@@ -16,9 +16,11 @@ type
     property Name : string read FName write SetName;
     procedure AddMessage(const pMessage : TZapMessage);
     procedure RemoveMessage(const pMessage : TZapMessage);
+    function GetMessage(const pIdMessage : string) : TZapMessage;
     procedure CleanMessages(const pStatusMessage : TZapMessageStatus);
     procedure CheckExpirationMessages;
-    function GetMessage : TZapMessage;
+    procedure CheckSendedMessages;
+    function GetNextMessageToProcess : TZapMessage;
     function Count : integer;
     constructor Create; overload;
     destructor Destroy; override;
@@ -38,6 +40,9 @@ type
 
 implementation
 
+uses
+  System.SysUtils;
+
 { TZapQueue }
 
 procedure TZapQueue.AddMessage(const pMessage: TZapMessage);
@@ -52,6 +57,23 @@ var
 begin
   for ZapMessage in FMessages do
     ZapMessage.CheckExpiration;
+end;
+
+procedure TZapQueue.CheckSendedMessages;
+var
+  ZapMessage : TZapMessage;
+begin
+  for ZapMessage in FMessages do
+  begin
+    if ZapMessage.Status = zSended then
+    begin
+      Sleep(100);
+      if not (ZapMessage is TZapRPCMessage) then
+        ZapMessage.Status := zProcessed
+      else
+        ZapMessage.Status := zProcessing;
+    end;
+  end;
 end;
 
 procedure TZapQueue.CleanMessages(const pStatusMessage: TZapMessageStatus);
@@ -81,7 +103,22 @@ begin
   inherited;
 end;
 
-function TZapQueue.GetMessage: TZapMessage;
+function TZapQueue.GetMessage(const pIdMessage: string): TZapMessage;
+var
+  ZapMessage : TZapMessage;
+begin
+  Result := nil;
+  for ZapMessage in FMessages do
+  begin
+    if ZapMessage.Id = pIdMessage then
+    begin
+      Result := ZapMessage;
+      Break;
+    end;
+  end;
+end;
+
+function TZapQueue.GetNextMessageToProcess: TZapMessage;
 var
   ZapMessage : TZapMessage;
 begin
