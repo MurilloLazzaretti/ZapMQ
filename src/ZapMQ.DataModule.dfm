@@ -17,6 +17,7 @@ object ZapDataModule: TZapDataModule
   end
   object HTTPService: TDSHTTPService
     HttpPort = 5679
+    Server = Server
     DSPort = 5679
     Filters = <>
     Left = 64

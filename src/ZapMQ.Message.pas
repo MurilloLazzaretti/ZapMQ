@@ -10,58 +10,53 @@ type
 
   TZapMessage = class
   private
-    FTimer : TTimer;
-    FBody: TJSONValue;
+    FBirthTime : Cardinal;
+    FBody: TJSONObject;
     FStatus: TZapMessageStatus;
     FQueueName: string;
-    procedure SetBody(const Value: TJSONValue);
+    FTTL: Word;
+    procedure SetBody(const Value: TJSONObject);
     procedure SetStatus(const Value: TZapMessageStatus);
-    procedure OnTTL(Sender: TObject);
     procedure SetQueueName(const Value: string);
+    procedure SetTTL(const Value: Word);
   public
+    property TTL : Word read FTTL write SetTTL;
     property QueueName : string read FQueueName write SetQueueName;
-    property Body : TJSONValue read FBody write SetBody;
+    property Body : TJSONObject read FBody write SetBody;
     property Status : TZapMessageStatus read FStatus write SetStatus;
-    constructor Create(const pTTL : word = 0); overload;
+    procedure CheckExpiration;
+    constructor Create; overload;
     destructor Destroy; override;
   end;
 
 implementation
 
+uses
+  Windows;
+
 { TZapMessage }
 
-constructor TZapMessage.Create(const pTTL: word);
+constructor TZapMessage.Create;
 begin
   FStatus := zCreated;
-  if pTTL > 0 then
-  begin
-    FTimer := TTimer.Create(nil);
-    FTimer.Interval := pTTL;
-    FTimer.OnTimer := OnTTL;
-    FTimer.Enabled := True;
-  end;
+  FBirthTime := GetTickCount;
 end;
 
 destructor TZapMessage.Destroy;
 begin
-  if Assigned(FTimer) then
-  begin
-    FTimer.Enabled := False;
-    FTimer.Free;
-  end;
   if Assigned(FBody) then
-  begin
     FBody.Free;
-  end;
   inherited;
 end;
 
-procedure TZapMessage.OnTTL(Sender: TObject);
+procedure TZapMessage.CheckExpiration;
 begin
-  FStatus := zExpired;
+  if FTTL > 0 then
+    if (FBirthTime + FTTL) < GetTickCount then
+      FStatus := zExpired;
 end;
 
-procedure TZapMessage.SetBody(const Value: TJSONValue);
+procedure TZapMessage.SetBody(const Value: TJSONObject);
 begin
   FBody := Value;
 end;
@@ -74,6 +69,11 @@ end;
 procedure TZapMessage.SetStatus(const Value: TZapMessageStatus);
 begin
   FStatus := Value;
+end;
+
+procedure TZapMessage.SetTTL(const Value: Word);
+begin
+  FTTL := Value;
 end;
 
 end.

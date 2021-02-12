@@ -16,6 +16,8 @@ type
     property Name : string read FName write SetName;
     procedure AddMessage(const pMessage : TZapMessage);
     procedure RemoveMessage(const pMessage : TZapMessage);
+    procedure CleanMessages(const pStatusMessage : TZapMessageStatus);
+    procedure CheckExpirationMessages;
     function GetMessage : TZapMessage;
     function Count : integer;
     constructor Create; overload;
@@ -27,6 +29,7 @@ type
     FQueues : TObjectList<TZapQueue>;
     procedure NewQueue(const pQueueName : string; const pMessage : TZapMessage); overload;
   public
+    function All : TObjectList<TZapQueue>;
     function Find(const pQueueName : string) : TZapQueue;
     procedure AddMessage(const pMessage : TZapMessage);
     constructor Create; overload;
@@ -41,6 +44,25 @@ procedure TZapQueue.AddMessage(const pMessage: TZapMessage);
 begin
   pMessage.Status := zPending;
   FMessages.Add(pMessage);
+end;
+
+procedure TZapQueue.CheckExpirationMessages;
+var
+  ZapMessage : TZapMessage;
+begin
+  for ZapMessage in FMessages do
+    ZapMessage.CheckExpiration;
+end;
+
+procedure TZapQueue.CleanMessages(const pStatusMessage: TZapMessageStatus);
+var
+  ZapMessage : TZapMessage;
+begin
+  for ZapMessage in FMessages do
+  begin
+    if ZapMessage.Status = pStatusMessage then
+      RemoveMessage(ZapMessage);
+  end;
 end;
 
 function TZapQueue.Count: integer;
@@ -95,6 +117,11 @@ begin
     Queue.AddMessage(pMessage)
   else
     NewQueue(pMessage.QueueName, pMessage);
+end;
+
+function TZapQueues.All: TObjectList<TZapQueue>;
+begin
+  Result := FQueues;
 end;
 
 constructor TZapQueues.Create;

@@ -10,24 +10,25 @@ type
 {$METHODINFO ON}
   TZapMethods = class(TComponent)
   public
-    function GetMessage(const pQueueName : string) : TJSONValue;
-    function UpdateMessage(const pQueueName : string; const pTTL : Word = 0) : TJSONValue;
+    function GetMessage(const pQueueName : string) : string;
+    function UpdateMessage(const pQueueName : string;
+      pMessage : string; const pTTL : Word = 0) : TJSONValue;
   end;
 {$METHODINFO OFF}
 
 implementation
 
 uses
-  ZapMQ.Core, ZapMQ.Message, ZapMQ.Queue, System.SysUtils, Datasnap.DSHTTPWebBroker;
+  ZapMQ.Core, ZapMQ.Message, ZapMQ.Queue, System.SysUtils;
 
 { TZapMethods }
 
-function TZapMethods.GetMessage(const pQueueName: string): TJSONValue;
+function TZapMethods.GetMessage(const pQueueName: string): string;
 var
   Queue : TZapQueue;
   ZapMessage : TZapMessage;
 begin
-  Result := nil;
+  Result := '';
   Queue := ZapMQ.Core.Context.Queues.Find(pQueueName);
   if Assigned(Queue) then
   begin
@@ -35,21 +36,21 @@ begin
     if Assigned(ZapMessage) then
     begin
       ZapMessage.Status := zProcessed;
-      Result := ZapMessage.Body
+      Result := ZapMessage.Body.ToString;
     end;
   end;
 end;
 
 function TZapMethods.UpdateMessage(const pQueueName: string;
-  const pTTL: Word): TJSONValue;
+  pMessage: string; const pTTL: Word): TJSONValue;
 var
   ZapMessage : TZapMessage;
 begin
   Result := nil;
-  ZapMessage := TZapMessage.Create(pTTL);
+  ZapMessage := TZapMessage.Create;
   ZapMessage.QueueName := pQueueName;
-  ZapMessage.Body := TJSONObject.ParseJSONValue(
-    TEncoding.UTF8.GetBytes(GetDataSnapWebModule.Request.Content), 0);
+  ZapMessage.TTL := pTTL;
+  ZapMessage.Body := TJSONObject.ParseJSONValue(TEncoding.ASCII.GetBytes(pMessage), 0) as TJSONObject;
 
   ZapMQ.Core.Context.Queues.AddMessage(ZapMessage);
 end;
