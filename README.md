@@ -13,7 +13,7 @@ When installation is done, in your services list will be ZapMQ service installed
 
 ## ⚡️ Server Port
 
-ZapMQ open a default TCP port 5679, if you want to change this port, go to application folder and edit ZapMQ.ini file
+ZapMQ open a default TCP port 5679, if you want to change this port, go to application folder and edit ZapMQ.ini file. Dont forget to restart the service.
 
 ```iniFile
 [ZapMQ]
@@ -28,3 +28,7 @@ Implemented Wrappers for now :
 | ---------- | --------------- | ----------------- |
 |  Delphi    | Done            | [`Delphi Wrapper`](https://github.com/HashLoad/boss)|
 |  .NET C#   | Cooming soon    | ❌                |
+
+## 🔥 Uninstall
+
+To uninstall the ZapMQ, under the folder of the installation, there is a file named unins000.exe just run it and next, next next...
