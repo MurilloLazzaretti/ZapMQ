@@ -6,7 +6,7 @@ uses
   JSON, ZapMQ.Message.JSON;
 
 type
-  TZapMessageStatus = (zCreated, zPending, zSended, zProcessed, zProcessing,
+  TZapMessageStatus = (zCreated, zPending, zSended, zProcessing, zProcessed,
     zAnswered, zExpired);
 
   TZapMessage = class
@@ -17,32 +17,27 @@ type
     FQueueName: string;
     FTTL: Word;
     FId: string;
+    FResponse: TJSONObject;
+    FRPC: boolean;
     procedure SetBody(const Value: TJSONObject);
     procedure SetStatus(const Value: TZapMessageStatus);
     procedure SetQueueName(const Value: string);
     procedure SetTTL(const Value: Word);
     procedure SetId(const Value: string);
+    procedure SetResponse(const Value: TJSONObject);
+    procedure SetRPC(const Value: boolean);
   public
     property Id : string read FId write SetId;
     property TTL : Word read FTTL write SetTTL;
     property QueueName : string read FQueueName write SetQueueName;
     property Body : TJSONObject read FBody write SetBody;
     property Status : TZapMessageStatus read FStatus write SetStatus;
+    property RPC : boolean read FRPC write SetRPC;
+    property Response : TJSONObject read FResponse write SetResponse;
     function Prepare : TZapJSONMessage;
     procedure CheckExpiration;
     constructor Create; overload;
     destructor Destroy; override;
-  end;
-
-  TZapRPCMessage = class(TZapMessage)
-  private
-    FResponse: TJSONObject;
-    FTimeout: Word;
-    procedure SetResponse(const Value: TJSONObject);
-    procedure SetTimeout(const Value: Word);
-  public
-    property Response : TJSONObject read FResponse write SetResponse;
-    property Timeout : Word read FTimeout write SetTimeout;
   end;
 
 implementation
@@ -63,6 +58,8 @@ destructor TZapMessage.Destroy;
 begin
   if Assigned(FBody) then
     FBody.Free;
+  if Assigned(FResponse) then
+    FResponse.Free;
   inherited;
 end;
 
@@ -88,6 +85,16 @@ begin
   FQueueName := Value;
 end;
 
+procedure TZapMessage.SetResponse(const Value: TJSONObject);
+begin
+  FResponse := Value;
+end;
+
+procedure TZapMessage.SetRPC(const Value: boolean);
+begin
+  FRPC := Value;
+end;
+
 procedure TZapMessage.SetStatus(const Value: TZapMessageStatus);
 begin
   FStatus := Value;
@@ -102,20 +109,9 @@ function TZapMessage.Prepare: TZapJSONMessage;
 begin
   Result := TZapJSONMessage.Create;
   Result.Id := FId;
-  Result.Body := FBody;
-  Result.RPC := (Self is TZapRPCMessage);
-end;
-
-{ TZapRPCMessage }
-
-procedure TZapRPCMessage.SetResponse(const Value: TJSONObject);
-begin
-  FResponse := Value;
-end;
-
-procedure TZapRPCMessage.SetTimeout(const Value: Word);
-begin
-  FTimeout := Value;
+  Result.Body := TJSONObject.ParseJSONValue(
+    TEncoding.ASCII.GetBytes(FBody.ToString), 0) as TJSONObject;
+  Result.RPC := FRPC;
 end;
 
 end.

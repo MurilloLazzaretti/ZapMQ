@@ -25,6 +25,7 @@ type
     property TTL : Word read FTTL write SetTTL;
     property Timeout : Word read FTimeout write SetTimeout;
     function ToJSON : TJSONObject;
+    destructor Destroy; override;
     class function FromJSON(const pJSONString : string) : TZapJSONMessage;
   end;
 
@@ -34,6 +35,13 @@ uses
   System.SysUtils;
 
 { TZapJSONMessage }
+
+destructor TZapJSONMessage.Destroy;
+begin
+  if Assigned(Body) then
+    Body.Free;
+  inherited;
+end;
 
 class function TZapJSONMessage.FromJSON(
   const pJSONString: string): TZapJSONMessage;
@@ -84,7 +92,8 @@ function TZapJSONMessage.ToJSON: TJSONObject;
 begin
   Result := TJSONObject.Create;
   Result.AddPair('Id', TJSONString.Create(FId));
-  Result.AddPair('Body', Body as TJSONValue);
+  Result.AddPair('Body', TJSONObject.ParseJSONValue(
+    TEncoding.ASCII.GetBytes(Body.ToString), 0) as TJSONValue);
   Result.AddPair('RPC', TJSONBool.Create(FRPC));
   Result.AddPair('TTL', TJSONNumber.Create(FTTL));
   Result.AddPair('Timeout', TJSONNumber.Create(FTimeout));

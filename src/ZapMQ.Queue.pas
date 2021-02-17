@@ -20,6 +20,7 @@ type
     procedure CleanMessages(const pStatusMessage : TZapMessageStatus);
     procedure CheckExpirationMessages;
     procedure CheckSendedMessages;
+    procedure Clear;
     function GetNextMessageToProcess : TZapMessage;
     function Count : integer;
     constructor Create; overload;
@@ -68,7 +69,7 @@ begin
     if ZapMessage.Status = zSended then
     begin
       Sleep(100);
-      if not (ZapMessage is TZapRPCMessage) then
+      if not ZapMessage.RPC then
         ZapMessage.Status := zProcessed
       else
         ZapMessage.Status := zProcessing;
@@ -85,6 +86,11 @@ begin
     if ZapMessage.Status = pStatusMessage then
       RemoveMessage(ZapMessage);
   end;
+end;
+
+procedure TZapQueue.Clear;
+begin
+  FMessages.Clear;
 end;
 
 function TZapQueue.Count: integer;
@@ -167,7 +173,13 @@ begin
 end;
 
 destructor TZapQueues.Destroy;
+var
+  Queue : TZapQueue;
 begin
+  for Queue in All do
+  begin
+    Queue.Clear;
+  end;
   FQueues.Free;
   inherited;
 end;
