@@ -1,5 +1,5 @@
 ## 🇧🇷  ZapMQ - Message Broker 🇧🇷
-  <p align="center">
+  <p>
     <a href="https://github.com/MurilloLazzaretti/ZapMQ/blob/main/img/ZapMQ.jpeg">
         <img alt="ZapMQ" height="150" src="https://github.com/MurilloLazzaretti/ZapMQ/blob/main/img/ZapMQ.jpeg">
     </a>  
