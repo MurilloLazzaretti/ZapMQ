@@ -1,10 +1,5 @@
 ## 🇧🇷  ZapMQ - Message Broker 🇧🇷
-  <p>
-    <a href="https://github.com/MurilloLazzaretti/ZapMQ/blob/main/img/ZapMQ.jpeg">
-        <img alt="ZapMQ" height="150" src="https://github.com/MurilloLazzaretti/ZapMQ/blob/main/img/ZapMQ.jpeg">
-    </a>  
-  </p>
-  <br>
+
   <b>ZapMQ</b> is a simple and efficient message broker for Windows platform developed in Delphi. With him you can communicate yours micro services in a simple way usign already implemented Delphi Wrapper. New Wrapper is coming soon (.NET C#)
 
 ## ⚠️ Warning
@@ -18,7 +13,7 @@ When installation is done, in your services list will be ZapMQ service installed
 
 ## ⚡️ Server Port
 
-ZapMQ open a default TCP port <b>5679</b>, if you want to change this port, go to application folder and edit ZapMQ.ini file. Dont forget to restart the service.
+ZapMQ open a default HTTP port <b>5679</b>, if you want to change this port, go to application folder and edit ZapMQ.ini file. Dont forget to restart the service.
 
 ```iniFile
 [ZapMQ]
@@ -41,6 +36,14 @@ Send a JSON object to a dermined queue with <b> answer.</b> "One" of the "N" sub
 🌐 _Exchange_ (Coming soon)
 
 Send a message to a dermined queue with <b>no answer.</b> "All" of the subscribers registred in this queue will process your message. 
+
+## 🕗 Performance
+
+We are current in a beta version, so we dont have numbers about how many messages the ZapMQ can recive in a second or how many it can send in a second, but if you need a high performance like Kafka, RabbitMQ or others messages brokers this is not your place. ZapMQ was not developed to have an extremely high performance.
+
+ZapMQ cant work in a cluster architecture too.
+
+We think that ZapMQ can send/recive like 300 messages per second (or something more), but we dont put it in a tester yet. 
 
 ## 🌱 Wrappers
 
