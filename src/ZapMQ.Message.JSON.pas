@@ -11,19 +11,16 @@ type
     FBody: TJSONObject;
     FId: string;
     FRPC: boolean;
-    FTimeout: Word;
     FTTL: Word;
     procedure SetBody(const Value: TJSONObject);
     procedure SetId(const Value: string);
     procedure SetRPC(const Value: boolean);
-    procedure SetTimeout(const Value: Word);
     procedure SetTTL(const Value: Word);
   public
     property Id : string read FId write SetId;
     property Body : TJSONObject read FBody write SetBody;
     property RPC : boolean read FRPC write SetRPC;
     property TTL : Word read FTTL write SetTTL;
-    property Timeout : Word read FTimeout write SetTimeout;
     function ToJSON : TJSONObject;
     destructor Destroy; override;
     class function FromJSON(const pJSONString : string) : TZapJSONMessage;
@@ -57,7 +54,6 @@ begin
       TEncoding.ASCII.GetBytes(JSON.GetValue<TJSONObject>('Body').ToString), 0) as TJSONObject;
     Result.FRPC := JSON.GetValue<boolean>('RPC');
     Result.FTTL := JSON.GetValue<Word>('TTL');
-    Result.FTimeout := JSON.GetValue<Word>('Timeout');
   finally
     JSON.Free;
   end;
@@ -78,11 +74,6 @@ begin
   FRPC := Value;
 end;
 
-procedure TZapJSONMessage.SetTimeout(const Value: Word);
-begin
-  FTimeout := Value;
-end;
-
 procedure TZapJSONMessage.SetTTL(const Value: Word);
 begin
   FTTL := Value;
@@ -96,7 +87,6 @@ begin
     TEncoding.ASCII.GetBytes(Body.ToString), 0) as TJSONValue);
   Result.AddPair('RPC', TJSONBool.Create(FRPC));
   Result.AddPair('TTL', TJSONNumber.Create(FTTL));
-  Result.AddPair('Timeout', TJSONNumber.Create(FTimeout));
 end;
 
 end.

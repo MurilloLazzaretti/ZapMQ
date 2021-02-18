@@ -27,15 +27,15 @@ Already implemented types of messages :
 
 👂 _Publisher and Subscriber_
 
-Send a message to a dermined queue with <b>no answer.</b> "One" of the "N" subscribers registred in this queue will process your message.  
+Send a message to a dermined queue with <b>no answer.</b> "One" of the "N" subscribers registered in this queue will process your message.  
 
 🔌 _RPC_ 
 
-Send a JSON object to a dermined queue with <b> answer.</b> "One" of the "N" subscribers registred in this queue will process your message and send an answer to the publisher. 
+Send a JSON object to a dermined queue with <b> answer.</b> "One" of the "N" subscribers registered in this queue will process your message and send an answer to the publisher. 
 
 🌐 _Exchange_ (Coming soon)
 
-Send a message to a dermined queue with <b>no answer.</b> "All" of the subscribers registred in this queue will process your message. 
+Send a message to a dermined queue with <b>no answer.</b> "All" of the subscribers registered in this queue will process your message. 
 
 ## 🕗 Performance
 
