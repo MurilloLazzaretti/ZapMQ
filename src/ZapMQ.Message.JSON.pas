@@ -12,15 +12,18 @@ type
     FId: string;
     FRPC: boolean;
     FTTL: Word;
+    FResponse: TJSONObject;
     procedure SetBody(const Value: TJSONObject);
     procedure SetId(const Value: string);
     procedure SetRPC(const Value: boolean);
     procedure SetTTL(const Value: Word);
+    procedure SetResponse(const Value: TJSONObject);
   public
     property Id : string read FId write SetId;
     property Body : TJSONObject read FBody write SetBody;
     property RPC : boolean read FRPC write SetRPC;
     property TTL : Word read FTTL write SetTTL;
+    property Response : TJSONObject read FResponse write SetResponse;
     function ToJSON : TJSONObject;
     destructor Destroy; override;
     class function FromJSON(const pJSONString : string) : TZapJSONMessage;
@@ -37,6 +40,8 @@ destructor TZapJSONMessage.Destroy;
 begin
   if Assigned(Body) then
     Body.Free;
+  if Assigned(Response) then
+    Response.Free;
   inherited;
 end;
 
@@ -69,6 +74,11 @@ begin
   FId := Value;
 end;
 
+procedure TZapJSONMessage.SetResponse(const Value: TJSONObject);
+begin
+  FResponse := Value;
+end;
+
 procedure TZapJSONMessage.SetRPC(const Value: boolean);
 begin
   FRPC := Value;
@@ -87,6 +97,8 @@ begin
     TEncoding.ASCII.GetBytes(Body.ToString), 0) as TJSONValue);
   Result.AddPair('RPC', TJSONBool.Create(FRPC));
   Result.AddPair('TTL', TJSONNumber.Create(FTTL));
+  Result.AddPair('Response', TJSONObject.ParseJSONValue(
+    TEncoding.ASCII.GetBytes(Response.ToString), 0) as TJSONValue);
 end;
 
 end.

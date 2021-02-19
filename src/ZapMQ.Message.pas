@@ -112,6 +112,11 @@ begin
   Result.Body := TJSONObject.ParseJSONValue(
     TEncoding.ASCII.GetBytes(FBody.ToString), 0) as TJSONObject;
   Result.RPC := FRPC;
+  if Assigned(FResponse) then
+  begin
+    Result.Response := TJSONObject.ParseJSONValue(
+      TEncoding.ASCII.GetBytes(FResponse.ToString), 0) as TJSONObject;
+  end;
 end;
 
 end.

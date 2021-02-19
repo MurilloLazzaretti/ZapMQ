@@ -4,7 +4,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, Datasnap.DSCommonServer, Datasnap.DSServer,
-  IPPeerServer, Datasnap.DSHTTP;
+  IPPeerServer, Datasnap.DSHTTP, IdHTTPWebBrokerBridge, Datasnap.DSHTTPWebBroker;
 
 type
   TZapDataModule = class(TDataModule)
@@ -14,7 +14,7 @@ type
     procedure MethodsGetClass(DSServerClass: TDSServerClass;
       var PersistentClass: TPersistentClass);
   private
-    { Private declarations }
+
   public
     { Public declarations }
   end;

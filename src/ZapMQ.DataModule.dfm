@@ -1,7 +1,7 @@
 object ZapDataModule: TZapDataModule
   OldCreateOrder = False
-  Height = 245
-  Width = 176
+  Height = 272
+  Width = 220
   object Server: TDSServer
     AutoStart = False
     ChannelQueueSize = 1000
@@ -21,6 +21,6 @@ object ZapDataModule: TZapDataModule
     DSPort = 5679
     Filters = <>
     Left = 48
-    Top = 152
+    Top = 144
   end
 end
