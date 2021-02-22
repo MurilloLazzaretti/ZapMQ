@@ -52,7 +52,7 @@ Implemented Wrappers for now :
 | _Language_ | _Status_        | _Link_            | 
 | ---------- | --------------- | ----------------- |
 |  Delphi    | Done            | [`Delphi Wrapper`](https://github.com/MurilloLazzaretti/ZapMQ-Delphi-Wrapper)|
-|  .NET C#   | Coming soon     | [`.NET Wrapper C#`](https://github.com/MurilloLazzaretti/ZapMQ-.NET-Wrapper)|
+|  .NET C#   | Done            | [`.NET Wrapper C#`](https://github.com/MurilloLazzaretti/ZapMQ-.NET-Wrapper)|
 
 ## 🔥 Uninstall
 
