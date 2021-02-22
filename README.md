@@ -1,6 +1,6 @@
 ## 🇧🇷  ZapMQ - Message Broker 🇧🇷
 
-  <b>ZapMQ</b> is a simple and efficient message broker for Windows platform developed in Delphi. With him you can communicate yours micro services in a simple way usign already implemented Delphi Wrapper. New Wrapper is coming soon (.NET C#)
+  <b>ZapMQ</b> is a simple and efficient message broker for Windows platform developed in Delphi. With him you can communicate yours micro services in a simple way usign already implemented Delphi Wrapper and .NET C#.
 
 ## ⚠️ Warning
 
@@ -52,7 +52,7 @@ Implemented Wrappers for now :
 | _Language_ | _Status_        | _Link_            | 
 | ---------- | --------------- | ----------------- |
 |  Delphi    | Done            | [`Delphi Wrapper`](https://github.com/MurilloLazzaretti/ZapMQ-Delphi-Wrapper)|
-|  .NET C#   | Coming soon     | ❌                |
+|  .NET C#   | Coming soon     | [`.NET Wrapper C#`](https://github.com/MurilloLazzaretti/ZapMQ-.NET-Wrapper)|
 
 ## 🔥 Uninstall
 
