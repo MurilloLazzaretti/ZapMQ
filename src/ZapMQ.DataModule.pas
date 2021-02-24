@@ -25,7 +25,7 @@ var
 implementation
 
 uses
-  ZapMQ.Methods;
+  ZapMQ.Methods, Datasnap.DSSession;
 
 {%CLASSGROUP 'System.Classes.TPersistent'}
 

@@ -4,8 +4,7 @@ interface
 
 uses
   System.Classes,
-  JSON,
-  DataSnap.DSHTTPWebBroker;
+  JSON;
 
 type
 {$METHODINFO ON}
@@ -33,7 +32,7 @@ var
   ZapJSONMessage : TZapJSONMessage;
   JSON : TJSONObject;
 begin
-  Result := string.Empty;
+  Result := '';
   Queue := ZapMQ.Core.Context.Queues.Find(pQueueName);
   if Assigned(Queue) then
   begin

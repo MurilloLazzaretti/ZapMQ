@@ -4,7 +4,6 @@ object ZapDataModule: TZapDataModule
   Width = 220
   object Server: TDSServer
     AutoStart = False
-    ChannelQueueSize = 1000
     Left = 48
     Top = 24
   end
@@ -20,6 +19,7 @@ object ZapDataModule: TZapDataModule
     Server = Server
     DSPort = 5679
     Filters = <>
+    SessionTimeout = 1000
     Left = 48
     Top = 144
   end

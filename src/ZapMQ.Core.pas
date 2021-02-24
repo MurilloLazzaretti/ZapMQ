@@ -45,6 +45,7 @@ begin
   FQueues := TZapQueues.Create;
   LoadConfig;
   FServer.Server.Start;
+  FServer.HTTPService.SessionTimeout := 1000;
   FServer.HTTPService.HttpPort := FPort;
   FServer.HTTPService.Active := True;
 end;
