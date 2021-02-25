@@ -3,33 +3,42 @@ unit ZapMQ.Threads;
 interface
 
 uses
-  System.classes, ZapMQ.Message, ZapMQ.Core, ZapMQ.Queue;
+  System.classes, ZapMQ.Message, ZapMQ.Core, ZapMQ.Queue, SyncObjs;
 
 type
   TZapMQCleanerThread = class(TThread)
   private
+    FEvent : TEvent;
     FStatusMessage : TZapMessageStatus;
     FContext : TZapCore;
   public
     procedure Execute; override;
+    procedure Stop;
     constructor Create(const pStatusMessage : TZapMessageStatus;
       const pContext : TZapCore); overload;
+    destructor Destroy; override;
   end;
 
   TZapMQCheckExpirationThread = class(TThread)
   private
+    FEvent : TEvent;
     FContext : TZapCore;
   public
     procedure Execute; override;
+    procedure Stop;
     constructor Create(const pContext : TZapCore); overload;
+    destructor Destroy; override;
   end;
 
   TZapMQCheckSendedThread = class(TThread)
   private
+    FEvent : TEvent;
     FContext : TZapCore;
   public
     procedure Execute; override;
+    procedure Stop;
     constructor Create(const pContext : TZapCore); overload;
+    destructor Destroy; override;
   end;
 
 implementation
@@ -42,6 +51,13 @@ begin
   inherited Create(True);
   FStatusMessage := pStatusMessage;
   FContext := pContext;
+  FEvent := TEvent.Create(nil, True, False, '');
+end;
+
+destructor TZapMQCleanerThread.Destroy;
+begin
+  FEvent.Free;
+  inherited;
 end;
 
 procedure TZapMQCleanerThread.Execute;
@@ -55,8 +71,16 @@ begin
     begin
       Queue.CleanMessages(FStatusMessage);
     end;
-    Sleep(1000);
+    if not (FEvent.WaitFor(1000) = wrTimeout) then
+    begin
+      Terminate;
+    end;
   end;
+end;
+
+procedure TZapMQCleanerThread.Stop;
+begin
+  FEvent.SetEvent;
 end;
 
 { TZapMQCheckExpirationThread }
@@ -65,6 +89,13 @@ constructor TZapMQCheckExpirationThread.Create(const pContext: TZapCore);
 begin
   inherited Create(True);
   FContext := pContext;
+  FEvent := TEvent.Create(nil, True, False, '');
+end;
+
+destructor TZapMQCheckExpirationThread.Destroy;
+begin
+  FEvent.Free;
+  inherited;
 end;
 
 procedure TZapMQCheckExpirationThread.Execute;
@@ -78,8 +109,16 @@ begin
     begin
       Queue.CheckExpirationMessages;
     end;
-    Sleep(1000);
+    if not (FEvent.WaitFor(1000) = wrTimeout) then
+    begin
+      Terminate;
+    end;
   end;
+end;
+
+procedure TZapMQCheckExpirationThread.Stop;
+begin
+  FEvent.SetEvent;
 end;
 
 { TZapMQCheckSendedThread }
@@ -88,6 +127,13 @@ constructor TZapMQCheckSendedThread.Create(const pContext: TZapCore);
 begin
   inherited Create(True);
   FContext := pContext;
+  FEvent := TEvent.Create(nil, True, False, '');
+end;
+
+destructor TZapMQCheckSendedThread.Destroy;
+begin
+  FEvent.Free;
+  inherited;
 end;
 
 procedure TZapMQCheckSendedThread.Execute;
@@ -101,8 +147,16 @@ begin
     begin
       Queue.CheckSendedMessages;
     end;
-    Sleep(1000);
+    if not (FEvent.WaitFor(1000) = wrTimeout) then
+    begin
+      Terminate;
+    end;
   end;
+end;
+
+procedure TZapMQCheckSendedThread.Stop;
+begin
+  FEvent.SetEvent;
 end;
 
 end.

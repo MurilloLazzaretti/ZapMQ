@@ -68,7 +68,6 @@ begin
   begin
     if ZapMessage.Status = zSended then
     begin
-      Sleep(100);
       if not ZapMessage.RPC then
         ZapMessage.Status := zProcessed
       else

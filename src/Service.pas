@@ -55,9 +55,12 @@ end;
 
 procedure TZapMQservice.ServiceStop(Sender: TService; var Stopped: Boolean);
 begin
-  ExpiredCleanerMessages.Terminate;
-  ProcessedClearnerMessage.Terminate;
-  CheckExpirationMessages.Terminate;
+  ExpiredCleanerMessages.Stop;
+  while not ExpiredCleanerMessages.CheckTerminated do;
+  ProcessedClearnerMessage.Stop;
+  while not ProcessedClearnerMessage.CheckTerminated do;
+  CheckExpirationMessages.Stop;
+  while not CheckExpirationMessages.CheckTerminated do;
   ExpiredCleanerMessages.Free;
   ProcessedClearnerMessage.Free;
   CheckExpirationMessages.Free;
