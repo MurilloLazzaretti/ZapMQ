@@ -11,9 +11,11 @@ type
   private
     FMessages : TObjectList<TZapMessage>;
     FName: string;
+    FLastRemovedMessage : TDateTime;
     procedure SetName(const Value: string);
   public
     property Name : string read FName write SetName;
+    property LastRemovedMessage : TDateTime read FLastRemovedMessage;
     procedure AddMessage(const pMessage : TZapMessage);
     procedure RemoveMessage(const pMessage : TZapMessage);
     function GetMessage(const pIdMessage : string) : TZapMessage;
@@ -34,6 +36,7 @@ type
   public
     function All : TObjectList<TZapQueue>;
     function Find(const pQueueName : string) : TZapQueue;
+    procedure RemoveQueue(const pQueue : TZapQueue);
     procedure AddMessage(const pMessage : TZapMessage);
     constructor Create; overload;
     destructor Destroy; override;
@@ -57,7 +60,10 @@ var
   ZapMessage : TZapMessage;
 begin
   for ZapMessage in FMessages do
-    ZapMessage.CheckExpiration;
+  begin
+    if ZapMessage.Status = zPending then
+      ZapMessage.CheckExpiration;
+  end;
 end;
 
 procedure TZapQueue.CheckSendedMessages;
@@ -141,6 +147,8 @@ end;
 procedure TZapQueue.RemoveMessage(const pMessage: TZapMessage);
 begin
   FMessages.Remove(pMessage);
+  if FMessages.Count = 0 then
+    FLastRemovedMessage := Now;
 end;
 
 procedure TZapQueue.SetName(const Value: string);
@@ -207,6 +215,11 @@ begin
   Queue.Name := pQueueName;
   Queue.AddMessage(pMessage);
   FQueues.Add(Queue);
+end;
+
+procedure TZapQueues.RemoveQueue(const pQueue: TZapQueue);
+begin
+  FQueues.Remove(pQueue);
 end;
 
 end.

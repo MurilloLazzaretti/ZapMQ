@@ -14,6 +14,7 @@ type
     ExpiredCleanerMessages, ProcessedClearnerMessage : TZapMQCleanerThread;
     CheckExpirationMessages : TZapMQCheckExpirationThread;
     CheckSendedMessages : TZapMQCheckSendedThread;
+    ZapMQQueueCleaner : TZapMQQueueCleaner;
   public
     function GetServiceController: TServiceController; override;
     { Public declarations }
@@ -50,21 +51,22 @@ begin
   CheckExpirationMessages.Start;
   CheckSendedMessages := TZapMQCheckSendedThread.Create(ZapMQ.Core.Context);
   CheckSendedMessages.Start;
+  ZapMQQueueCleaner := TZapMQQueueCleaner.Create(ZapMQ.Core.Context);
+  ZapMQQueueCleaner.Start;
   Started := True;
 end;
 
 procedure TZapMQservice.ServiceStop(Sender: TService; var Stopped: Boolean);
 begin
   ExpiredCleanerMessages.Stop;
-  while not ExpiredCleanerMessages.CheckTerminated do;
   ProcessedClearnerMessage.Stop;
-  while not ProcessedClearnerMessage.CheckTerminated do;
   CheckExpirationMessages.Stop;
-  while not CheckExpirationMessages.CheckTerminated do;
+  ZapMQQueueCleaner.Stop;
   ExpiredCleanerMessages.Free;
   ProcessedClearnerMessage.Free;
   CheckExpirationMessages.Free;
   CheckSendedMessages.Free;
+  ZapMQQueueCleaner.Free;
   TZapCore.Stop;
   Stopped := True;
 end;

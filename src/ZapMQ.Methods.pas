@@ -44,7 +44,14 @@ begin
         JSON := ZapJSONMessage.ToJSON;
         try
           Result := JSON.ToString;
-          ZapMessage.Status := zSended;
+          if ZapMessage.RPC then
+          begin
+            ZapMessage.Status := zSended;
+          end
+          else
+          begin
+            ZapMessage.Status := zProcessed;
+          end;
         finally
           JSON.Free;
         end;
@@ -77,7 +84,7 @@ begin
           JSON := ZapJSONMessage.ToJSON;
           try
             Result := JSON.ToString;
-            ZapMessage.Status := zSended;
+            ZapMessage.Status := zProcessed;
           finally
             JSON.Free;
           end;
@@ -123,8 +130,9 @@ begin
     ZapMessage := Queue.GetMessage(pIdMessage);
     if Assigned(ZapMessage) then
     begin
+      ZapMessage.Response.Free;
       ZapMessage.Response := TJSONObject.ParseJSONValue(
-        TEncoding.ASCII.GetBytes(pMessage), 0) as TJSONObject;
+        TEncoding.ASCII.GetBytes(pMessage), 0) as TJSONObject;;
       ZapMessage.Status := zAnswered;
     end;
   end;
