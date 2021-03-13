@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "ZapMQ"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.4"
 #define MyAppPublisher "Murillo Lazzaretti"
 #define MyAppURL "https://github.com/MurilloLazzaretti"
 #define MyAppExeName "ZapMQ.exe"
@@ -23,6 +23,7 @@ DefaultGroupName={#MyAppName}
 LicenseFile=Y:\Prod\GitHub\Murillo\ZapMQ\LICENSE
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
+DisableProgramGroupPage=yes
 OutputBaseFilename=ZapMQ - Installer
 Compression=lzma
 SolidCompression=yes
