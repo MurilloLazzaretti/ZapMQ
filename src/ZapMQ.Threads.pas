@@ -85,6 +85,7 @@ begin
     begin
       Queue.CleanMessages(FStatusMessage);
     end;
+    FEvent.ResetEvent;
     FEvent.WaitFor(1000);
   end;
 end;
@@ -122,6 +123,7 @@ begin
     begin
       Queue.CheckExpirationMessages;
     end;
+    FEvent.ResetEvent;
     FEvent.WaitFor(1000);
   end;
 end;
@@ -159,6 +161,7 @@ begin
     begin
       Queue.CheckSendedMessages;
     end;
+    FEvent.ResetEvent;
     FEvent.WaitFor(1000);
   end;
 end;
@@ -202,6 +205,7 @@ begin
         end;
       end;
     end;
+    FEvent.ResetEvent;
     FEvent.WaitFor(60000);
   end;
 end;
