@@ -25,7 +25,7 @@ Send a message to a queue and <b>get an answer</b>. Exactly one of the subscribe
 
 ⚡ _Push and confirmation_ (protocol v2)
 
-A client that speaks the v2 protocol keeps a connection open and gets each message the moment it arrives, then confirms it when done. Clients of both protocols can share a queue. The protocol is described in [`docs/PROTOCOLO-V2.md`](docs/PROTOCOLO-V2.md) (in Portuguese). The wrappers do not use it yet.
+A client that speaks the v2 protocol keeps a connection open and gets each message the moment it arrives, then confirms it when done. Clients of both protocols can share a queue. The protocol is described in [`docs/PROTOCOLO-V2.md`](docs/PROTOCOLO-V2.md) (in Portuguese). The .NET wrapper uses it from version 2.0 on, and falls back to the old protocol by itself when the server is 1.x.
 
 🪦 _Dead letters_
 
@@ -103,6 +103,7 @@ Only `Port` is commonly changed. Everything else may be left out.
 | `LogLevel` | `Information` | `Verbose`, `Debug`, `Information`, `Warning` or `Error` |
 | `DeadLetters.MaxMessagesPerQueue` | 1000 | Dead letters kept per queue; the oldest leave first. `0` keeps none |
 | `DeadLetters.MaxAgeHours` | 168 | Longest a dead letter is kept. `0` keeps none |
+| `V2.Enabled` | true | `false` turns the v2 protocol off: the service answers 1.x only and v2 wrappers fall back to it |
 | `V2.MaxFrameBytes` | 4194304 | Largest v2 frame accepted |
 | `V2.PingSeconds` | 15 | Interval of the keep-alive ping sent to v2 clients |
 | `V2.PingTimeoutSeconds` | 30 | Silence after which a v2 client is considered gone |
@@ -235,7 +236,7 @@ Remove-Item C:\ZapMQ -Recurse
 | Delphi     | Done     | [`Delphi Wrapper`](https://github.com/MurilloLazzaretti/ZapMQ-Delphi-Wrapper) |
 | .NET C#    | Done     | [`.NET Wrapper C#`](https://github.com/MurilloLazzaretti/ZapMQ-.NET-Wrapper) |
 
-Both wrappers were written for 1.x and work with 2.x as they are.
+The Delphi wrapper speaks the 1.x protocol and works with 2.x as it is. The .NET wrapper speaks both from its version 2.0 on and picks the one the server offers; its 1.x releases also keep working.
 
 ## 🔌 Compatibility with 1.x
 

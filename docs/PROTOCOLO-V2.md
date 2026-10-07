@@ -1,6 +1,6 @@
 # ZapMQ — Protocolo v2
 
-Situação: aprovada em 2026-10-07. Servidor implementado; wrapper .NET 2.0 pendente.
+Situação: aprovada em 2026-10-07. Servidor e wrapper .NET 2.0 implementados; nada instalado em ambiente algum.
 Última revisão: 2026-10-07.
 
 Este documento especifica o protocolo v2 do ZapMQ e o que ele exige do servidor e do wrapper .NET. Corresponde à fase 5 do [plano](PLANO-2.0.md) (versão 2.1): entrega por push, confirmação sem reentrega e mensagens mortas.
@@ -41,7 +41,9 @@ O WebSocket foi escolhido porque existe pronto no `netstandard2.0` (sem dependê
 
 ### 2.1 Batimento
 
-O servidor envia um ping do WebSocket a cada 15 segundos. Sem resposta em 30 segundos, a conexão é considerada perdida. O wrapper faz o mesmo no sentido contrário e, ao perder a conexão, reconecta (seção 7.3).
+O servidor envia um ping do WebSocket a cada 15 segundos. Sem resposta em 30 segundos, a conexão é considerada perdida.
+
+No sentido contrário, o wrapper envia a operação `ping` (seção 4.10) a cada 15 segundos e considera a conexão perdida se nada chegar do servidor em 30 segundos; então reconecta (seção 7.3). O ping próprio do WebSocket não serve aqui porque o `netstandard2.0` não permite ao cliente enviá-lo nem saber se foi respondido.
 
 ## 3. Formato dos quadros
 
@@ -154,7 +156,15 @@ Usado só depois de uma reconexão: o wrapper informa de quais RPCs ainda espera
 
 Avisa que o servidor vai encerrar a conexão. O wrapper reconecta.
 
-### 4.10 Erros
+### 4.10 `ping` — cliente → servidor
+
+```json
+{ "op": "ping", "id": 7 }
+```
+
+Responde `{ "re": 7, "ok": true }`. Serve só para o cliente saber que a conexão continua viva.
+
+### 4.11 Erros
 
 | Código | Quando |
 |---|---|
@@ -263,9 +273,12 @@ Regras que continuam iguais: não é permitido enviar para uma fila vinculada pe
 ### 7.2 Escolha do protocolo
 
 1. Ao iniciar, o wrapper tenta abrir o WebSocket em `/v2`.
-2. Se o servidor responder que não conhece esse caminho, é um servidor 1.x: o wrapper trabalha em v1, exatamente como a DLL atual.
+2. Se não conseguir, faz uma chamada 1.x inofensiva (a resposta de uma mensagem que não existe). Se o servidor responder, é um servidor que só atende v1: o wrapper trabalha em v1, com o mesmo código da DLL 1.x.
 3. Em v1, ele tenta o `/v2` de novo a cada minuto. Quando o servidor for atualizado, o wrapper passa para v2 sozinho, sem reiniciar a aplicação.
-4. Se o servidor não responder de forma alguma, o wrapper continua tentando.
+4. Se o servidor não responder de forma alguma, o wrapper continua tentando, com a espera da seção 7.3.
+5. O caminho inverso também funciona: se um servidor 2.x for trocado por um 1.x, o wrapper volta para v1 e passa a coletar pela forma antiga as respostas de RPC que ainda esperava.
+
+O teste do item 2 não depende de como o servidor 1.x recusa o WebSocket, só de ele responder à chamada 1.x.
 
 Assim o servidor e as DLLs podem ser trocados em qualquer ordem.
 
@@ -274,12 +287,27 @@ Assim o servidor e as DLLs podem ser trocados em qualquer ordem.
 - Tentativas com espera crescente, de 250 ms até 5 s.
 - Ao reconectar: `hello`, `bind` de todas as filas vinculadas e `await` dos RPCs pendentes.
 - A mensagem que estava em processamento quando a conexão caiu continua sendo processada pelo handler até o fim. O servidor já a registrou como `unconfirmed`; a resposta ou confirmação tardia é recusada com `not-found` e o wrapper registra o fato.
-- `SendMessage` e `SendRPCMessage` chamados sem conexão esperam até 5 segundos por ela e então devolvem `false`, que é o que a aplicação já recebe hoje quando o servidor está fora.
+- Uma mensagem que chegou ao wrapper mas ainda não tinha começado a ser processada quando a conexão caiu é descartada pelo wrapper. O servidor já a registrou como `unconfirmed`; processá-la poderia fazê-la rodar duas vezes se fosse reenviada.
+- Se chegar uma mensagem de uma fila para a qual o wrapper não tem handler, ele derruba a conexão e reconecta. A mensagem fica no servidor como `unconfirmed`, em vez de ser confirmada sem ter sido processada.
+- `SendMessage` e `SendRPCMessage` chamados sem conexão esperam até 5 segundos por ela e então devolvem `false`.
+- Um pedido sem resposta do servidor em 30 segundos derruba a conexão e devolve `false`.
+
+**Mudança em relação à DLL 1.x:** o `SendMessage` da 1.x devolvia `true` sempre, mesmo com o servidor fora; só o `SendRPCMessage` devolvia `false`. Na 2.0 o `SendMessage` devolve `false` quando o servidor não confirma, nos dois protocolos.
+
+### 7.3.1 `pProcessing`
+
+O handler que termina com `pProcessing` ligado faz o wrapper parar de consumir, como sempre fez. Em v2 o wrapper desvincula todas as filas, confirma a mensagem que acabou de processar e não recebe mais nada; as mensagens seguintes ficam na fila para outros consumidores.
+
+### 7.3.2 `StopThreads`
+
+Desvincula as filas, termina a mensagem que estiver em processamento, confirma e fecha a conexão. A chamada espera até 2 segundos por isso. Depois dela, o que a aplicação ainda enviar vai por v1.
 
 ### 7.4 Threads
 
-- Uma thread de consumo por instância do wrapper chama os handlers de fila em série, como hoje.
+- Uma thread de consumo por instância do wrapper chama os handlers de fila em série, nos dois protocolos e durante a troca entre eles.
 - Handlers de resposta de RPC e `OnRPCExpired` são chamados fora da thread de consumo, como hoje.
+- A conexão é lida por uma thread própria e vigiada por outra. Nada no wrapper espera pelo pool de threads: uma aplicação com muitas chamadas de envio bloqueadas ao mesmo tempo esgotaria o pool e ninguém seria acordado.
+- Uma exceção que escapa de um handler continua derrubando o processo, como na 1.x. Em v2 a mensagem fica no servidor como `unconfirmed`.
 
 ### 7.5 Distribuição
 
@@ -369,5 +397,5 @@ Um servidor que não conhece um desses campos o ignora; um cliente que precisa d
 - Testes de convivência v1 e v2 para cada linha da tabela da seção 9.
 - Teste de entrega única com consumidores v1 e v2 concorrendo na mesma fila.
 - O wrapper 2.0 contra o servidor 2.1 e contra um servidor 1.x, com a troca de protocolo sem reiniciar o processo.
-- As aplicações de exemplo compiladas contra a DLL 1.x, rodando com a DLL 2.0 no lugar, sem recompilar.
+- Código compilado contra a DLL 1.x, rodando com a DLL 2.0 no lugar, sem recompilar; e a superfície pública das duas DLLs comparada membro a membro.
 - O contrato v1 (`tests/contract`) continua passando sem alteração.

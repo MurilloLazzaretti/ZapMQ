@@ -217,6 +217,9 @@ internal sealed class V2Connection(WebSocket socket, Broker broker, V2Options op
                 return settled ? V2Frames.Ok(id) : throw NotFound();
             }
 
+            case "ping":
+                return V2Frames.Ok(id);
+
             case "await":
             {
                 var queue = Queue(request);

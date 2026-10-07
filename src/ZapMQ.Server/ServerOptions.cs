@@ -46,6 +46,11 @@ public sealed class ServerOptions
 
 public sealed class V2Options
 {
+    /// <summary>
+    /// Off, the server answers the 1.x protocol only and v2 wrappers fall back to it.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
     public int MaxFrameBytes { get; set; } = 4 * 1024 * 1024;
 
     public int PingSeconds { get; set; } = 15;

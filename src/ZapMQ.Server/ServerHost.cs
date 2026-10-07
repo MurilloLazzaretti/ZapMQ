@@ -80,7 +80,8 @@ public static class ServerHost
             app.Services.GetRequiredService<V2Connections>().DrainAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
         });
 
-        app.MapV2(options.V2);
+        if (options.V2.Enabled)
+            app.MapV2(options.V2);
         app.MapDataSnap();
         app.MapAdmin();
         app.MapGet("/health", () => Results.Json(new { status = "ok" }));

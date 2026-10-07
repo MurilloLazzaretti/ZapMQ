@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json.Linq;
 
 namespace ZapMQ.Server.Tests;
@@ -82,6 +84,36 @@ public class V2ProtocolTests(ServerFixture server) : IClassFixture<ServerFixture
 
         Assert.Equal("unsupported-protocol", (string)reply["error"]!["code"]!);
         await client.Closed.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task Ping_is_answered()
+    {
+        await using var client = await Connect();
+
+        Assert.True((bool)(await client.RequestAsync(new JObject { ["op"] = "ping" }))["ok"]!);
+    }
+
+    [Fact]
+    public async Task With_v2_turned_off_the_server_answers_the_old_protocol_only()
+    {
+        var app = ServerHost.Build([], builder => builder.Configuration.AddInMemoryCollection(
+            new Dictionary<string, string?> { ["ZapMQ:Port"] = "0", ["ZapMQ:V2:Enabled"] = "false" }));
+        await app.StartAsync();
+        try
+        {
+            var port = new Uri(app.Urls.First().Replace("[::]", "localhost").Replace("0.0.0.0", "localhost")).Port;
+            using var http = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}/") };
+
+            await Assert.ThrowsAsync<System.Net.WebSockets.WebSocketException>(() => V2Client.ConnectAsync(port));
+            Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync("v2")).StatusCode);
+            Assert.Equal("{\"result\":[\"\"]}", await http.GetStringAsync("datasnap/rest/TZapMethods/GetMessage/" + Queue()));
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
     }
 
     [Fact]
