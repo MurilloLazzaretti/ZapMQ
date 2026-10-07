@@ -274,12 +274,12 @@ Regras que continuam iguais: não é permitido enviar para uma fila vinculada pe
 
 O wrapper trabalha em v1 desde o primeiro instante, com o mesmo código da DLL 1.x, e passa para v2 assim que uma conexão fica pronta. Sempre que não há conexão v2 ele está em v1. Assim uma instância nunca fica parada esperando a conexão: consome e envia desde que é criada, como a 1.x.
 
-1. Uma instância nova espera de 10 a 20 segundos (10 fixos mais um tempo sorteado) antes da primeira tentativa de v2; nesse período trabalha só em v1, com o custo que a 1.x tinha. Depois disso, e sempre que perde a conexão, tenta abrir o WebSocket em `/v2`, em segundo plano.
+1. Ao iniciar, e sempre que perde a conexão, o wrapper tenta abrir o WebSocket em `/v2`, em segundo plano.
 2. Se o servidor recusar o WebSocket mas responder a uma chamada 1.x inofensiva (a resposta de uma mensagem que não existe), é um servidor que só atende v1: a próxima tentativa de v2 fica para dali a um minuto, e as respostas de RPC que o wrapper esperava por v2 passam a ser coletadas pela forma antiga.
 3. Se o servidor aceitar o WebSocket mas a saudação não se completar a tempo (máquina sobrecarregada), ou se não responder de forma alguma, o wrapper tenta de novo com a espera da seção 7.3.
 4. Quando a conexão v2 fica pronta, o wrapper vincula as filas e para de consultar por v1. A troca acontece com a aplicação rodando, nos dois sentidos.
 
-A primeira versão do wrapper só começava a consumir depois de a conexão v2 estar pronta. Num servidor que inicia dezenas de serviços ao mesmo tempo isso levou mais de dez segundos, o suficiente para o Worker Control dar o processo como morto. Daí a regra acima. A espera inicial existe pelo mesmo motivo: um serviço recém-iniciado está ocupado iniciando, muitas vezes junto com dezenas de outros, e o sorteio evita que todos conectem no mesmo instante.
+A primeira versão do wrapper só começava a consumir depois de a conexão v2 estar pronta. Num servidor que inicia dezenas de serviços ao mesmo tempo isso levou mais de dez segundos, o suficiente para o Worker Control dar o processo como morto. Daí a regra acima.
 
 ### 7.3 Reconexão
 
