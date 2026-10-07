@@ -5,11 +5,22 @@ namespace ZapMQ.Server.V1;
 
 /// <summary>
 /// The 1.x protocol: DataSnap REST calls to <c>TZapMethods</c>, every parameter in the URL path.
-/// Existing wrappers keep talking to the server through these routes.
+/// Existing wrappers keep talking to the server through these routes, so the answers follow the
+/// 1.x server case by case (see tests/contract).
 /// </summary>
 public static class DataSnapEndpoints
 {
     private const string Prefix = "/datasnap/rest/TZapMethods/";
+
+    private sealed record Method(string Name, int Parameters, Func<Broker, string[], string> Invoke);
+
+    private static readonly Method[] Methods =
+    [
+        new("GetMessage", 1, GetMessage),
+        new("UpdateMessage", 2, UpdateMessage),
+        new("GetRPCResponse", 2, GetRpcResponse),
+        new("UpdateRPCResponse", 3, UpdateRpcResponse)
+    ];
 
     public static void MapDataSnap(this IEndpointRouteBuilder routes) =>
         routes.Map(Prefix + "{**call}", Handle);
@@ -19,16 +30,21 @@ public static class DataSnapEndpoints
         byte[] payload;
         try
         {
-            payload = V1Message.Envelope(Invoke(broker, ReadCall(context)));
+            payload = V1Message.Envelope(Invoke(broker, context.Request.Method, ReadCall(context)));
         }
-        catch (V1Exception error)
+        catch (Exception error) when (error is V1Exception or ArgumentException)
         {
             loggers.CreateLogger(typeof(DataSnapEndpoints)).LogWarning("Rejected 1.x call: {Reason}", error.Message);
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             payload = V1Message.Error(error.Message);
         }
 
-        context.Response.ContentType = "application/json; charset=utf-8";
+        // Same headers a DataSnap server sends. Its clients read the session from Pragma; the
+        // broker keeps no session, but the response keeps the shape those clients are used to.
+        context.Response.Headers.Pragma = $"dssession={Random.Shared.Next(100000, 999999)}.{Random.Shared.Next(100000, 999999)}.{Random.Shared.Next(100000, 999999)},dssessionexpires=1000";
+        context.Response.Headers.Connection = "keep-alive";
+        context.Response.Headers.Server = "DatasnapHTTPService/2011";
+        context.Response.ContentType = "application/json";
         context.Response.ContentLength = payload.Length;
         await context.Response.Body.WriteAsync(payload);
     }
@@ -44,61 +60,73 @@ public static class DataSnapEndpoints
         if (start < 0)
             throw new V1Exception("Invalid request");
 
-        var segments = target[(start + Prefix.Length)..].Split('/');
+        var path = target[(start + Prefix.Length)..];
+        var query = path.IndexOf('?');
+        if (query >= 0)
+            path = path[..query];
+
+        var segments = path.Split('/');
         for (var i = 0; i < segments.Length; i++)
             segments[i] = Uri.UnescapeDataString(segments[i]);
         return segments;
     }
 
-    private static string Invoke(Broker broker, string[] call)
+    private static string Invoke(Broker broker, string verb, string[] call)
     {
-        var method = call[0];
-
-        if (method.Equals("GetMessage", StringComparison.OrdinalIgnoreCase))
+        // DataSnap maps the HTTP verb to a method-name prefix, and no method here has one: only
+        // GET reaches a method.
+        var name = verb.ToUpperInvariant() switch
         {
-            var queue = Parameters(call, 1)[0];
-            return broker.Take(queue) is { } message ? V1Message.Serialize(message) : string.Empty;
-        }
+            "GET" => call[0],
+            "POST" => "update" + call[0],
+            "PUT" => "accept" + call[0],
+            "DELETE" => "cancel" + call[0],
+            _ => call[0]
+        };
 
-        if (method.Equals("UpdateMessage", StringComparison.OrdinalIgnoreCase))
-        {
-            var parameters = Parameters(call, 2);
-            var publication = V1Message.ParsePublication(parameters[1]);
-            return broker.Publish(parameters[0], publication.Body, publication.Rpc, publication.Ttl);
-        }
+        var method = Array.Find(Methods, m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new V1Exception($"TZapMethods.{name} method not found in the server method list");
 
-        if (method.Equals("GetRPCResponse", StringComparison.OrdinalIgnoreCase))
-        {
-            var parameters = Parameters(call, 2);
-            return broker.TakeResponse(parameters[0], parameters[1]) is { } message
-                ? V1Message.Serialize(message)
-                : string.Empty;
-        }
+        var received = call.Length - 1;
+        if (received > method.Parameters)
+            throw new V1Exception(
+                $"Server method TZapMethods.{method.Name} consumed only {method.Parameters} input parameters out of {received}. " +
+                "Either call with more parameters or change method definition.");
 
-        if (method.Equals("UpdateRPCResponse", StringComparison.OrdinalIgnoreCase))
-        {
-            var parameters = Parameters(call, 3);
-            var response = V1Message.ParseResponse(parameters[2]);
-            return response is not null && broker.Respond(parameters[0], parameters[1], response)
-                ? "OK"
-                : string.Empty;
-        }
+        // Parameters left out arrive as empty text.
+        var parameters = new string[method.Parameters];
+        for (var i = 0; i < parameters.Length; i++)
+            parameters[i] = i < received ? call[i + 1] : string.Empty;
 
-        throw new V1Exception($"TZapMethods.{method} method not found in the server method list");
+        return method.Invoke(broker, parameters);
     }
 
-    /// <summary>
-    /// Returns the parameters of a call. The JSON payload is always the last one, so a client
-    /// that left a slash unescaped inside it still gets its payload back in one piece.
-    /// </summary>
-    private static string[] Parameters(string[] call, int count)
-    {
-        if (call.Length - 1 < count || string.IsNullOrEmpty(call[1]))
-            throw new V1Exception("Invalid number of parameters");
+    private static string GetMessage(Broker broker, string[] parameters) =>
+        broker.Take(parameters[0]) is { } message ? V1Message.Serialize(message) : string.Empty;
 
-        var parameters = new string[count];
-        Array.Copy(call, 1, parameters, 0, count - 1);
-        parameters[count - 1] = string.Join('/', call, count, call.Length - count);
-        return parameters;
+    private static string UpdateMessage(Broker broker, string[] parameters)
+    {
+        var publication = V1Message.ParsePublication(parameters[1]);
+        return broker.Publish(parameters[0], publication.Body, publication.Rpc, publication.Ttl);
+    }
+
+    private static string GetRpcResponse(Broker broker, string[] parameters) =>
+        broker.TakeResponse(parameters[0], parameters[1]) is { } message ? V1Message.Serialize(message) : string.Empty;
+
+    private static string UpdateRpcResponse(Broker broker, string[] parameters)
+    {
+        switch (V1Message.ParseResponse(parameters[2], out var response))
+        {
+            case V1Message.ResponseKind.Object:
+                return broker.Respond(parameters[0], parameters[1], response) ? "OK" : string.Empty;
+
+            // The message is looked up before the payload is examined, so this only fails for a
+            // message that exists.
+            case V1Message.ResponseKind.NotAnObject when broker.Contains(parameters[0], parameters[1]):
+                throw V1Message.NotAnObjectError();
+
+            default:
+                return string.Empty;
+        }
     }
 }

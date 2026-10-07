@@ -1,0 +1,892 @@
+{
+  "answer.unknown_queue": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_invalid.array": {
+    "body": "{\"error\":\"Invalid class typecast\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "answer_invalid.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":true,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_invalid.not_json": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_invalid.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_invalid.response": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":true,\\\"TTL\\\":0,\\\"Response\\\":{\\\"n\\\":2}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_invalid.twice_first": {
+    "body": "{\"result\":[\"OK\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_invalid.twice_second": {
+    "body": "{\"result\":[\"OK\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_pending.answer": {
+    "body": "{\"result\":[\"OK\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_pending.get": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_pending.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_pending.response": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":true,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_plain.answer_pending": {
+    "body": "{\"result\":[\"OK\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "answer_plain.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "body_array.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "body_array.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "body_null.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "body_null.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "body_number.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "body_number.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "body_string.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "body_string.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "errors.get_message_empty_queue": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "errors.get_message_extra_parameter": {
+    "body": "{\"error\":\"Server method TZapMethods.GetMessage consumed only 1 input parameters out of 2. Either call with more parameters or change method definition.\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "errors.get_message_no_queue": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "errors.lowercase_method": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "errors.unknown_method": {
+    "body": "{\"error\":\"TZapMethods.Nope method not found in the server method list\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "errors.update_message_no_payload": {
+    "body": "{\"error\":\"Invalid JSON format\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "escaped_unicode.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{\\\"text\\\":\\\"a\\u00E7\\u00E3o\\\"},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "escaped_unicode.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "fields_client_id.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{\\\"a\\\":1},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "fields_client_id.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "fields_empty_object.get": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "fields_empty_object.publish": {
+    "body": "{\"error\":\"Value 'Id' not found\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "fields_no_body.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "fields_no_body.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "fields_no_id.get": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "fields_no_id.publish": {
+    "body": "{\"error\":\"Value 'Id' not found\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "fields_no_rpc.get": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "fields_no_rpc.publish": {
+    "body": "{\"error\":\"Value 'RPC' not found\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "fields_no_ttl.get": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "fields_no_ttl.publish": {
+    "body": "{\"error\":\"Value 'TTL' not found\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "get_message.unknown_queue": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "invalid_array.publish": {
+    "body": "{\"error\":\"Invalid class typecast\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "invalid_empty.publish": {
+    "body": "{\"error\":\"Invalid JSON format\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "invalid_not_json.publish": {
+    "body": "{\"error\":\"Invalid JSON format\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "invalid_string.publish": {
+    "body": "{\"error\":\"Invalid class typecast\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "invalid_truncated.publish": {
+    "body": "{\"error\":\"Invalid JSON format\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "plain.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{\\\"name\\\":\\\"x\\\",\\\"n\\\":1.50,\\\"b\\\":true,\\\"z\\\":null},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "plain.get_again": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "plain.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "plus_sign.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{\\\"p\\\":\\\"a+b c\\\"},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "plus_sign.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "question_mark.get": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "question_mark.publish": {
+    "body": "{\"error\":\"Invalid JSON format\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "raw_slash.get": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "raw_slash.publish": {
+    "body": "{\"error\":\"Server method TZapMethods.UpdateMessage consumed only 2 input parameters out of 4. Either call with more parameters or change method definition.\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "response.unknown_queue": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc.answer": {
+    "body": "{\"result\":[\"OK\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{\\\"ask\\\":1},\\\"RPC\\\":true,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc.get_again": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc.response": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{\\\"ask\\\":1},\\\"RPC\\\":true,\\\"TTL\\\":0,\\\"Response\\\":{\\\"answer\\\":42,\\\"text\\\":\\\"a\\u00E7\\u00E3o\\\"}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc.response_again": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc.response_before_answer": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc.response_before_delivery": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc_unbraced_id.answer_raw_braces": {
+    "body": "{\"result\":[\"OK\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc_unbraced_id.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":true,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc_unbraced_id.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "rpc_unbraced_id.response_raw_braces": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":true,\\\"TTL\\\":0,\\\"Response\\\":{\\\"a\\\":1}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "text.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{\\\"path\\\":\\\"D:\\\\\\\\files\\\\\\\\a b\\\\\\/c.bmp\\\",\\\"url\\\":\\\"http:\\\\\\/\\\\\\/h:80\\\\\\/x?y=1&z=2#f\\\",\\\"text\\\":\\\"a\\u00E7\\u00E3o \\u20AC + % \\\\\\\"q\\\\\\\" <tag> 'single'\\\",\\\"tab\\\":\\\"a\\\\tb\\\\nc\\\"},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "text.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "ttl_40000.get_after_4s": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "ttl_40000.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "ttl_67536.get_after_4s": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "ttl_67536.publish": {
+    "body": "{\"error\":\"'67536' is not a valid integer value\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "ttl_fraction.get_after_4s": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "ttl_fraction.publish": {
+    "body": "{\"error\":\"'1500.5' is not a valid integer value\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "ttl_negative.get_after_4s": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "ttl_negative.publish": {
+    "body": "{\"error\":\"'-1' is not a valid integer value\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "ttl_short.get_after_4s": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "ttl_short.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "ttl_text.get_after_4s": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "ttl_text.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "verbs.get_after_posts": {
+    "body": "{\"result\":[\"\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "verbs.post_get": {
+    "body": "{\"error\":\"TZapMethods.updateGetMessage method not found in the server method list\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "verbs.post_update": {
+    "body": "{\"error\":\"TZapMethods.updateUpdateMessage method not found in the server method list\"}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 500
+  },
+  "whitespace.get": {
+    "body": "{\"result\":[\"{\\\"Id\\\":\\\"{<id>}\\\",\\\"Body\\\":{\\\"a\\\":[1,2],\\\"b\\\":{}},\\\"RPC\\\":false,\\\"TTL\\\":0,\\\"Response\\\":{}}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  },
+  "whitespace.publish": {
+    "body": "{\"result\":[\"{<id>}\"]}",
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/json",
+      "pragma": "dssession=<session>,dssessionexpires=1000",
+      "server": "DatasnapHTTPService/2011"
+    },
+    "status": 200
+  }
+}

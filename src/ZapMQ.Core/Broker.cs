@@ -44,13 +44,16 @@ public sealed class Broker(BrokerOptions? options = null, TimeProvider? time = n
         _queues.TryGetValue(queue, out var target) ? target.Take() : null;
 
     /// <summary>
-    /// Stores the response of an RPC message that has already been delivered.
+    /// Stores the response of a message that is still in the queue, delivered or not.
     /// </summary>
     public bool Respond(string queue, string id, string response)
     {
         ArgumentNullException.ThrowIfNull(response);
         return _queues.TryGetValue(queue, out var target) && target.Respond(id, response);
     }
+
+    public bool Contains(string queue, string id) =>
+        _queues.TryGetValue(queue, out var target) && target.Contains(id);
 
     /// <summary>
     /// Returns an answered RPC message and removes it, or null while there is no response.

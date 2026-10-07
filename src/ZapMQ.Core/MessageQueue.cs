@@ -80,7 +80,20 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
     {
         lock (_gate)
         {
-            if (!_inFlight.TryGetValue(id, out var entry) || IsPastRetention(entry))
+            if (!_inFlight.TryGetValue(id, out var entry))
+            {
+                // 1.x accepts a response for a message nobody consumed yet: the message is then
+                // considered answered and is never delivered.
+                var node = FindPending(id);
+                if (node is null)
+                    return false;
+
+                entry = node.Value;
+                _pending.Remove(node);
+                _inFlight[id] = entry;
+            }
+
+            if (IsPastRetention(entry))
                 return false;
 
             if (entry.Response is null)
@@ -88,6 +101,12 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
             entry.Response = response;
             return true;
         }
+    }
+
+    public bool Contains(string id)
+    {
+        lock (_gate)
+            return _inFlight.ContainsKey(id) || FindPending(id) is not null;
     }
 
     public BrokerMessage? TakeResponse(string id)
@@ -145,6 +164,16 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
             return new QueueSnapshot(Name, _pending.Count, _inFlight.Count - answered, answered,
                 _published, _delivered, _responded, _expired, _dropped);
         }
+    }
+
+    private LinkedListNode<Entry>? FindPending(string id)
+    {
+        for (var node = _pending.First; node is not null; node = node.Next)
+        {
+            if (node.Value.Id == id)
+                return node;
+        }
+        return null;
     }
 
     private bool IsExpired(Entry entry) =>

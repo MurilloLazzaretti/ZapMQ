@@ -206,17 +206,31 @@ public class BrokerTests
     }
 
     [Fact]
-    public void Respond_is_refused_for_what_was_not_delivered_as_rpc()
+    public void Respond_is_refused_for_a_message_that_is_no_longer_in_the_queue()
     {
-        var pending = _broker.Publish("orders", "ask", rpc: true);
-        Assert.False(_broker.Respond("orders", pending, "answer"));
-
         var plain = _broker.Publish("plain", "tell");
         _broker.Take("plain");
         Assert.False(_broker.Respond("plain", plain, "answer"));
 
-        Assert.False(_broker.Respond("orders", "{UNKNOWN}", "answer"));
-        Assert.False(_broker.Respond("missing", pending, "answer"));
+        Assert.False(_broker.Respond("plain", "{UNKNOWN}", "answer"));
+        Assert.False(_broker.Respond("missing", plain, "answer"));
+    }
+
+    [Fact]
+    public void Message_answered_before_delivery_is_never_delivered()
+    {
+        _broker.Publish("orders", "first");
+        var id = _broker.Publish("orders", "ask", rpc: true);
+        _broker.Publish("orders", "last");
+
+        Assert.True(_broker.Contains("orders", id));
+        Assert.True(_broker.Respond("orders", id, "answer"));
+
+        Assert.Equal("first", _broker.Take("orders")!.Body);
+        Assert.Equal("last", _broker.Take("orders")!.Body);
+        Assert.Null(_broker.Take("orders"));
+        Assert.Equal("answer", _broker.TakeResponse("orders", id)!.Response);
+        Assert.False(_broker.Contains("orders", id));
     }
 
     [Fact]

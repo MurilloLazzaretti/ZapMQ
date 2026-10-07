@@ -56,21 +56,21 @@ public class DataSnapProtocolTests(ServerFixture server) : IClassFixture<ServerF
             ["nested"] = new JObject { ["list"] = new JArray(1, "two", JValue.CreateNull(), true) }
         };
 
-        await Publish(queue, new JObject { ["Body"] = body, ["RPC"] = false, ["TTL"] = 0 }.ToString());
+        await Publish(queue, new JObject { ["Id"] = "", ["Body"] = body, ["RPC"] = false, ["TTL"] = 0 }.ToString());
         var delivered = JObject.Parse(await Call($"GetMessage/{queue}"));
 
         Assert.True(JToken.DeepEquals(body, delivered["Body"]));
     }
 
     [Fact]
-    public async Task Payload_with_unescaped_slashes_is_kept_whole()
+    public async Task Payload_with_an_unescaped_slash_is_refused_like_in_1x()
     {
-        var queue = Queue();
+        using var response = await server.Http.GetAsync($"UpdateMessage/{Queue()}/%7B%22Id%22%3A%22%22%2C%22Body%22%3A%7B%22p%22%3A%22a/b%22%7D%2C%22RPC%22%3Afalse%2C%22TTL%22%3A0%7D");
 
-        await Call($"UpdateMessage/{queue}/" + "{\"Body\":{\"path\":\"a/b/c\"},\"RPC\":false,\"TTL\":0}".Replace("\"", "%22").Replace("{", "%7B").Replace("}", "%7D"));
-        var delivered = JObject.Parse(await Call($"GetMessage/{queue}"));
-
-        Assert.Equal("a/b/c", (string)delivered["Body"]!["path"]!);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal(
+            "Server method TZapMethods.UpdateMessage consumed only 2 input parameters out of 3. Either call with more parameters or change method definition.",
+            (string)JObject.Parse(await response.Content.ReadAsStringAsync())["error"]!);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class DataSnapProtocolTests(ServerFixture server) : IClassFixture<ServerF
         var queue = Queue();
         var text = new string('x', 300_000);
 
-        await Publish(queue, new JObject { ["Body"] = new JObject { ["text"] = text }, ["RPC"] = false, ["TTL"] = 0 }.ToString());
+        await Publish(queue, new JObject { ["Id"] = "", ["Body"] = new JObject { ["text"] = text }, ["RPC"] = false, ["TTL"] = 0 }.ToString());
         var delivered = JObject.Parse(await Call($"GetMessage/{queue}"));
 
         Assert.Equal(text, (string)delivered["Body"]!["text"]!);
@@ -90,7 +90,7 @@ public class DataSnapProtocolTests(ServerFixture server) : IClassFixture<ServerF
     {
         var queue = Queue();
 
-        await Publish(queue, "{\"Body\":\"text\",\"RPC\":false,\"TTL\":0}");
+        await Publish(queue, "{\"Id\":\"\",\"Body\":\"text\",\"RPC\":false,\"TTL\":0}");
         var delivered = JObject.Parse(await Call($"GetMessage/{queue}"));
 
         Assert.Equal("{}", delivered["Body"]!.ToString(Newtonsoft.Json.Formatting.None));
@@ -101,7 +101,7 @@ public class DataSnapProtocolTests(ServerFixture server) : IClassFixture<ServerF
     {
         var queue = Queue();
 
-        var id = await Publish(queue, "{\"Body\":{\"ask\":1},\"RPC\":true,\"TTL\":0}");
+        var id = await Publish(queue, "{\"Id\":\"\",\"Body\":{\"ask\":1},\"RPC\":true,\"TTL\":0}");
         Assert.Equal(string.Empty, await Call($"GetRPCResponse/{queue}/{Uri.EscapeDataString(id)}"));
 
         var delivered = JObject.Parse(await Call($"GetMessage/{queue}"));
@@ -126,21 +126,26 @@ public class DataSnapProtocolTests(ServerFixture server) : IClassFixture<ServerF
     {
         var queue = Queue();
 
-        await Publish(queue, "{\"Body\":{},\"RPC\":false,\"TTL\":200}");
+        await Publish(queue, "{\"Id\":\"\",\"Body\":{},\"RPC\":false,\"TTL\":200}");
         await Task.Delay(600);
 
         Assert.Equal(string.Empty, await Call($"GetMessage/{queue}"));
     }
 
     [Theory]
-    [InlineData("not json")]
-    [InlineData("[1,2]")]
-    public async Task Invalid_publication_is_an_error(string payload)
+    [InlineData("not json", "Invalid JSON format")]
+    [InlineData("[1,2]", "Invalid class typecast")]
+    [InlineData("{\"Body\":{},\"RPC\":false,\"TTL\":0}", "Value 'Id' not found")]
+    [InlineData("{\"Id\":\"\",\"Body\":{},\"TTL\":0}", "Value 'RPC' not found")]
+    [InlineData("{\"Id\":\"\",\"Body\":{},\"RPC\":false}", "Value 'TTL' not found")]
+    [InlineData("{\"Id\":\"\",\"Body\":{},\"RPC\":false,\"TTL\":65536}", "'65536' is not a valid integer value")]
+    [InlineData("{\"Id\":\"\",\"Body\":{},\"RPC\":false,\"TTL\":-1}", "'-1' is not a valid integer value")]
+    public async Task Invalid_publication_is_an_error(string payload, string error)
     {
         using var response = await server.Http.GetAsync($"UpdateMessage/{Queue()}/{Uri.EscapeDataString(payload)}");
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("Invalid JSON format", (string)JObject.Parse(await response.Content.ReadAsStringAsync())["error"]!);
+        Assert.Equal(error, (string)JObject.Parse(await response.Content.ReadAsStringAsync())["error"]!);
     }
 
     [Fact]
@@ -157,7 +162,7 @@ public class DataSnapProtocolTests(ServerFixture server) : IClassFixture<ServerF
         var queue = Queue();
         const int total = 300;
         for (var i = 0; i < total; i++)
-            await Publish(queue, "{\"Body\":{\"i\":" + i + "},\"RPC\":false,\"TTL\":0}");
+            await Publish(queue, "{\"Id\":\"\",\"Body\":{\"i\":" + i + "},\"RPC\":false,\"TTL\":0}");
 
         var consumers = Enumerable.Range(0, 12).Select(async _ =>
         {
