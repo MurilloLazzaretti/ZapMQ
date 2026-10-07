@@ -3,30 +3,32 @@ unit ZapMQ.Message.JSON;
 interface
 
 uses
-  JSON;
+  System.JSON;
 
 type
   TZapJSONMessage = class
   private
     FBody: TJSONObject;
     FId: string;
-    FRPC: boolean;
+    FRPC: Boolean;
     FTTL: Word;
     FResponse: TJSONObject;
     procedure SetBody(const Value: TJSONObject);
     procedure SetId(const Value: string);
-    procedure SetRPC(const Value: boolean);
+    procedure SetRPC(const Value: Boolean);
     procedure SetTTL(const Value: Word);
     procedure SetResponse(const Value: TJSONObject);
   public
-    property Id : string read FId write SetId;
-    property Body : TJSONObject read FBody write SetBody;
-    property RPC : boolean read FRPC write SetRPC;
-    property TTL : Word read FTTL write SetTTL;
-    property Response : TJSONObject read FResponse write SetResponse;
-    function ToJSON : TJSONObject;
+    property Id: string read FId write SetId;
+    property Body: TJSONObject read FBody write SetBody;
+    property RPC: Boolean read FRPC write SetRPC;
+    property TTL: Word read FTTL write SetTTL;
+    property Response: TJSONObject read FResponse write SetResponse;
+
+    function ToJSON: TJSONObject;
+    class function FromJSON(const pJSONString: string): TZapJSONMessage;
+
     destructor Destroy; override;
-    class function FromJSON(const pJSONString : string) : TZapJSONMessage;
   end;
 
 implementation
@@ -38,30 +40,9 @@ uses
 
 destructor TZapJSONMessage.Destroy;
 begin
-  if Assigned(Body) then
-    Body.Free;
-  if Assigned(Response) then
-    Response.Free;
+  FBody.Free;
+  FResponse.Free;
   inherited;
-end;
-
-class function TZapJSONMessage.FromJSON(
-  const pJSONString: string): TZapJSONMessage;
-var
-  JSON : TJSONObject;
-begin
-  JSON := TJSONObject.ParseJSONValue(
-    TEncoding.ASCII.GetBytes(pJSONString), 0) as TJSONObject;
-  try
-    Result := TZapJSONMessage.Create;
-    Result.FId := JSON.GetValue<string>('Id');
-    Result.FBody := TJSONObject.ParseJSONValue(
-      TEncoding.ASCII.GetBytes(JSON.GetValue<TJSONObject>('Body').ToString), 0) as TJSONObject;
-    Result.FRPC := JSON.GetValue<boolean>('RPC');
-    Result.FTTL := JSON.GetValue<Word>('TTL');
-  finally
-    JSON.Free;
-  end;
 end;
 
 procedure TZapJSONMessage.SetBody(const Value: TJSONObject);
@@ -79,7 +60,7 @@ begin
   FResponse := Value;
 end;
 
-procedure TZapJSONMessage.SetRPC(const Value: boolean);
+procedure TZapJSONMessage.SetRPC(const Value: Boolean);
 begin
   FRPC := Value;
 end;
@@ -92,13 +73,53 @@ end;
 function TZapJSONMessage.ToJSON: TJSONObject;
 begin
   Result := TJSONObject.Create;
-  Result.AddPair('Id', TJSONString.Create(FId));
-  Result.AddPair('Body', TJSONObject.ParseJSONValue(
-    TEncoding.ASCII.GetBytes(Body.ToString), 0) as TJSONValue);
+  Result.AddPair('Id', FId);
+
+  if Assigned(FBody) then
+    Result.AddPair('Body', FBody.Clone as TJSONObject)
+  else
+    Result.AddPair('Body', TJSONObject.Create);
+
   Result.AddPair('RPC', TJSONBool.Create(FRPC));
   Result.AddPair('TTL', TJSONNumber.Create(FTTL));
-  Result.AddPair('Response', TJSONObject.ParseJSONValue(
-    TEncoding.ASCII.GetBytes(Response.ToString), 0) as TJSONValue);
+
+  if Assigned(FResponse) then
+    Result.AddPair('Response', FResponse.Clone as TJSONObject)
+  else
+    Result.AddPair('Response', TJSONObject.Create);
+end;
+
+class function TZapJSONMessage.FromJSON(const pJSONString: string): TZapJSONMessage;
+var
+  JSON: TJSONObject;
+  BodyValue, RespValue: TJSONValue;
+begin
+  Result := TZapJSONMessage.Create;
+
+  JSON := TJSONObject.ParseJSONValue(pJSONString) as TJSONObject;
+  if not Assigned(JSON) then
+    raise Exception.Create('Invalid JSON format');
+
+  try
+    Result.FId := JSON.GetValue<string>('Id');
+    Result.FRPC := JSON.GetValue<Boolean>('RPC');
+    Result.FTTL := JSON.GetValue<Word>('TTL');
+
+    BodyValue := JSON.GetValue('Body');
+    if Assigned(BodyValue) and (BodyValue is TJSONObject) then
+      Result.FBody := (BodyValue as TJSONObject).Clone as TJSONObject
+    else
+      Result.FBody := TJSONObject.Create;
+
+    RespValue := JSON.GetValue('Response');
+    if Assigned(RespValue) and (RespValue is TJSONObject) then
+      Result.FResponse := (RespValue as TJSONObject).Clone as TJSONObject
+    else
+      Result.FResponse := TJSONObject.Create;
+  finally
+    JSON.Free;
+  end;
 end;
 
 end.
+

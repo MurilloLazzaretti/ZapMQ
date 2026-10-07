@@ -3,31 +3,37 @@ unit ZapMQ.Core;
 interface
 
 uses
-  ZapMQ.DataModule, ZapMQ.Queue;
+  ZapMQ.DataModule, ZapMQ.Queue, System.SyncObjs;
 
 type
   TZapCore = class
   private
-    FServer : TZapDataModule;
+    FServer: TZapDataModule;
     FQueues: TZapQueues;
     FPort: Word;
+    FQueueLock: TCriticalSection;
     procedure SetQueues(const Value: TZapQueues);
     procedure SetPort(const Value: Word);
     procedure LoadConfig;
   public
-    property Port : Word read FPort write SetPort;
-    property Queues : TZapQueues read FQueues write SetQueues;
+    property Port: Word read FPort write SetPort;
+    property Queues: TZapQueues read FQueues write SetQueues;
+    property QueueLock: TCriticalSection read FQueueLock;
+
     constructor Create; overload;
     destructor Destroy; override;
+
     class procedure Start;
     class procedure Stop;
   end;
 
-  const IniFileName = 'ZapMQ.ini';
-        IniSection  = 'ZapMQ';
-        DefaultPort = 5679;
+const
+  IniFileName = 'ZapMQ.ini';
+  IniSection  = 'ZapMQ';
+  DefaultPort = 5679;
 
-  var Context : TZapCore;
+var
+  Context: TZapCore;
 
 implementation
 
@@ -41,6 +47,7 @@ uses
 
 constructor TZapCore.Create;
 begin
+  FQueueLock := TCriticalSection.Create;
   FServer := TZapDataModule.Create(nil);
   FQueues := TZapQueues.Create;
   LoadConfig;
@@ -56,13 +63,14 @@ begin
   FServer.HTTPService.Active := False;
   FServer.Free;
   FQueues.Free;
+  FQueueLock.Free;
   inherited;
 end;
 
 procedure TZapCore.LoadConfig;
 var
-  IniFile : TIniFile;
-  FileName : string;
+  IniFile: TIniFile;
+  FileName: string;
 begin
   FileName := ExtractFilePath(Application.ExeName) + IniFileName;
   if not FileExists(FileName) then
@@ -103,3 +111,4 @@ begin
 end;
 
 end.
+

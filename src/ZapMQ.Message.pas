@@ -3,120 +3,178 @@ unit ZapMQ.Message;
 interface
 
 uses
-  JSON, ZapMQ.Message.JSON;
+  System.JSON, System.SyncObjs, ZapMQ.Message.JSON;
 
 type
-  TZapMessageStatus = (zCreated, zPending, zSended, zProcessing, zProcessed,
-    zAnswered, zExpired);
+  TZapMessageStatus = (zCreated, zPending, zSended, zProcessing, zProcessed, zAnswered, zExpired);
 
   TZapMessage = class
   private
-    FBirthTime : Cardinal;
+    FLock: TCriticalSection;
+    FBirthTime: UInt64;
     FBody: TJSONObject;
     FStatus: TZapMessageStatus;
     FQueueName: string;
     FTTL: Word;
     FId: string;
     FResponse: TJSONObject;
-    FRPC: boolean;
+    FRPC: Boolean;
+
     procedure SetBody(const Value: TJSONObject);
     procedure SetStatus(const Value: TZapMessageStatus);
     procedure SetQueueName(const Value: string);
     procedure SetTTL(const Value: Word);
     procedure SetId(const Value: string);
     procedure SetResponse(const Value: TJSONObject);
-    procedure SetRPC(const Value: boolean);
+    procedure SetRPC(const Value: Boolean);
   public
-    property Id : string read FId write SetId;
-    property TTL : Word read FTTL write SetTTL;
-    property QueueName : string read FQueueName write SetQueueName;
-    property Body : TJSONObject read FBody write SetBody;
-    property Status : TZapMessageStatus read FStatus write SetStatus;
-    property RPC : boolean read FRPC write SetRPC;
-    property Response : TJSONObject read FResponse write SetResponse;
-    function Prepare : TZapJSONMessage;
+    property Id: string read FId write SetId;
+    property TTL: Word read FTTL write SetTTL;
+    property QueueName: string read FQueueName write SetQueueName;
+    property Body: TJSONObject read FBody write SetBody;
+    property Status: TZapMessageStatus read FStatus write SetStatus;
+    property RPC: Boolean read FRPC write SetRPC;
+    property Response: TJSONObject read FResponse write SetResponse;
+    property BirthTime: UInt64 read FBirthTime;
+    function Prepare: TZapJSONMessage;
     procedure CheckExpiration;
-    constructor Create; overload;
+
+    constructor Create;
     destructor Destroy; override;
   end;
 
 implementation
 
 uses
-  Windows, System.SysUtils;
+  System.SysUtils, System.DateUtils, Winapi.Windows;
 
 { TZapMessage }
 
 constructor TZapMessage.Create;
 begin
+  FLock := TCriticalSection.Create;
   FStatus := zCreated;
-  FBirthTime := GetTickCount;
+  FBirthTime := GetTickCount64;
   FId := TGUID.NewGuid.ToString;
 end;
 
 destructor TZapMessage.Destroy;
 begin
-  if Assigned(FBody) then
-    FBody.Free;
-  if Assigned(FResponse) then
-    FResponse.Free;
+  FLock.Enter;
+  try
+    FreeAndNil(FBody);
+    FreeAndNil(FResponse);
+  finally
+    FLock.Leave;
+  end;
+  FLock.Free;
   inherited;
 end;
 
 procedure TZapMessage.CheckExpiration;
 begin
-  if FTTL > 0 then
-    if (FBirthTime + FTTL) < GetTickCount then
+  FLock.Enter;
+  try
+    if (FTTL > 0) and ((GetTickCount64 - FBirthTime) > FTTL) then
       FStatus := zExpired;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TZapMessage.Prepare: TZapJSONMessage;
+var
+  NewBody, NewResp: TJSONObject;
+begin
+  FLock.Enter;
+  try
+    Result := TZapJSONMessage.Create;
+    Result.Id := FId;
+    NewBody := TJSONObject.ParseJSONValue(FBody.ToJSON) as TJSONObject;
+    Result.Body := NewBody;
+    Result.RPC := FRPC;
+
+    if Assigned(FResponse) then
+    begin
+      NewResp := TJSONObject.ParseJSONValue(FResponse.ToJSON) as TJSONObject;
+      Result.Response := NewResp;
+    end;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TZapMessage.SetBody(const Value: TJSONObject);
 begin
-  FBody := Value;
+  FLock.Enter;
+  try
+    FreeAndNil(FBody);
+    FBody := Value;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TZapMessage.SetId(const Value: string);
 begin
-  FId := Value;
+  FLock.Enter;
+  try
+    FId := Value;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TZapMessage.SetQueueName(const Value: string);
 begin
-  FQueueName := Value;
+  FLock.Enter;
+  try
+    FQueueName := Value;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TZapMessage.SetResponse(const Value: TJSONObject);
 begin
-  FResponse := Value;
+  FLock.Enter;
+  try
+    FreeAndNil(FResponse);
+    FResponse := Value;
+  finally
+    FLock.Leave;
+  end;
 end;
 
-procedure TZapMessage.SetRPC(const Value: boolean);
+procedure TZapMessage.SetRPC(const Value: Boolean);
 begin
-  FRPC := Value;
+  FLock.Enter;
+  try
+    FRPC := Value;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TZapMessage.SetStatus(const Value: TZapMessageStatus);
 begin
-  FStatus := Value;
+  FLock.Enter;
+  try
+    FStatus := Value;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TZapMessage.SetTTL(const Value: Word);
 begin
-  FTTL := Value;
-end;
-
-function TZapMessage.Prepare: TZapJSONMessage;
-begin
-  Result := TZapJSONMessage.Create;
-  Result.Id := FId;
-  Result.Body := TJSONObject.ParseJSONValue(
-    TEncoding.ASCII.GetBytes(FBody.ToString), 0) as TJSONObject;
-  Result.RPC := FRPC;
-  if Assigned(FResponse) then
-  begin
-    Result.Response := TJSONObject.ParseJSONValue(
-      TEncoding.ASCII.GetBytes(FResponse.ToString), 0) as TJSONObject;
+  FLock.Enter;
+  try
+    FTTL := Value;
+  finally
+    FLock.Leave;
   end;
 end;
 
 end.
+

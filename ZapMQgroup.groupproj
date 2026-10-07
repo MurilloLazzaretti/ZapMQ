@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{64404FAF-17B6-451F-BD0A-3901256BBB16}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="ZapMQ.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Z:\prod\ZapMQ\standalone\StandAlone.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="ZapMQ">
+        <MSBuild Projects="ZapMQ.dproj"/>
+    </Target>
+    <Target Name="ZapMQ:Clean">
+        <MSBuild Projects="ZapMQ.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ZapMQ:Make">
+        <MSBuild Projects="ZapMQ.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="StandAlone">
+        <MSBuild Projects="Z:\prod\ZapMQ\standalone\StandAlone.dproj"/>
+    </Target>
+    <Target Name="StandAlone:Clean">
+        <MSBuild Projects="Z:\prod\ZapMQ\standalone\StandAlone.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="StandAlone:Make">
+        <MSBuild Projects="Z:\prod\ZapMQ\standalone\StandAlone.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="ZapMQ;StandAlone"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="ZapMQ:Clean;StandAlone:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="ZapMQ:Make;StandAlone:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

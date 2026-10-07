@@ -4,17 +4,16 @@ interface
 
 uses
   System.Classes,
-  JSON;
+  System.JSON;
 
 type
 {$METHODINFO ON}
   TZapMethods = class(TComponent)
   public
-    function GetMessage(const pQueueName : string) : string;
-    function GetRPCResponse(const pQueueName : string; const pIdMessage : string) : string;
-    function UpdateMessage(const pQueueName : string; const pMessage : string) : string;
-    function UpdateRPCResponse(const pQueueName : string; const pIdMessage : string;
-      const pMessage : string) : string;
+    function GetMessage(const pQueueName: string): string;
+    function GetRPCResponse(const pQueueName, pIdMessage: string): string;
+    function UpdateMessage(const pQueueName, pMessage: string): string;
+    function UpdateRPCResponse(const pQueueName, pIdMessage, pMessage: string): string;
   end;
 {$METHODINFO OFF}
 
@@ -27,13 +26,13 @@ uses
 
 function TZapMethods.GetMessage(const pQueueName: string): string;
 var
-  Queue : TZapQueue;
-  ZapMessage : TZapMessage;
-  ZapJSONMessage : TZapJSONMessage;
-  JSON : TJSONObject;
+  Queue: TZapQueue;
+  ZapMessage: TZapMessage;
+  ZapJSONMessage: TZapJSONMessage;
+  JSON: TJSONObject;
 begin
   Result := '';
-  Queue := ZapMQ.Core.Context.Queues.Find(pQueueName);
+  Queue := Context.Queues.Find(pQueueName);
   if Assigned(Queue) then
   begin
     ZapMessage := Queue.GetNextMessageToProcess;
@@ -44,17 +43,14 @@ begin
         JSON := ZapJSONMessage.ToJSON;
         try
           Result := JSON.ToString;
-          if ZapMessage.RPC then
-          begin
-            ZapMessage.Status := zSended;
-          end
-          else
-          begin
-            ZapMessage.Status := zProcessed;
-          end;
         finally
           JSON.Free;
         end;
+
+        if ZapMessage.RPC then
+          ZapMessage.Status := zSended
+        else
+          ZapMessage.Status := zProcessed;
       finally
         ZapJSONMessage.Free;
       end;
@@ -62,80 +58,84 @@ begin
   end;
 end;
 
-function TZapMethods.GetRPCResponse(const pQueueName,
-  pIdMessage: string): string;
+function TZapMethods.GetRPCResponse(const pQueueName, pIdMessage: string): string;
 var
-  Queue : TZapQueue;
-  ZapMessage : TZapMessage;
-  ZapJSONMessage : TZapJSONMessage;
-  JSON : TJSONObject;
+  Queue: TZapQueue;
+  ZapMessage: TZapMessage;
+  ZapJSONMessage: TZapJSONMessage;
+  JSON: TJSONObject;
 begin
-  Result := string.Empty;
-  Queue := ZapMQ.Core.Context.Queues.Find(pQueueName);
+  Result := '';
+  Queue := Context.Queues.Find(pQueueName);
   if Assigned(Queue) then
   begin
     ZapMessage := Queue.GetMessage(pIdMessage);
-    if Assigned(ZapMessage) then
+    if Assigned(ZapMessage) and (ZapMessage.Status = zAnswered) then
     begin
-      if ZapMessage.Status = zAnswered then
-      begin
-        ZapJSONMessage := ZapMessage.Prepare;
+      ZapJSONMessage := ZapMessage.Prepare;
+      try
+        JSON := ZapJSONMessage.ToJSON;
         try
-          JSON := ZapJSONMessage.ToJSON;
-          try
-            Result := JSON.ToString;
-            ZapMessage.Status := zProcessed;
-          finally
-            JSON.Free;
-          end;
+          Result := JSON.ToString;
         finally
-          ZapJSONMessage.Free;
+          JSON.Free;
         end;
+
+        ZapMessage.Status := zProcessed;
+      finally
+        ZapJSONMessage.Free;
       end;
     end;
   end;
 end;
 
-function TZapMethods.UpdateMessage(const pQueueName : string; const pMessage : string) : string;
+function TZapMethods.UpdateMessage(const pQueueName, pMessage: string): string;
 var
-  ZapMessage : TZapMessage;
-  ZapJSONMessage : TZapJSONMessage;
+  ZapJSONMessage: TZapJSONMessage;
+  ZapMessage: TZapMessage;
 begin
   ZapJSONMessage := TZapJSONMessage.FromJSON(pMessage);
   try
     ZapMessage := TZapMessage.Create;
     ZapMessage.QueueName := pQueueName;
     ZapMessage.TTL := ZapJSONMessage.TTL;
-    ZapMessage.Body := TJSONObject.ParseJSONValue(
-      TEncoding.ASCII.GetBytes(ZapJSONMessage.Body.ToString), 0) as TJSONObject;
+
+    if Assigned(ZapJSONMessage.Body) then
+      ZapMessage.Body := TJSONObject.ParseJSONValue(ZapJSONMessage.Body.ToJSON) as TJSONObject;
+
     ZapMessage.RPC := ZapJSONMessage.RPC;
     ZapMessage.Response := TJSONObject.Create;
+
+    Context.Queues.AddMessage(ZapMessage);
     Result := ZapMessage.Id;
-    ZapMQ.Core.Context.Queues.AddMessage(ZapMessage);
   finally
     ZapJSONMessage.Free;
   end;
 end;
 
-function TZapMethods.UpdateRPCResponse(const pQueueName : string; const pIdMessage : string;
-  const pMessage : string): string;
+function TZapMethods.UpdateRPCResponse(const pQueueName, pIdMessage, pMessage: string): string;
 var
-  ZapMessage : TZapMessage;
-  Queue : TZapQueue;
+  Queue: TZapQueue;
+  ZapMessage: TZapMessage;
+  ParsedJSON: TJSONObject;
 begin
-  Result := string.Empty;
-  Queue := ZapMQ.Core.Context.Queues.Find(pQueueName);
+  Result := '';
+  Queue := Context.Queues.Find(pQueueName);
   if Assigned(Queue) then
   begin
     ZapMessage := Queue.GetMessage(pIdMessage);
     if Assigned(ZapMessage) then
     begin
-      ZapMessage.Response.Free;
-      ZapMessage.Response := TJSONObject.ParseJSONValue(
-        TEncoding.ASCII.GetBytes(pMessage), 0) as TJSONObject;;
-      ZapMessage.Status := zAnswered;
+      ParsedJSON := TJSONObject.ParseJSONValue(TEncoding.UTF8.GetBytes(pMessage), 0) as TJSONObject;
+      if Assigned(ParsedJSON) then
+      begin
+        ZapMessage.Response := ParsedJSON;
+        ZapMessage.Status := zAnswered;
+        Result := 'OK';
+      end;
     end;
   end;
 end;
 
 end.
+

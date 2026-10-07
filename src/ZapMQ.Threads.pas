@@ -3,64 +3,62 @@ unit ZapMQ.Threads;
 interface
 
 uses
-  System.classes, ZapMQ.Message, ZapMQ.Core, ZapMQ.Queue, SyncObjs;
+  System.Classes, ZapMQ.Message, ZapMQ.Core, ZapMQ.Queue, SyncObjs;
 
 type
   TZapMQCleanerThread = class(TThread)
   private
-    FEvent : TEvent;
-    FStatusMessage : TZapMessageStatus;
-    FContext : TZapCore;
+    FEvent: TEvent;
+    FStatusMessage: TZapMessageStatus;
+    FContext: TZapCore;
   public
     procedure Execute; override;
     procedure Stop;
-    constructor Create(const pStatusMessage : TZapMessageStatus;
-      const pContext : TZapCore); overload;
+    constructor Create(const pStatusMessage: TZapMessageStatus; const pContext: TZapCore);
     destructor Destroy; override;
   end;
 
   TZapMQCheckExpirationThread = class(TThread)
   private
-    FEvent : TEvent;
-    FContext : TZapCore;
+    FEvent: TEvent;
+    FContext: TZapCore;
   public
     procedure Execute; override;
     procedure Stop;
-    constructor Create(const pContext : TZapCore); overload;
+    constructor Create(const pContext: TZapCore);
     destructor Destroy; override;
   end;
 
   TZapMQCheckSendedThread = class(TThread)
   private
-    FEvent : TEvent;
-    FContext : TZapCore;
+    FEvent: TEvent;
+    FContext: TZapCore;
   public
     procedure Execute; override;
     procedure Stop;
-    constructor Create(const pContext : TZapCore); overload;
+    constructor Create(const pContext: TZapCore);
     destructor Destroy; override;
   end;
 
   TZapMQQueueCleaner = class(TThread)
   private
-    FEvent : TEvent;
-    FContext : TZapCore;
+    FEvent: TEvent;
+    FContext: TZapCore;
   public
     procedure Execute; override;
     procedure Stop;
-    constructor Create(const pContext : TZapCore); overload;
+    constructor Create(const pContext: TZapCore);
     destructor Destroy; override;
   end;
 
 implementation
 
 uses
-  System.DateUtils, System.SysUtils;
+  System.SysUtils, System.DateUtils, ZapMQ.Utils;
 
 { TZapMQCleanerThread }
 
-constructor TZapMQCleanerThread.Create(const pStatusMessage : TZapMessageStatus;
-  const pContext : TZapCore);
+constructor TZapMQCleanerThread.Create(const pStatusMessage: TZapMessageStatus; const pContext: TZapCore);
 begin
   inherited Create(True);
   FStatusMessage := pStatusMessage;
@@ -76,15 +74,29 @@ end;
 
 procedure TZapMQCleanerThread.Execute;
 var
-  Queue : TZapQueue;
+  Queue: TZapQueue;
 begin
   inherited;
   while not Terminated do
   begin
-    for Queue in Context.Queues.All do
-    begin
-      Queue.CleanMessages(FStatusMessage);
+    try
+      FContext.QueueLock.Enter;
+      try
+        for Queue in FContext.Queues.All do
+        begin
+          if ((FStatusMessage = zProcessed) or (FStatusMessage = zExpired)) then
+            Queue.CleanMessages(FStatusMessage)
+          else
+            Queue.CleanMessages(FStatusMessage, 180000);
+        end;
+      finally
+        FContext.QueueLock.Leave;
+      end;
+    except
+      on E: Exception do
+        LogError('CleanerThread: ' + E.Message);
     end;
+
     FEvent.ResetEvent;
     FEvent.WaitFor(1000);
   end;
@@ -94,7 +106,7 @@ procedure TZapMQCleanerThread.Stop;
 begin
   Terminate;
   FEvent.SetEvent;
-  while not Terminated do;
+  WaitFor;
 end;
 
 { TZapMQCheckExpirationThread }
@@ -114,15 +126,26 @@ end;
 
 procedure TZapMQCheckExpirationThread.Execute;
 var
-  Queue : TZapQueue;
+  Queue: TZapQueue;
 begin
   inherited;
   while not Terminated do
   begin
-    for Queue in Context.Queues.All do
-    begin
-      Queue.CheckExpirationMessages;
+    try
+      FContext.QueueLock.Enter;
+      try
+        for Queue in FContext.Queues.All do
+        begin
+          Queue.CheckExpirationMessages;
+        end;
+      finally
+        FContext.QueueLock.Leave;
+      end;
+    except
+      on E: Exception do
+        LogError('ExpirationThread: ' + E.Message);
     end;
+
     FEvent.ResetEvent;
     FEvent.WaitFor(1000);
   end;
@@ -132,7 +155,7 @@ procedure TZapMQCheckExpirationThread.Stop;
 begin
   Terminate;
   FEvent.SetEvent;
-  while not Terminated do;
+  WaitFor;
 end;
 
 { TZapMQCheckSendedThread }
@@ -152,15 +175,26 @@ end;
 
 procedure TZapMQCheckSendedThread.Execute;
 var
-  Queue : TZapQueue;
+  Queue: TZapQueue;
 begin
   inherited;
   while not Terminated do
   begin
-    for Queue in Context.Queues.All do
-    begin
-      Queue.CheckSendedMessages;
+    try
+      FContext.QueueLock.Enter;
+      try
+        for Queue in FContext.Queues.All do
+        begin
+          Queue.CheckSendedMessages;
+        end;
+      finally
+        FContext.QueueLock.Leave;
+      end;
+    except
+      on E: Exception do
+        LogError('SendedThread: ' + E.Message);
     end;
+
     FEvent.ResetEvent;
     FEvent.WaitFor(1000);
   end;
@@ -170,7 +204,7 @@ procedure TZapMQCheckSendedThread.Stop;
 begin
   Terminate;
   FEvent.SetEvent;
-  while not Terminated do;
+  WaitFor;
 end;
 
 { TZapMQQueueCleaner }
@@ -190,21 +224,38 @@ end;
 
 procedure TZapMQQueueCleaner.Execute;
 var
-  Queue : TZapQueue;
+  Queue: TZapQueue;
+  QueuesToRemove: TArray<TZapQueue>;
+  I: Integer;
 begin
   inherited;
   while not Terminated do
   begin
-    for Queue in Context.Queues.All do
-    begin
-      if Queue.Count = 0 then
-      begin
-        if IncMinute(Queue.LastRemovedMessage, 1) < Now then
+    try
+      FContext.QueueLock.Enter;
+      try
+        SetLength(QueuesToRemove, 0);
+        for Queue in FContext.Queues.All do
         begin
-          Context.Queues.RemoveQueue(Queue);
+          if (Queue.Count = 0) and (Queue.LastRemovedMessage > 0) then
+          begin
+            if IncMinute(Queue.LastRemovedMessage, 1) < Now then
+              QueuesToRemove := QueuesToRemove + [Queue];
+          end;
         end;
+
+        for I := Low(QueuesToRemove) to High(QueuesToRemove) do
+        begin
+          FContext.Queues.RemoveQueue(QueuesToRemove[I]);
+        end;
+      finally
+        FContext.QueueLock.Leave;
       end;
+    except
+      on E: Exception do
+        LogError('QueueCleanerThread: ' + E.Message);
     end;
+
     FEvent.ResetEvent;
     FEvent.WaitFor(60000);
   end;
@@ -214,7 +265,8 @@ procedure TZapMQQueueCleaner.Stop;
 begin
   Terminate;
   FEvent.SetEvent;
-  while not Terminated do;
+  WaitFor;
 end;
 
 end.
+

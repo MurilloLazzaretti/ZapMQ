@@ -9,7 +9,8 @@ uses
   ZapMQ.Methods in 'src\ZapMQ.Methods.pas',
   ZapMQ.Queue in 'src\ZapMQ.Queue.pas',
   ZapMQ.Threads in 'src\ZapMQ.Threads.pas',
-  Service in 'src\Service.pas' {ZapMQservice: TService};
+  Service in 'src\Service.pas' {ZapMQservice: TService},
+  ZapMQ.Utils in 'src\ZapMQ.Utils.pas';
 
 {$R *.RES}
 
