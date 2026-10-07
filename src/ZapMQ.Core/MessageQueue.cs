@@ -1,6 +1,21 @@
 namespace ZapMQ.Core;
 
-internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions options)
+/// <summary>
+/// The settings of one queue with the broker defaults already applied.
+/// </summary>
+internal sealed record QueueSettings(
+    TimeSpan Retention,
+    TimeSpan EmptyLifetime,
+    int DeadLetterLimit,
+    TimeSpan DeadLetterMaxAge,
+    bool RedeliverUnconfirmed);
+
+/// <summary>
+/// Something to hand to a consumer once the queue lock is released.
+/// </summary>
+internal readonly record struct Delivery(Consumer Consumer, BrokerMessage Message, bool IsResponse);
+
+internal sealed class MessageQueue(string name, TimeProvider time, QueueSettings settings, DeadLetterStore deadLetters)
 {
     private sealed class Entry
     {
@@ -9,74 +24,193 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
         public required bool Rpc;
         public required TimeSpan Ttl;
         public required long Born;
+        public required DateTimeOffset PublishedAt;
+        public string? RequeuedFrom;
         public string? Response;
+        public long AnsweredAt;
+        // The pushed-to consumer that has not confirmed this message yet.
+        public Consumer? Owner;
+        // The consumer waiting for the answer of this RPC message.
+        public Consumer? ReplyTo;
     }
 
     private readonly object _gate = new();
     // Publication order, so the head is always the oldest pending message.
     private readonly LinkedList<Entry> _pending = new();
-    // RPC messages already delivered, waiting for the response to be written or collected.
+    // Delivered messages that are not finished: being processed by a pushed-to consumer, or RPC
+    // messages waiting for the response to be written or collected.
     private readonly Dictionary<string, Entry> _inFlight = new(StringComparer.Ordinal);
+    private readonly List<Consumer> _consumers = [];
+    private int _nextConsumer;
     private long? _emptySince;
-    private long _published, _delivered, _responded, _expired, _dropped;
+    private long _published, _delivered, _confirmed, _responded, _redelivered, _expired, _notConsumed, _unconfirmed, _dropped;
 
     public string Name { get; } = name;
 
     /// <summary>
-    /// Set once the broker has let go of this queue. A publisher that still holds the instance
-    /// must fetch a new one instead of adding to a queue nobody will read.
+    /// Replaced as a whole when the queue is reconfigured.
+    /// </summary>
+    public QueueSettings Settings { get; set; } = settings;
+
+    /// <summary>
+    /// Set once the broker has let go of this queue. Whoever still holds the instance must fetch
+    /// a new one instead of using a queue nobody will read.
     /// </summary>
     public bool Removed { get; private set; }
 
-    public bool TryPublish(string id, string body, bool rpc, TimeSpan ttl)
+    public bool TryPublish(string id, string body, bool rpc, TimeSpan ttl, Consumer? replyTo, string? requeuedFrom, List<Delivery> deliveries)
     {
         lock (_gate)
         {
             if (Removed)
                 return false;
 
-            _pending.AddLast(new Entry { Id = id, Body = body, Rpc = rpc, Ttl = ttl, Born = time.GetTimestamp() });
+            _pending.AddLast(new Entry
+            {
+                Id = id,
+                Body = body,
+                Rpc = rpc,
+                Ttl = ttl,
+                Born = time.GetTimestamp(),
+                PublishedAt = time.GetUtcNow(),
+                RequeuedFrom = requeuedFrom,
+                ReplyTo = rpc ? replyTo : null
+            });
             _emptySince = null;
             _published++;
+            Dispatch(deliveries);
             return true;
         }
     }
 
     /// <summary>
-    /// Hands the oldest deliverable message to exactly one caller. Selecting the message and
-    /// taking it out of the pending list happen under the same lock, so two concurrent callers
-    /// can never receive the same message.
+    /// Hands the oldest deliverable message to a caller that asks for it (the 1.x way). Selecting
+    /// the message and taking it out of the pending list happen under the same lock, so two
+    /// concurrent callers can never receive the same message.
     /// </summary>
     public BrokerMessage? Take()
     {
         lock (_gate)
         {
-            try
-            {
-                while (_pending.First is { } node)
-                {
-                    var entry = node.Value;
-                    _pending.RemoveFirst();
-
-                    if (IsExpired(entry)) { _expired++; continue; }
-                    if (IsPastRetention(entry)) { _dropped++; continue; }
-
-                    if (entry.Rpc)
-                        _inFlight[entry.Id] = entry;
-
-                    _delivered++;
-                    return Snapshot(entry);
-                }
-                return null;
-            }
-            finally
+            var node = FirstDeliverable();
+            if (node is null)
             {
                 TrackEmptiness();
+                return null;
             }
+
+            var entry = node.Value;
+            _pending.Remove(node);
+            if (entry.Rpc)
+                _inFlight[entry.Id] = entry;
+
+            _delivered++;
+            TrackEmptiness();
+            return Snapshot(entry);
         }
     }
 
-    public bool Respond(string id, string response, bool includeUndelivered)
+    public bool Bind(Consumer consumer, List<Delivery> deliveries)
+    {
+        lock (_gate)
+        {
+            if (Removed)
+                return false;
+
+            if (!_consumers.Contains(consumer))
+                _consumers.Add(consumer);
+            Dispatch(deliveries);
+            return true;
+        }
+    }
+
+    public void Unbind(Consumer consumer)
+    {
+        lock (_gate)
+        {
+            _consumers.Remove(consumer);
+            _nextConsumer = 0;
+        }
+    }
+
+    /// <summary>
+    /// Pushes pending messages to free consumers, one consumer after the other.
+    /// </summary>
+    public void Dispatch(List<Delivery> deliveries)
+    {
+        lock (_gate)
+        {
+            while (_consumers.Count > 0 && FirstDeliverable() is { } node)
+            {
+                var consumer = NextFreeConsumer();
+                if (consumer is null)
+                    break;
+
+                var entry = node.Value;
+                _pending.Remove(node);
+                entry.Owner = consumer;
+                _inFlight[entry.Id] = entry;
+                consumer.Current = (Name, entry.Id);
+                consumer.LastQueue = Name;
+                _delivered++;
+                deliveries.Add(new Delivery(consumer, Snapshot(entry), IsResponse: false));
+            }
+            TrackEmptiness();
+        }
+    }
+
+    /// <summary>
+    /// The consumer finished the message it was pushed.
+    /// </summary>
+    public bool Confirm(Consumer consumer, string id)
+    {
+        lock (_gate)
+        {
+            if (!_inFlight.TryGetValue(id, out var entry) || entry.Owner != consumer)
+                return false;
+
+            _inFlight.Remove(id);
+            consumer.Current = null;
+            _confirmed++;
+            TrackEmptiness();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The consumer finished the RPC message it was pushed and this is its answer.
+    /// </summary>
+    public bool Respond(Consumer consumer, string id, string response, List<Delivery> deliveries)
+    {
+        lock (_gate)
+        {
+            if (!_inFlight.TryGetValue(id, out var entry) || entry.Owner != consumer)
+                return false;
+
+            consumer.Current = null;
+            entry.Owner = null;
+            _confirmed++;
+
+            if (!entry.Rpc)
+            {
+                // Nobody is waiting for an answer: the response only confirms the message.
+                _inFlight.Remove(id);
+            }
+            else
+            {
+                StoreResponse(entry, response);
+                PushResponse(entry, deliveries);
+            }
+            TrackEmptiness();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Stores the response of a message taken the 1.x way. A message a pushed-to consumer is
+    /// still processing can only be answered by that consumer.
+    /// </summary>
+    public bool Respond(string id, string response, bool includeUndelivered, List<Delivery> deliveries)
     {
         lock (_gate)
         {
@@ -92,20 +226,16 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
                 _inFlight[id] = entry;
             }
 
-            if (IsPastRetention(entry))
+            if (entry.Owner is not null)
+                return false;
+            if (entry.Response is null && IsPastRetention(entry))
                 return false;
 
-            if (entry.Response is null)
-                _responded++;
-            entry.Response = response;
+            StoreResponse(entry, response);
+            PushResponse(entry, deliveries);
+            TrackEmptiness();
             return true;
         }
-    }
-
-    public bool Contains(string id)
-    {
-        lock (_gate)
-            return _inFlight.ContainsKey(id) || FindPending(id) is not null;
     }
 
     public BrokerMessage? TakeResponse(string id)
@@ -122,8 +252,71 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
     }
 
     /// <summary>
+    /// Routes the answers of these messages to a consumer, handing over the ones already there.
+    /// Returns how many of the messages were found.
+    /// </summary>
+    public int Await(Consumer consumer, IEnumerable<string> ids, List<Delivery> deliveries)
+    {
+        lock (_gate)
+        {
+            var found = 0;
+            foreach (var id in ids)
+            {
+                if (!_inFlight.TryGetValue(id, out var entry))
+                    entry = FindPending(id)?.Value;
+                if (entry is null || !entry.Rpc)
+                    continue;
+
+                found++;
+                entry.ReplyTo = consumer;
+                if (entry.Response is not null)
+                    PushResponse(entry, deliveries);
+            }
+            TrackEmptiness();
+            return found;
+        }
+    }
+
+    /// <summary>
+    /// The consumer went away holding this message. It is never handed to somebody else, unless
+    /// the queue was explicitly set up for that.
+    /// </summary>
+    public void Abandon(Consumer consumer, string id, List<Delivery> deliveries)
+    {
+        lock (_gate)
+        {
+            if (!_inFlight.TryGetValue(id, out var entry) || entry.Owner != consumer)
+                return;
+
+            _inFlight.Remove(id);
+            consumer.Current = null;
+            entry.Owner = null;
+            _unconfirmed++;
+
+            if (Settings.RedeliverUnconfirmed)
+            {
+                _pending.AddFirst(entry);
+                _emptySince = null;
+                _redelivered++;
+                Dispatch(deliveries);
+            }
+            else
+            {
+                Bury(entry, DeadLetterReason.Unconfirmed, consumer.Description);
+            }
+            TrackEmptiness();
+        }
+    }
+
+    public bool Contains(string id)
+    {
+        lock (_gate)
+            return _inFlight.ContainsKey(id) || FindPending(id) is not null;
+    }
+
+    /// <summary>
     /// Discards what expired or outlived the retention and reports whether the queue itself
-    /// can be let go. Returns true at most once: from then on the queue refuses new messages.
+    /// can be let go. Returns true at most once: from then on the queue refuses everything.
     /// </summary>
     public bool Sweep()
     {
@@ -132,14 +325,20 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
             for (var node = _pending.First; node is not null;)
             {
                 var next = node.Next;
-                if (IsExpired(node.Value)) { _pending.Remove(node); _expired++; }
-                else if (IsPastRetention(node.Value)) { _pending.Remove(node); _dropped++; }
+                BuryIfDead(node);
                 node = next;
             }
 
             foreach (var (id, entry) in _inFlight)
             {
-                if (IsPastRetention(entry))
+                // A message a connected consumer is processing has no deadline.
+                if (entry.Owner is not null)
+                    continue;
+
+                // An answer waits for its collector for the retention time, counted from the
+                // answer; an unanswered RPC is given up the retention time after it was sent.
+                var since = entry.Response is null ? entry.Born : entry.AnsweredAt;
+                if (time.GetElapsedTime(since) > Settings.Retention)
                 {
                     _inFlight.Remove(id);
                     _dropped++;
@@ -148,7 +347,7 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
 
             TrackEmptiness();
 
-            if (_emptySince is { } since && time.GetElapsedTime(since) > options.EmptyQueueLifetime)
+            if (_consumers.Count == 0 && _emptySince is { } emptySince && time.GetElapsedTime(emptySince) > Settings.EmptyLifetime)
                 Removed = true;
 
             return Removed;
@@ -159,10 +358,90 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
     {
         lock (_gate)
         {
-            var answered = _inFlight.Values.Count(e => e.Response is not null);
-            return new QueueSnapshot(Name, _pending.Count, _inFlight.Count - answered, answered,
-                _published, _delivered, _responded, _expired, _dropped);
+            var processing = _inFlight.Values.Count(e => e.Owner is not null);
+            var answered = _inFlight.Values.Count(e => e.Owner is null && e.Response is not null);
+            return new QueueSnapshot(Name, _pending.Count, processing, _inFlight.Count - processing - answered, answered,
+                _consumers.Count, _published, _delivered, _confirmed, _responded, _redelivered,
+                _expired, _notConsumed, _unconfirmed, _dropped);
         }
+    }
+
+    /// <summary>
+    /// The oldest pending message that may still be delivered. Dead ones found on the way are buried.
+    /// </summary>
+    private LinkedListNode<Entry>? FirstDeliverable()
+    {
+        while (_pending.First is { } node)
+        {
+            if (!BuryIfDead(node))
+                return node;
+        }
+        return null;
+    }
+
+    private bool BuryIfDead(LinkedListNode<Entry> node)
+    {
+        var entry = node.Value;
+        DeadLetterReason reason;
+        if (entry.Ttl > TimeSpan.Zero && time.GetElapsedTime(entry.Born) > entry.Ttl)
+        {
+            reason = DeadLetterReason.Expired;
+            _expired++;
+        }
+        else if (IsPastRetention(entry))
+        {
+            reason = DeadLetterReason.NotConsumed;
+            _notConsumed++;
+        }
+        else
+        {
+            return false;
+        }
+
+        _pending.Remove(node);
+        Bury(entry, reason, consumer: null);
+        return true;
+    }
+
+    private void Bury(Entry entry, DeadLetterReason reason, string? consumer) =>
+        deadLetters.Add(
+            new DeadLetter(entry.Id, Name, entry.Body, entry.Rpc, reason, entry.PublishedAt, time.GetUtcNow(), consumer),
+            Settings.DeadLetterLimit,
+            Settings.DeadLetterMaxAge);
+
+    private Consumer? NextFreeConsumer()
+    {
+        for (var i = 0; i < _consumers.Count; i++)
+        {
+            var index = (_nextConsumer + i) % _consumers.Count;
+            if (_consumers[index].TryAcquire())
+            {
+                _nextConsumer = (index + 1) % _consumers.Count;
+                return _consumers[index];
+            }
+        }
+        return null;
+    }
+
+    private void StoreResponse(Entry entry, string response)
+    {
+        if (entry.Response is null)
+            _responded++;
+        entry.Response = response;
+        entry.AnsweredAt = time.GetTimestamp();
+    }
+
+    /// <summary>
+    /// Hands the answer to whoever is waiting for it on a live connection. Otherwise it stays
+    /// until it is collected the 1.x way, asked for again, or the retention runs out.
+    /// </summary>
+    private void PushResponse(Entry entry, List<Delivery> deliveries)
+    {
+        if (entry.ReplyTo is not { IsClosed: false } receiver)
+            return;
+
+        _inFlight.Remove(entry.Id);
+        deliveries.Add(new Delivery(receiver, Snapshot(entry), IsResponse: true));
     }
 
     private LinkedListNode<Entry>? FindPending(string id)
@@ -175,11 +454,8 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
         return null;
     }
 
-    private bool IsExpired(Entry entry) =>
-        entry.Ttl > TimeSpan.Zero && time.GetElapsedTime(entry.Born) > entry.Ttl;
-
     private bool IsPastRetention(Entry entry) =>
-        time.GetElapsedTime(entry.Born) > options.Retention;
+        time.GetElapsedTime(entry.Born) > Settings.Retention;
 
     private void TrackEmptiness()
     {
@@ -188,5 +464,5 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
     }
 
     private BrokerMessage Snapshot(Entry entry) =>
-        new(entry.Id, Name, entry.Body, entry.Rpc, entry.Response);
+        new(entry.Id, Name, entry.Body, entry.Rpc, entry.Response) { RequeuedFrom = entry.RequeuedFrom };
 }

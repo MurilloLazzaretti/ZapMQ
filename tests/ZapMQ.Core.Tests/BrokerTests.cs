@@ -149,7 +149,7 @@ public class BrokerTests
 
         _time.Advance(TimeSpan.FromSeconds(1));
         Assert.Null(_broker.Take("orders"));
-        Assert.Equal(1, _broker.GetQueues().Single().Dropped);
+        Assert.Equal(1, _broker.GetQueues().Single().NotConsumed);
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public class BrokerTests
         var queue = _broker.GetQueues().Single();
         Assert.Equal(1, queue.Pending);
         Assert.Equal(1, queue.Expired);
-        Assert.Equal(0, queue.Dropped);
+        Assert.Equal(0, queue.NotConsumed);
     }
 
     [Fact]
