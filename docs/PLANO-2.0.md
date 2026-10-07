@@ -1,6 +1,6 @@
 # ZapMQ 2.0 e Worker Control 2.0 — Plano de migração para .NET
 
-Situação: fases 0 a 3 concluídas; versão 2.0 instalada no ambiente de desenvolvimento (fase 4); instalador escrito e não testado.
+Situação: fases 0 a 3 concluídas; versão 2.0 instalada no ambiente de desenvolvimento (fase 4).
 Última revisão: 2026-10-07.
 
 Este documento é a referência para a reescrita do ZapMQ e do Worker Control em .NET. Ele registra as premissas, as decisões já tomadas, o escopo por versão e a ordem de execução. O desenho detalhado do protocolo v2 e das telas do painel será feito em documentos próprios, a partir daqui.
@@ -120,11 +120,9 @@ Ciclo de vida:
 
 ### Instalação
 
+Não há instalador. `dotnet publish src/ZapMQ.Server -c Release -r win-x64 -o publish/win-x64` gera um único `ZapMQ.exe` que carrega o runtime do .NET, de modo que o servidor de destino não precisa de nada instalado. Os dois arquivos gerados (`ZapMQ.exe` e `appsettings.json`) são copiados para uma pasta e o serviço é registrado com `sc.exe`. O passo a passo de configuração, instalação, convivência com a 1.x, atualização e remoção está no `README.md`.
+
 Em servidor com Microsoft Defender configurado para bloquear executáveis desconhecidos, o `ZapMQ.exe` novo é impedido de rodar ("Access is denied") até a pasta ou o arquivo constar nas exceções definidas pela administração do servidor.
-
-Instalação manual, sem o instalador, mantendo a 1.x instalada para poder voltar: copiar `ZapMQ.exe` e `appsettings.json` para uma pasta própria, registrar um serviço com outro nome (`sc.exe create ZapMQServer binPath= "<pasta>\ZapMQ.exe" start= auto DisplayName= "ZapMQ 2.0"`), parar o serviço da 1.x (`ZapMQservice`), deixá-lo com início manual e iniciar o novo. Para voltar: parar o novo, devolver o da 1.x a início automático e iniciá-lo.
-
-`dotnet publish src/ZapMQ.Server -c Release -r win-x64 -o publish/win-x64` gera um único `ZapMQ.exe` que carrega o runtime do .NET, de modo que o servidor de destino não precisa de nada instalado. O `Installer/ZapMQ.iss` registra o serviço `ZapMQ` com início automático e reinício em caso de falha. Instalado sobre uma 1.x, ele para e remove o serviço Delphi e leva para o `appsettings.json` a porta que estiver no `ZapMQ.ini`.
 
 ## 6. Semântica de entrega
 
@@ -216,6 +214,7 @@ Fragilidades a corrigir:
 
 - Mesmas filas (`<pid>`, `<pid>SS`, `<pid>TR`, `WorkerControlAdmin`) e mesmo formato de `ConfigWorkers.json`. Worker com a DLL antiga continua sendo monitorado.
 - Wrapper de worker .NET com a mesma API: `WorkerWrapperCore(host, port, keepAlive, safeStop)` e `Trace(texto)`.
+- Sem instalador, como o ZapMQ: executável único, registrado com `sc.exe`, com o passo a passo no `README.md` do repositório.
 - Serviço Windows com início automático, conta SYSTEM, dependente do serviço ZapMQ. Ao subir, espera o ZapMQ responder antes de avaliar keep-alive.
 
 **Armazenamento**
@@ -259,8 +258,8 @@ Grupos e workers com estado ao vivo, edição da configuração, ações manuais
 | Branch `main` | Versão 2.0 em .NET |
 | `src/` | Projetos .NET: núcleo do broker, compatibilidade v1, protocolo v2, persistência, serviço e painel |
 | `tests/` | Testes do núcleo e testes de contrato do protocolo v1 |
-| `docs/` | Este plano, a especificação do protocolo v2 e o guia de migração |
-| `Installer/` | Instalador do serviço |
+| `docs/` | Este plano e a especificação do protocolo v2 |
+| `README.md` | Configuração, instalação, atualização e remoção do serviço |
 
 Os fontes Delphi saem da `main` quando o código .NET entrar; continuam disponíveis na `delphi-v1`. O Worker Control segue o mesmo modelo no repositório dele.
 
@@ -286,7 +285,7 @@ A troca do servidor (fase 4) é parar um serviço e iniciar o outro na mesma por
 |---|---|
 | 0 | Feita. `tests/contract/contract.py` grava como um servidor responde ao protocolo 1.x; `tests/contract/delphi-1.x.json` guarda 89 respostas de um servidor Delphi real |
 | 1 | Feita: `src/ZapMQ.Core`, com testes em `tests/ZapMQ.Core.Tests` |
-| 2 | Feita: `src/ZapMQ.Server` com a camada de compatibilidade v1, retenção configurável, `/health`, `/metrics` e log diário em arquivo. O instalador (`Installer/ZapMQ.iss`) está escrito, mas ainda não foi compilado nem executado em Windows |
+| 2 | Feita: `src/ZapMQ.Server` com a camada de compatibilidade v1, retenção configurável, `/health`, `/metrics` e log diário em arquivo. A instalação é manual, descrita no `README.md` |
 | 3 | Feita. O wrapper .NET 1.x roda sem modificação nos testes (`tests/ZapMQ.Server.Tests`), e a primeira instalação mostrou serviços .NET e clientes Delphi (via wrapper Delphi) publicando, consumindo e fazendo RPC contra o servidor novo |
 | 4 | Feita no ambiente de desenvolvimento em 2026-10-07. Demais ambientes pendentes |
 
@@ -323,4 +322,4 @@ Diferenças intencionais em relação à 1.x:
 2. Tecnologia da interface do painel.
 3. Porta padrão do painel.
 4. Formato de quadro e conjunto de operações do protocolo v2 (documento de especificação próprio).
-5. Publicar uma Release no GitHub para a última versão Delphi, com o instalador anexado.
+5. Publicar uma Release no GitHub para a última versão Delphi.
