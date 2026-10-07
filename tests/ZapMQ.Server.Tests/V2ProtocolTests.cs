@@ -60,7 +60,7 @@ public class V2ProtocolTests(ServerFixture server) : IClassFixture<ServerFixture
 
         Assert.True((bool)reply["ok"]!);
         Assert.Equal(2, (int)reply["protocol"]!);
-        Assert.Equal("2.0.0", (string)reply["server"]!);
+        Assert.Equal(ServerHost.Version, (string)reply["server"]!);
         Assert.StartsWith("c-", (string)reply["connection"]!);
     }
 
