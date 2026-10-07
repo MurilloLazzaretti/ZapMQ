@@ -86,6 +86,20 @@ public class DataSnapProtocolTests(ServerFixture server) : IClassFixture<ServerF
     }
 
     [Fact]
+    public async Task Trailing_slash_sent_by_the_delphi_client_is_not_a_parameter()
+    {
+        var queue = Queue();
+
+        var id = await Call($"UpdateMessage/{queue}/{Uri.EscapeDataString("{\"Id\":\"\",\"Body\":{\"a\":1},\"RPC\":true,\"TTL\":0}")}/");
+        var delivered = JObject.Parse(await Call($"GetMessage/{queue}/"));
+        Assert.Equal(id, (string)delivered["Id"]!);
+
+        Assert.Equal("OK", await Call($"UpdateRPCResponse/{queue}/{Uri.EscapeDataString(id)}/{Uri.EscapeDataString("{\"b\":2}")}/"));
+        var answered = JObject.Parse(await Call($"GetRPCResponse/{queue}/{Uri.EscapeDataString(id)}/"));
+        Assert.Equal(2, (int)answered["Response"]!["b"]!);
+    }
+
+    [Fact]
     public async Task Body_that_is_not_an_object_becomes_an_empty_object()
     {
         var queue = Queue();

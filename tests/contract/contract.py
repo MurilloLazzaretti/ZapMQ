@@ -185,6 +185,13 @@ def scenarios(server):
     yield "errors.get_message_extra_parameter", server.call(f"GetMessage/{queue()}/extra")
     yield "errors.lowercase_method", server.call(f"getmessage/{queue()}")
 
+    # The Delphi DataSnap client ends every URL with a slash.
+    q = queue()
+    yield "trailing_slash.publish", server.call(f"UpdateMessage/{q}/{enc(POSTED)}/")
+    yield "trailing_slash.get", server.call(f"GetMessage/{q}/")
+    yield "trailing_slash.get_again", server.call(f"GetMessage/{q}/")
+    yield "trailing_slash.double", server.call(f"GetMessage/{q}//")
+
     q = queue()
     yield "verbs.post_update", server.call(f"UpdateMessage/{q}/{enc(POSTED)}", method="POST")
     yield "verbs.post_get", server.call(f"GetMessage/{q}", method="POST")

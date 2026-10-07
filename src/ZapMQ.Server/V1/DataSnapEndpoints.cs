@@ -34,7 +34,11 @@ public static class DataSnapEndpoints
         }
         catch (Exception error) when (error is V1Exception or ArgumentException)
         {
-            loggers.CreateLogger(typeof(DataSnapEndpoints)).LogWarning("Rejected 1.x call: {Reason}", error.Message);
+            // The start of the request line goes along: it is what tells apart a client that
+            // speaks the protocol differently from one that sent bad data.
+            var target = context.Features.GetRequiredFeature<IHttpRequestFeature>().RawTarget;
+            loggers.CreateLogger(typeof(DataSnapEndpoints)).LogWarning(
+                "Rejected 1.x call: {Reason} | {Verb} {Target}", error.Message, context.Request.Method, target.Length > 200 ? target[..200] : target);
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             payload = V1Message.Error(error.Message);
         }
@@ -65,7 +69,8 @@ public static class DataSnapEndpoints
         if (query >= 0)
             path = path[..query];
 
-        var segments = path.Split('/');
+        // The Delphi DataSnap client ends every URL with a slash; that is not one more parameter.
+        var segments = path.TrimEnd('/').Split('/');
         for (var i = 0; i < segments.Length; i++)
             segments[i] = Uri.UnescapeDataString(segments[i]);
         return segments;
