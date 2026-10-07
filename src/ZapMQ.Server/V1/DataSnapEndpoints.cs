@@ -118,7 +118,7 @@ public static class DataSnapEndpoints
         switch (V1Message.ParseResponse(parameters[2], out var response))
         {
             case V1Message.ResponseKind.Object:
-                return broker.Respond(parameters[0], parameters[1], response) ? "OK" : string.Empty;
+                return broker.Respond(parameters[0], parameters[1], response, includeUndelivered: true) ? "OK" : string.Empty;
 
             // The message is looked up before the payload is examined, so this only fails for a
             // message that exists.

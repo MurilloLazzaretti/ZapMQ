@@ -106,9 +106,10 @@ Ciclo de vida:
 
 - **Plataforma:** serviço Windows em .NET, sobre o servidor web embutido (Kestrel). Alvo: a versão LTS corrente do .NET no início da implementação (o suporte ao .NET 8 termina em novembro de 2026, então o servidor não deve nascer nele). Os wrappers continuam em `netstandard2.0` e não são afetados por essa escolha.
 - **Portas:** 5679 para mensageria (v1 e v2 na mesma porta, para que a troca do servidor não exija mudança em nenhum cliente); porta própria e configurável para o painel.
-- **Configuração:** arquivo JSON ao lado do executável, com porta, retenção padrão e definição de filas e exchanges. O `ZapMQ.ini` atual é lido como alternativa para a porta, para que a troca do executável funcione sem editar nada.
+- **Configuração:** `appsettings.json` ao lado do executável, no padrão do .NET, com a seção `ZapMQ` (porta, retenção padrão e, mais adiante, definição de filas e exchanges). O `ZapMQ.ini` da 1.x não é lido: quem alterou a porta nele precisa repetir o valor no `appsettings.json` ao instalar a 2.0.
 - **Fila não declarada:** continua sendo criada no primeiro envio, em memória, com a retenção padrão. Declarar a fila só é necessário para mudar o comportamento dela.
 - **Núcleo sem dependência de transporte:** as duas camadas de protocolo chamam o mesmo núcleo, o que permite testar as regras do broker sem HTTP.
+- **Limitações da 1.x ficam na camada v1:** validação de campos obrigatórios, limite de 16 bits do TTL, resposta de RPC antes da entrega, formato de erro e de escape do DataSnap existem só em `src/ZapMQ.Server/V1`. O núcleo e o protocolo v2 não herdam nenhuma delas.
 
 ## 6. Semântica de entrega
 

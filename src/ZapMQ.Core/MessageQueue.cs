@@ -76,15 +76,14 @@ internal sealed class MessageQueue(string name, TimeProvider time, BrokerOptions
         }
     }
 
-    public bool Respond(string id, string response)
+    public bool Respond(string id, string response, bool includeUndelivered)
     {
         lock (_gate)
         {
             if (!_inFlight.TryGetValue(id, out var entry))
             {
-                // 1.x accepts a response for a message nobody consumed yet: the message is then
-                // considered answered and is never delivered.
-                var node = FindPending(id);
+                // Answering a message nobody consumed yet takes it out of the delivery line.
+                var node = includeUndelivered ? FindPending(id) : null;
                 if (node is null)
                     return false;
 

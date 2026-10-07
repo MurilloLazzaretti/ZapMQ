@@ -1,8 +1,7 @@
 namespace ZapMQ.Server;
 
 /// <summary>
-/// Settings read from the <c>ZapMQ</c> section of <c>ZapMQ.json</c>, or from the 1.x
-/// <c>ZapMQ.ini</c> when only that file exists.
+/// Settings read from the <c>ZapMQ</c> section of <c>appsettings.json</c>.
 /// </summary>
 public sealed class ServerOptions
 {

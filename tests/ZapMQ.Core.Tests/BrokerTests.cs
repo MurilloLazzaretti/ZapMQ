@@ -217,6 +217,15 @@ public class BrokerTests
     }
 
     [Fact]
+    public void Undelivered_message_cannot_be_answered_by_default()
+    {
+        var id = _broker.Publish("orders", "ask", rpc: true);
+
+        Assert.False(_broker.Respond("orders", id, "answer"));
+        Assert.Equal("ask", _broker.Take("orders")!.Body);
+    }
+
+    [Fact]
     public void Message_answered_before_delivery_is_never_delivered()
     {
         _broker.Publish("orders", "first");
@@ -224,7 +233,7 @@ public class BrokerTests
         _broker.Publish("orders", "last");
 
         Assert.True(_broker.Contains("orders", id));
-        Assert.True(_broker.Respond("orders", id, "answer"));
+        Assert.True(_broker.Respond("orders", id, "answer", includeUndelivered: true));
 
         Assert.Equal("first", _broker.Take("orders")!.Body);
         Assert.Equal("last", _broker.Take("orders")!.Body);

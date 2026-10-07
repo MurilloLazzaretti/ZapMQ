@@ -7,18 +7,12 @@ public static class ServerHost
 {
     public static WebApplication Build(string[] args, Action<WebApplicationBuilder>? configure = null)
     {
-        // A Windows service starts in System32, so everything is resolved from the executable folder.
+        // A Windows service starts in System32, so appsettings.json is resolved from the executable folder.
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             Args = args,
             ContentRootPath = AppContext.BaseDirectory
         });
-
-        // The json file wins over the 1.x ini, which is only read so that replacing the
-        // executable keeps the configured port.
-        builder.Configuration
-            .AddIniFile("ZapMQ.ini", optional: true, reloadOnChange: false)
-            .AddJsonFile("ZapMQ.json", optional: true, reloadOnChange: false);
 
         configure?.Invoke(builder);
 
