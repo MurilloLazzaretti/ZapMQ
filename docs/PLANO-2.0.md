@@ -1,6 +1,6 @@
 # ZapMQ 2.0 e Worker Control 2.0 — Plano de migração para .NET
 
-Situação: planejamento concluído, implementação não iniciada.
+Situação: fases 1 e 2 implementadas; fases 0 e 3 pendentes (dependem de um servidor Delphi em execução e de clientes Delphi no Windows).
 Última revisão: 2026-10-07.
 
 Este documento é a referência para a reescrita do ZapMQ e do Worker Control em .NET. Ele registra as premissas, as decisões já tomadas, o escopo por versão e a ordem de execução. O desenho detalhado do protocolo v2 e das telas do painel será feito em documentos próprios, a partir daqui.
@@ -263,6 +263,23 @@ Os fontes Delphi saem da `main` quando o código .NET entrar; continuam disponí
 | 8 | Worker Control 2.0: serviço, wrapper de worker e seção no painel | 5, 6 |
 
 A troca do servidor (fase 4) é parar um serviço e iniciar o outro na mesma porta. Como a 1.x não persiste nada, as mensagens em trânsito no momento da troca se perdem; voltar atrás é o mesmo procedimento no sentido inverso.
+
+### Andamento
+
+| Fase | Situação |
+|---|---|
+| 0 | Pendente. Precisa de um servidor Delphi em execução para gravar as respostas reais |
+| 1 | Feita: `src/ZapMQ.Core`, com testes em `tests/ZapMQ.Core.Tests` |
+| 2 | Feita em parte: `src/ZapMQ.Server` com a camada de compatibilidade v1, TTL e retenção configuráveis, `/health` e `/metrics`. Testada com requisições HTTP e com a DLL do wrapper .NET 1.x sem modificação (`tests/ZapMQ.Server.Tests`). Falta o log estruturado em arquivo e o instalador |
+| 3 | Pendente. O wrapper .NET já foi validado; falta o wrapper Delphi |
+
+Pontos da camada v1 construídos a partir da leitura do código Delphi e que a fase 0 precisa confirmar contra o servidor real: tipo de conteúdo e cabeçalhos da resposta (o DataSnap envia dados de sessão no cabeçalho `Pragma`), formato e código HTTP dos erros, e a forma como o cliente Delphi codifica os parâmetros na URL.
+
+Diferenças intencionais em relação à 1.x:
+
+- `TTL` acima de 65.535 ms é respeitado como enviado, em vez de truncado para 16 bits.
+- `UpdateRPCResponse` só é aceito para mensagem RPC já entregue; a 1.x aceitava para qualquer mensagem existente na fila.
+- Mensagem vencida não é entregue nem no intervalo de até 1 s em que a 1.x ainda a entregaria.
 
 ## 14. Riscos
 
