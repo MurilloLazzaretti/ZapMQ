@@ -132,13 +132,23 @@ public class DataSnapProtocolTests(ServerFixture server) : IClassFixture<ServerF
         Assert.Equal(string.Empty, await Call($"GetMessage/{queue}"));
     }
 
+    [Fact]
+    public async Task Ttl_above_the_1x_limit_of_16_bits_is_accepted()
+    {
+        var queue = Queue();
+
+        await Publish(queue, "{\"Id\":\"\",\"Body\":{},\"RPC\":false,\"TTL\":120000}");
+
+        Assert.NotEqual(string.Empty, await Call($"GetMessage/{queue}"));
+    }
+
     [Theory]
     [InlineData("not json", "Invalid JSON format")]
     [InlineData("[1,2]", "Invalid class typecast")]
     [InlineData("{\"Body\":{},\"RPC\":false,\"TTL\":0}", "Value 'Id' not found")]
     [InlineData("{\"Id\":\"\",\"Body\":{},\"TTL\":0}", "Value 'RPC' not found")]
     [InlineData("{\"Id\":\"\",\"Body\":{},\"RPC\":false}", "Value 'TTL' not found")]
-    [InlineData("{\"Id\":\"\",\"Body\":{},\"RPC\":false,\"TTL\":65536}", "'65536' is not a valid integer value")]
+    [InlineData("{\"Id\":\"\",\"Body\":{},\"RPC\":false,\"TTL\":1.5}", "'1.5' is not a valid integer value")]
     [InlineData("{\"Id\":\"\",\"Body\":{},\"RPC\":false,\"TTL\":-1}", "'-1' is not a valid integer value")]
     public async Task Invalid_publication_is_an_error(string payload, string error)
     {

@@ -14,6 +14,21 @@ public sealed class ServerOptions
     public int EmptyQueueLifetimeSeconds { get; set; } = 60;
 
     /// <summary>
+    /// Folder of the daily log files, relative to the executable unless it is a full path.
+    /// </summary>
+    public string LogDirectory { get; set; } = "logs";
+
+    /// <summary>
+    /// How many daily log files are kept.
+    /// </summary>
+    public int LogRetentionDays { get; set; } = 30;
+
+    /// <summary>
+    /// Verbose, Debug, Information, Warning or Error.
+    /// </summary>
+    public string LogLevel { get; set; } = "Information";
+
+    /// <summary>
     /// The 1.x protocol carries the whole message in the URL, so the request line has to be
     /// allowed to grow far beyond the web server default.
     /// </summary>

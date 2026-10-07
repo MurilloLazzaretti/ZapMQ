@@ -1,6 +1,6 @@
 # ZapMQ 2.0 e Worker Control 2.0 — Plano de migração para .NET
 
-Situação: fases 0 e 1 concluídas; fase 2 sem log em arquivo e sem instalador; fase 3 validada com o wrapper .NET, pendente com o wrapper Delphi.
+Situação: fases 0, 1 e 2 concluídas; instalador escrito e não testado; fase 3 validada com o wrapper .NET, pendente com o wrapper Delphi.
 Última revisão: 2026-10-07.
 
 Este documento é a referência para a reescrita do ZapMQ e do Worker Control em .NET. Ele registra as premissas, as decisões já tomadas, o escopo por versão e a ordem de execução. O desenho detalhado do protocolo v2 e das telas do painel será feito em documentos próprios, a partir daqui.
@@ -73,7 +73,7 @@ Ciclo de vida:
 | A mensagem é escolhida sob lock, mas o status só muda depois; dois consumidores podem receber a mesma mensagem | Corrigido: escolha e marcação são uma única operação |
 | Sem confirmação: mensagem comum é dada como processada ao ser entregue | Mantido para clientes v1; clientes v2 confirmam (seção 6) |
 | Descarte fixo aos 180 s | Passa a ser a retenção padrão, configurável por fila |
-| `TTL` de 16 bits: valor acima de 65.535 ms é recusado com erro e a mensagem não é publicada | Mantido no contrato v1; sem limite no v2 |
+| `TTL` de 16 bits: valor acima de 65.535 ms é recusado com erro e a mensagem não é publicada | Removido: o limite não existe mais, nem no protocolo v1 |
 | Corpo da mensagem trafega na URL | Mantido no v1; no v2 vai no corpo |
 | Sem persistência, métricas, painel ou log além de erros no Event Log | Seção 7 |
 | "Exchange" citado no README nunca foi implementado | Seção 7 |
@@ -110,6 +110,17 @@ Ciclo de vida:
 - **Fila não declarada:** continua sendo criada no primeiro envio, em memória, com a retenção padrão. Declarar a fila só é necessário para mudar o comportamento dela.
 - **Núcleo sem dependência de transporte:** as duas camadas de protocolo chamam o mesmo núcleo, o que permite testar as regras do broker sem HTTP.
 - **Limitações da 1.x ficam na camada v1:** validação de campos obrigatórios, limite de 16 bits do TTL, resposta de RPC antes da entrega, formato de erro e de escape do DataSnap existem só em `src/ZapMQ.Server/V1`. O núcleo e o protocolo v2 não herdam nenhuma delas.
+
+### Registros
+
+| Tipo | Onde | Uso |
+|---|---|---|
+| Log de diagnóstico do serviço (início, parada, chamadas recusadas, erros) | Arquivo diário em `logs/`, com retenção configurável; avisos e erros também no Event Log | Descobrir por que o serviço falhou, mesmo que o banco esteja indisponível |
+| Histórico de mensagens e eventos por fila | SQLite | Consulta e filtro no painel |
+
+### Instalação
+
+`dotnet publish src/ZapMQ.Server -c Release -r win-x64 -o publish/win-x64` gera um único `ZapMQ.exe` que carrega o runtime do .NET, de modo que o servidor de destino não precisa de nada instalado. O `Installer/ZapMQ.iss` registra o serviço `ZapMQ` com início automático e reinício em caso de falha. Instalado sobre uma 1.x, ele para e remove o serviço Delphi e leva para o `appsettings.json` a porta que estiver no `ZapMQ.ini`.
 
 ## 6. Semântica de entrega
 
@@ -271,7 +282,7 @@ A troca do servidor (fase 4) é parar um serviço e iniciar o outro na mesma por
 |---|---|
 | 0 | Feita. `tests/contract/contract.py` grava como um servidor responde ao protocolo 1.x; `tests/contract/delphi-1.x.json` guarda 89 respostas de um servidor Delphi real |
 | 1 | Feita: `src/ZapMQ.Core`, com testes em `tests/ZapMQ.Core.Tests` |
-| 2 | Feita em parte: `src/ZapMQ.Server` com a camada de compatibilidade v1, retenção configurável, `/health` e `/metrics`. As 89 respostas do servidor novo são idênticas às do Delphi em status, corpo e cabeçalhos. Falta o log estruturado em arquivo e o instalador |
+| 2 | Feita: `src/ZapMQ.Server` com a camada de compatibilidade v1, retenção configurável, `/health`, `/metrics` e log diário em arquivo. O instalador (`Installer/ZapMQ.iss`) está escrito, mas ainda não foi compilado nem executado em Windows |
 | 3 | Feita para o wrapper .NET 1.x, que roda sem modificação nos testes (`tests/ZapMQ.Server.Tests`). Pendente para o wrapper Delphi, que precisa ser testado no Windows |
 
 Para repetir a comparação: `contract.py record http://host:porta saida.json` contra o servidor novo e `contract.py compare delphi-1.x.json saida.json`.
@@ -279,12 +290,15 @@ Para repetir a comparação: `contract.py record http://host:porta saida.json` c
 O que a gravação mostrou sobre a 1.x, e que a camada v1 reproduz:
 
 - `Id`, `RPC` e `TTL` são obrigatórios em `UpdateMessage`; a falta de um deles é erro (`Value 'X' not found`).
-- `TTL` fora de 0 a 65.535, negativo ou fracionário é erro (`'N' is not a valid integer value`) e a mensagem não é publicada.
+- `TTL` negativo ou fracionário é erro (`'N' is not a valid integer value`) e a mensagem não é publicada. A 1.x também recusava valores acima de 65.535; isso não foi mantido.
 - `UpdateRPCResponse` é aceito para qualquer mensagem ainda na fila, mesmo não entregue; a mensagem passa a contar como respondida e não é mais entregue.
 - Uma barra não escapada dentro do JSON é lida como parâmetro a mais e a chamada é recusada; um `?` é lido como início de query string.
 - Só `GET` chega a um método; nomes de método não diferenciam maiúsculas.
 
-Única diferença intencional em relação à 1.x: mensagem vencida não é entregue nem no intervalo de até 1 s em que a 1.x ainda a entregaria.
+Diferenças intencionais em relação à 1.x:
+
+- `TTL` acima de 65.535 ms é aceito. Na 1.x a publicação falhava com erro.
+- Mensagem vencida não é entregue nem no intervalo de até 1 s em que a 1.x ainda a entregaria.
 
 ## 14. Riscos
 

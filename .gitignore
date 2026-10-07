@@ -78,3 +78,7 @@ TestResults/
 
 # 1.x wrapper kept as a compatibility fixture
 !tests/ZapMQ.Server.Tests/lib/ZapMQWrapper.dll
+
+# runtime output
+logs/
+publish/

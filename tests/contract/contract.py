@@ -18,6 +18,8 @@ from urllib.parse import quote, urlsplit
 PREFIX = "/datasnap/rest/TZapMethods/"
 ID = re.compile(r"\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}")
 VOLATILE_HEADERS = {"date", "content-length"}
+# Where 2.x answers differently from 1.x on purpose: a TTL above 16 bits is accepted.
+INTENTIONAL = {"ttl_67536.publish", "ttl_67536.get_after_4s"}
 
 ANSWER = json.dumps({"answer": 42, "text": "a\u00e7\u00e3o"}, ensure_ascii=False)
 N1, N2 = '{"n":1}', '{"n":2}'
@@ -226,7 +228,7 @@ def meaning(body):
 def compare(reference_path, other_path):
     reference = json.load(open(reference_path, encoding="utf-8"))
     other = json.load(open(other_path, encoding="utf-8"))
-    different = 0
+    different = intentional = 0
     for name in sorted(reference):
         expected, actual = reference[name], other.get(name)
         notes = []
@@ -239,10 +241,13 @@ def compare(reference_path, other_path):
                 notes.append(f"body\n      ref: {expected['body']}\n      got: {actual['body']}")
             elif expected["body"] != actual["body"]:
                 notes.append(f"same meaning, different bytes\n      ref: {expected['body']}\n      got: {actual['body']}")
-        if notes:
+        if notes and name in INTENTIONAL:
+            intentional += 1
+        elif notes:
             different += 1
             print(f"- {name}: " + "; ".join(notes))
-    print(f"\n{len(reference) - different} equal, {different} different, of {len(reference)}")
+    equal = len(reference) - different - intentional
+    print(f"\n{equal} equal, {intentional} different on purpose, {different} different, of {len(reference)}")
     return 1 if different else 0
 
 

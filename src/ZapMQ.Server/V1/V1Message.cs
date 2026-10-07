@@ -98,7 +98,8 @@ internal static class V1Message
         root.TryGetProperty(name, out var value) ? value : throw new V1Exception($"Value '{name}' not found");
 
     /// <summary>
-    /// The 1.x TTL is an unsigned 16-bit number of milliseconds; anything else is refused.
+    /// Milliseconds as a whole, non-negative number. The 1.x server also refused anything above
+    /// 65535; that limit was dropped on purpose.
     /// </summary>
     private static TimeSpan ReadTtl(JsonElement value)
     {
@@ -109,7 +110,7 @@ internal static class V1Message
             _ => "0"
         };
 
-        if (!ushort.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var milliseconds))
+        if (!uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var milliseconds))
             throw new V1Exception($"'{text}' is not a valid integer value");
 
         return TimeSpan.FromMilliseconds(milliseconds);
