@@ -1,6 +1,6 @@
 # ZapMQ 2.0 e Worker Control 2.0 — Plano de migração para .NET
 
-Situação: fases 0, 1 e 2 concluídas; instalador escrito e não testado; fase 3 validada com o wrapper .NET, pendente com o wrapper Delphi.
+Situação: fases 0 a 3 concluídas; versão 2.0 instalada no ambiente de desenvolvimento (fase 4); instalador escrito e não testado.
 Última revisão: 2026-10-07.
 
 Este documento é a referência para a reescrita do ZapMQ e do Worker Control em .NET. Ele registra as premissas, as decisões já tomadas, o escopo por versão e a ordem de execução. O desenho detalhado do protocolo v2 e das telas do painel será feito em documentos próprios, a partir daqui.
@@ -119,6 +119,10 @@ Ciclo de vida:
 | Histórico de mensagens e eventos por fila | SQLite | Consulta e filtro no painel |
 
 ### Instalação
+
+Em servidor com Microsoft Defender configurado para bloquear executáveis desconhecidos, o `ZapMQ.exe` novo é impedido de rodar ("Access is denied") até a pasta ou o arquivo constar nas exceções definidas pela administração do servidor.
+
+Instalação manual, sem o instalador, mantendo a 1.x instalada para poder voltar: copiar `ZapMQ.exe` e `appsettings.json` para uma pasta própria, registrar um serviço com outro nome (`sc.exe create ZapMQServer binPath= "<pasta>\ZapMQ.exe" start= auto DisplayName= "ZapMQ 2.0"`), parar o serviço da 1.x (`ZapMQservice`), deixá-lo com início manual e iniciar o novo. Para voltar: parar o novo, devolver o da 1.x a início automático e iniciá-lo.
 
 `dotnet publish src/ZapMQ.Server -c Release -r win-x64 -o publish/win-x64` gera um único `ZapMQ.exe` que carrega o runtime do .NET, de modo que o servidor de destino não precisa de nada instalado. O `Installer/ZapMQ.iss` registra o serviço `ZapMQ` com início automático e reinício em caso de falha. Instalado sobre uma 1.x, ele para e remove o serviço Delphi e leva para o `appsettings.json` a porta que estiver no `ZapMQ.ini`.
 
@@ -283,7 +287,8 @@ A troca do servidor (fase 4) é parar um serviço e iniciar o outro na mesma por
 | 0 | Feita. `tests/contract/contract.py` grava como um servidor responde ao protocolo 1.x; `tests/contract/delphi-1.x.json` guarda 89 respostas de um servidor Delphi real |
 | 1 | Feita: `src/ZapMQ.Core`, com testes em `tests/ZapMQ.Core.Tests` |
 | 2 | Feita: `src/ZapMQ.Server` com a camada de compatibilidade v1, retenção configurável, `/health`, `/metrics` e log diário em arquivo. O instalador (`Installer/ZapMQ.iss`) está escrito, mas ainda não foi compilado nem executado em Windows |
-| 3 | Feita para o wrapper .NET 1.x, que roda sem modificação nos testes (`tests/ZapMQ.Server.Tests`). Pendente para o wrapper Delphi, que precisa ser testado no Windows |
+| 3 | Feita. O wrapper .NET 1.x roda sem modificação nos testes (`tests/ZapMQ.Server.Tests`), e a primeira instalação mostrou serviços .NET e clientes Delphi (via wrapper Delphi) publicando, consumindo e fazendo RPC contra o servidor novo |
+| 4 | Feita no ambiente de desenvolvimento em 2026-10-07. Demais ambientes pendentes |
 
 Para repetir a comparação: `contract.py record http://host:porta saida.json` contra o servidor novo e `contract.py compare delphi-1.x.json saida.json`.
 
@@ -294,6 +299,7 @@ O que a gravação mostrou sobre a 1.x, e que a camada v1 reproduz:
 - `UpdateRPCResponse` é aceito para qualquer mensagem ainda na fila, mesmo não entregue; a mensagem passa a contar como respondida e não é mais entregue.
 - Uma barra não escapada dentro do JSON é lida como parâmetro a mais e a chamada é recusada; um `?` é lido como início de query string.
 - Só `GET` chega a um método; nomes de método não diferenciam maiúsculas.
+- O cliente DataSnap do Delphi termina toda URL com uma barra, que não conta como parâmetro. Isso não apareceu na gravação, feita com requisições montadas à mão, e só foi descoberto na primeira instalação. Os cenários `trailing_slash.*` do roteiro ainda precisam ser gravados contra um servidor Delphi.
 
 Diferenças intencionais em relação à 1.x:
 
