@@ -67,3 +67,11 @@ __recovery/
 
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
 modules/
+
+# .NET
+bin/
+obj/
+.vs/
+*.user
+TestResults/
+.DS_Store
