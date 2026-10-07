@@ -2,6 +2,15 @@
 
   <b>ZapMQ</b> is a simple and efficient message broker for Windows platform developed in Delphi. With him you can communicate yours micro services in a simple way usign already implemented Delphi Wrapper and .NET C#.
 
+## 🚧 Version 2.0 (.NET)
+
+ZapMQ is being rewritten in .NET and this branch (`main`) will become version 2.0.
+
+The Delphi version (1.x) stays available and keeps working:
+
+- Source code: branch [`delphi-v1`](https://github.com/MurilloLazzaretti/ZapMQ/tree/delphi-v1)
+- Last Delphi tag: [`v1.1.0`](https://github.com/MurilloLazzaretti/ZapMQ/tree/v1.1.0)
+
 ## ⚠️ Warning
 
 ZapMQ is in a <b>Beta</b> version for now, if you have any issue, please tell us.
