@@ -272,15 +272,14 @@ Regras que continuam iguais: não é permitido enviar para uma fila vinculada pe
 
 ### 7.2 Escolha do protocolo
 
-1. Ao iniciar, o wrapper tenta abrir o WebSocket em `/v2`.
-2. Se não conseguir, faz uma chamada 1.x inofensiva (a resposta de uma mensagem que não existe). Se o servidor responder, é um servidor que só atende v1: o wrapper trabalha em v1, com o mesmo código da DLL 1.x.
-3. Em v1, ele tenta o `/v2` de novo a cada minuto. Quando o servidor for atualizado, o wrapper passa para v2 sozinho, sem reiniciar a aplicação.
-4. Se o servidor não responder de forma alguma, o wrapper continua tentando, com a espera da seção 7.3.
-5. O caminho inverso também funciona: se um servidor 2.x for trocado por um 1.x, o wrapper volta para v1 e passa a coletar pela forma antiga as respostas de RPC que ainda esperava.
+O wrapper trabalha em v1 desde o primeiro instante, com o mesmo código da DLL 1.x, e passa para v2 assim que uma conexão fica pronta. Sempre que não há conexão v2 ele está em v1. Assim uma instância nunca fica parada esperando a conexão: consome e envia desde que é criada, como a 1.x.
 
-O teste do item 2 não depende de como o servidor 1.x recusa o WebSocket, só de ele responder à chamada 1.x.
+1. Ao iniciar, e sempre que perde a conexão, o wrapper tenta abrir o WebSocket em `/v2`, em segundo plano.
+2. Se o servidor recusar o WebSocket mas responder a uma chamada 1.x inofensiva (a resposta de uma mensagem que não existe), é um servidor que só atende v1: a próxima tentativa de v2 fica para dali a um minuto, e as respostas de RPC que o wrapper esperava por v2 passam a ser coletadas pela forma antiga.
+3. Se o servidor aceitar o WebSocket mas a saudação não se completar a tempo (máquina sobrecarregada), ou se não responder de forma alguma, o wrapper tenta de novo com a espera da seção 7.3.
+4. Quando a conexão v2 fica pronta, o wrapper vincula as filas e para de consultar por v1. A troca acontece com a aplicação rodando, nos dois sentidos.
 
-Assim o servidor e as DLLs podem ser trocados em qualquer ordem.
+A primeira versão do wrapper só começava a consumir depois de a conexão v2 estar pronta. Num servidor que inicia dezenas de serviços ao mesmo tempo isso levou mais de dez segundos, o suficiente para o Worker Control dar o processo como morto. Daí a regra acima.
 
 ### 7.3 Reconexão
 
@@ -289,7 +288,7 @@ Assim o servidor e as DLLs podem ser trocados em qualquer ordem.
 - A mensagem que estava em processamento quando a conexão caiu continua sendo processada pelo handler até o fim. O servidor já a registrou como `unconfirmed`; a resposta ou confirmação tardia é recusada com `not-found` e o wrapper registra o fato.
 - Uma mensagem que chegou ao wrapper mas ainda não tinha começado a ser processada quando a conexão caiu é descartada pelo wrapper. O servidor já a registrou como `unconfirmed`; processá-la poderia fazê-la rodar duas vezes se fosse reenviada.
 - Se chegar uma mensagem de uma fila para a qual o wrapper não tem handler, ele derruba a conexão e reconecta. A mensagem fica no servidor como `unconfirmed`, em vez de ser confirmada sem ter sido processada.
-- `SendMessage` e `SendRPCMessage` chamados sem conexão esperam até 5 segundos por ela e então devolvem `false`.
+- `SendMessage` e `SendRPCMessage` chamados sem conexão v2 vão por v1 na hora, e devolvem `false` se o servidor não responder.
 - Um pedido sem resposta do servidor em 30 segundos derruba a conexão e devolve `false`.
 
 **Mudança em relação à DLL 1.x:** o `SendMessage` da 1.x devolvia `true` sempre, mesmo com o servidor fora; só o `SendRPCMessage` devolvia `false`. Na 2.0 o `SendMessage` devolve `false` quando o servidor não confirma, nos dois protocolos.
