@@ -33,4 +33,48 @@ public sealed class ServerOptions
     /// allowed to grow far beyond the web server default.
     /// </summary>
     public int MaxRequestLineBytes { get; set; } = 4 * 1024 * 1024;
+
+    public V2Options V2 { get; set; } = new();
+
+    public DeadLetterOptions DeadLetters { get; set; } = new();
+
+    /// <summary>
+    /// Settings of individual queues, by name.
+    /// </summary>
+    public Dictionary<string, QueueSettingsOptions> Queues { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class V2Options
+{
+    public int MaxFrameBytes { get; set; } = 4 * 1024 * 1024;
+
+    public int PingSeconds { get; set; } = 15;
+
+    public int PingTimeoutSeconds { get; set; } = 30;
+}
+
+public sealed class DeadLetterOptions
+{
+    public int MaxMessagesPerQueue { get; set; } = 1000;
+
+    public int MaxAgeHours { get; set; } = 168;
+}
+
+/// <summary>
+/// One queue. Whatever is left out uses the general value.
+/// </summary>
+public sealed class QueueSettingsOptions
+{
+    public int? RetentionSeconds { get; set; }
+
+    public bool RedeliverUnconfirmed { get; set; }
+
+    public QueueDeadLetterOptions? DeadLetters { get; set; }
+}
+
+public sealed class QueueDeadLetterOptions
+{
+    public int? MaxMessagesPerQueue { get; set; }
+
+    public int? MaxAgeHours { get; set; }
 }

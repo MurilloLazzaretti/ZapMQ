@@ -1,6 +1,6 @@
 # ZapMQ — Protocolo v2
 
-Situação: aprovada em 2026-10-07. Implementação em andamento.
+Situação: aprovada em 2026-10-07. Servidor implementado; wrapper .NET 2.0 pendente.
 Última revisão: 2026-10-07.
 
 Este documento especifica o protocolo v2 do ZapMQ e o que ele exige do servidor e do wrapper .NET. Corresponde à fase 5 do [plano](PLANO-2.0.md) (versão 2.1): entrega por push, confirmação sem reentrega e mensagens mortas.

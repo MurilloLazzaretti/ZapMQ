@@ -289,7 +289,7 @@ A troca do servidor (fase 4) é parar um serviço e iniciar o outro na mesma por
 | 2 | Feita: `src/ZapMQ.Server` com a camada de compatibilidade v1, retenção configurável, `/health`, `/metrics` e log diário em arquivo. A instalação é manual, descrita no `README.md` |
 | 3 | Feita. O wrapper .NET 1.x roda sem modificação nos testes (`tests/ZapMQ.Server.Tests`), e a primeira instalação mostrou serviços .NET e clientes Delphi (via wrapper Delphi) publicando, consumindo e fazendo RPC contra o servidor novo |
 | 4 | Feita no ambiente de desenvolvimento em 2026-10-07. Demais ambientes pendentes |
-| 5 | Especificação aprovada em [`PROTOCOLO-V2.md`](PROTOCOLO-V2.md). Implementação em andamento |
+| 5 | Especificação aprovada em [`PROTOCOLO-V2.md`](PROTOCOLO-V2.md). Servidor implementado: entrega por push, confirmação, mensagens mortas, definições por fila, endpoint `/v2`, rotas `/admin` e métricas com as conexões. Falta o wrapper .NET 2.0. Nada disso está instalado em ambiente algum |
 
 Para repetir a comparação: `contract.py record http://host:porta saida.json` contra o servidor novo e `contract.py compare delphi-1.x.json saida.json`.
 

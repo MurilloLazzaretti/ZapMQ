@@ -26,6 +26,15 @@ public abstract class Consumer
     internal string? LastQueue { get; set; }
 
     /// <summary>
+    /// The queues this consumer is bound to, in binding order.
+    /// </summary>
+    public IReadOnlyList<string> GetBoundQueues()
+    {
+        lock (Queues)
+            return [.. Queues];
+    }
+
+    /// <summary>
     /// Queue and id of the message this consumer has not confirmed yet. Set and cleared under
     /// the lock of that queue.
     /// </summary>

@@ -14,7 +14,15 @@ public sealed class ServerFixture : IAsyncLifetime
 
     public int Port { get; private set; }
 
+    /// <summary>
+    /// Rooted at the 1.x routes.
+    /// </summary>
     public HttpClient Http { get; private set; } = null!;
+
+    /// <summary>
+    /// Rooted at the server itself: administration, metrics, health.
+    /// </summary>
+    public HttpClient Admin { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
@@ -24,11 +32,13 @@ public sealed class ServerFixture : IAsyncLifetime
 
         Port = new Uri(_app.Urls.First().Replace("[::]", "localhost").Replace("0.0.0.0", "localhost")).Port;
         Http = new HttpClient { BaseAddress = new Uri($"http://localhost:{Port}/datasnap/rest/TZapMethods/") };
+        Admin = new HttpClient { BaseAddress = new Uri($"http://localhost:{Port}/") };
     }
 
     public async Task DisposeAsync()
     {
         Http.Dispose();
+        Admin.Dispose();
         if (_app is not null)
         {
             await _app.StopAsync();

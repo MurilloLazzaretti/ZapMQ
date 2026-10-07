@@ -23,15 +23,23 @@ Send a message to a queue with <b>no answer</b>. Exactly one of the subscribers 
 
 Send a message to a queue and <b>get an answer</b>. Exactly one of the subscribers of that queue receives it and its answer goes back to the sender.
 
+⚡ _Push and confirmation_ (protocol v2)
+
+A client that speaks the v2 protocol keeps a connection open and gets each message the moment it arrives, then confirms it when done. Clients of both protocols can share a queue. The protocol is described in [`docs/PROTOCOLO-V2.md`](docs/PROTOCOLO-V2.md) (in Portuguese). The wrappers do not use it yet.
+
+🪦 _Dead letters_
+
+A message that expired, that nobody consumed, or that was delivered to a v2 client that went away before confirming it is kept as a dead letter, with the reason. Dead letters are not a queue: they are read, put back or discarded through the administration routes below. A message is never delivered a second time on the broker's own initiative.
+
 🩺 _Health and metrics_
 
-`GET /health` tells whether the service is up. `GET /metrics` lists the queues with their counters (pending, delivered, answered, expired, dropped).
+`GET /health` tells whether the service is up. `GET /metrics` lists the queues with their counters, the dead letters per queue and the connected v2 clients.
 
 📄 _Log_
 
 One log file per day, next to the executable. Warnings and errors also go to the Windows Event Log.
 
-Messages live in memory: restarting the service empties the queues. A message that nobody consumes is discarded after the retention time (180 seconds by default).
+Messages and dead letters live in memory: restarting the service empties them. A message that nobody consumes leaves its queue after the retention time (180 seconds by default).
 
 ## 📋 Requirements
 
@@ -67,19 +75,64 @@ Edit `appsettings.json`, in the same folder as `ZapMQ.exe`. Restart the service 
     "EmptyQueueLifetimeSeconds": 60,
     "LogDirectory": "logs",
     "LogRetentionDays": 30,
-    "LogLevel": "Information"
+    "LogLevel": "Information",
+    "DeadLetters": {
+      "MaxMessagesPerQueue": 1000,
+      "MaxAgeHours": 168
+    },
+    "Queues": {
+      "Orders": {
+        "RetentionSeconds": 3600,
+        "RedeliverUnconfirmed": false,
+        "DeadLetters": { "MaxMessagesPerQueue": 5000 }
+      }
+    }
   }
 }
 ```
 
+Only `Port` is commonly changed. Everything else may be left out.
+
 | Property | Default | Description |
 | -------- | ------- | ----------- |
 | `Port` | 5679 | HTTP port the service listens on |
-| `RetentionSeconds` | 180 | Longest a message stays in the broker, counted from when it was sent |
+| `RetentionSeconds` | 180 | Longest a message waits in a queue without being consumed |
 | `EmptyQueueLifetimeSeconds` | 60 | How long a queue is kept after its last message leaves |
 | `LogDirectory` | `logs` | Folder of the log files. Relative to the executable unless it is a full path |
 | `LogRetentionDays` | 30 | How many daily log files are kept |
 | `LogLevel` | `Information` | `Verbose`, `Debug`, `Information`, `Warning` or `Error` |
+| `DeadLetters.MaxMessagesPerQueue` | 1000 | Dead letters kept per queue; the oldest leave first. `0` keeps none |
+| `DeadLetters.MaxAgeHours` | 168 | Longest a dead letter is kept. `0` keeps none |
+| `V2.MaxFrameBytes` | 4194304 | Largest v2 frame accepted |
+| `V2.PingSeconds` | 15 | Interval of the keep-alive ping sent to v2 clients |
+| `V2.PingTimeoutSeconds` | 30 | Silence after which a v2 client is considered gone |
+
+`Queues` holds settings of individual queues, by name. A queue that is not listed uses the general values; queues do not have to be declared to exist.
+
+| Property of a queue | Default | Description |
+| ------------------- | ------- | ----------- |
+| `RetentionSeconds` | the general one | Retention of this queue |
+| `RedeliverUnconfirmed` | `false` | Puts a message that was delivered and not confirmed back in the queue instead of dead-lettering it. Only for queues where handling the same message twice does no harm |
+| `DeadLetters.MaxMessagesPerQueue` | the general one | Dead letters kept for this queue |
+| `DeadLetters.MaxAgeHours` | the general one | Age limit of the dead letters of this queue |
+
+## 🛠 Administration
+
+Plain HTTP on the service port. There is no access control: whoever reaches the port can use these routes.
+
+| Route | What it does |
+| ----- | ------------ |
+| `GET /admin/dead-letters` | Dead letters per queue, by reason |
+| `GET /admin/dead-letters/{queue}` | The dead letters of a queue, newest first |
+| `GET /admin/dead-letters/{queue}/{id}` | One dead letter |
+| `POST /admin/dead-letters/{queue}/{id}/requeue` | Publishes a copy to the queue and removes the dead letter |
+| `DELETE /admin/dead-letters/{queue}/{id}` | Discards one |
+| `DELETE /admin/dead-letters/{queue}` | Discards all of a queue |
+| `GET /admin/queues/{queue}` | The settings given to a queue |
+| `PUT /admin/queues/{queue}` | Changes them, effective immediately |
+| `DELETE /admin/queues/{queue}` | Goes back to the general values |
+
+A change made through `PUT /admin/queues` lasts until the service restarts, when `appsettings.json` applies again. Message ids contain braces and have to be URL-encoded in the routes.
 
 ## ⚙️ Installation
 
