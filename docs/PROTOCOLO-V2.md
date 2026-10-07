@@ -1,6 +1,6 @@
 # ZapMQ — Protocolo v2
 
-Situação: proposta para revisão. Nada deste documento está implementado.
+Situação: aprovada em 2026-10-07. Implementação em andamento.
 Última revisão: 2026-10-07.
 
 Este documento especifica o protocolo v2 do ZapMQ e o que ele exige do servidor e do wrapper .NET. Corresponde à fase 5 do [plano](PLANO-2.0.md) (versão 2.1): entrega por push, confirmação sem reentrega e mensagens mortas.
@@ -186,6 +186,7 @@ publicada ──► pendente ──► entregue ──► confirmada            
                  │             ├──► respondida ──► resposta coletada   (RPC; some)
                  │             │
                  │             └──► não confirmada   ──► mensagens mortas
+                 │                                       (ou de volta à fila, se a fila permitir)
                  │
                  ├──► vencida (TTL)        ──► mensagens mortas
                  └──► não consumida (retenção) ──► mensagens mortas
@@ -201,11 +202,13 @@ Consequência: uma queda de rede no instante da entrega coloca a mensagem nas me
 
 Não há prazo de confirmação enquanto a conexão estiver viva: um handler demorado não perde a mensagem.
 
+Uma fila pode ser marcada com `RedeliverUnconfirmed`. Nesse caso a mensagem não confirmada volta para o início da fila e é entregue de novo. A opção vem desligada e só serve para filas em que processar a mesma mensagem duas vezes não causa dano.
+
 ### 5.5 RPC
 
 - A resposta é devolvida a quem publicou, pela conexão em que publicou.
 - O tempo de espera continua sendo controlado pelo wrapper (`DefaultRPCTimeout` ou o TTL informado), que dispara `OnRPCExpired` como hoje.
-- RPC entregue e nunca respondido é descartado pela retenção e contado nas métricas. Não vai para as mensagens mortas (decisão em aberto, seção 11).
+- RPC entregue e nunca respondido é descartado pela retenção e contado nas métricas. Não vai para as mensagens mortas.
 
 ## 6. Mensagens mortas
 
@@ -312,6 +315,15 @@ Novas chaves em `appsettings.json`. Todas opcionais.
 
 A seção `Queues` é o primeiro uso da definição de fila prevista no plano. Fila que não aparece nela usa os valores gerais.
 
+| Chave de uma fila | Padrão | Descrição |
+|---|---|---|
+| `RetentionSeconds` | o geral | Tempo máximo de uma mensagem não consumida na fila |
+| `RedeliverUnconfirmed` | `false` | Devolve à fila a mensagem entregue e não confirmada |
+| `DeadLetters.MaxMessagesPerQueue` | o geral | Limite de mensagens mortas guardadas |
+| `DeadLetters.MaxAgeHours` | o geral | Idade máxima de uma mensagem morta |
+
+As definições de fila podem ser alteradas com o serviço rodando, pelas rotas `GET` e `PUT /admin/queues/{fila}`. Na 2.1 a alteração feita por essas rotas vale até o serviço reiniciar, quando volta o que está no `appsettings.json`. A partir da 2.2 o painel edita essas definições e o serviço as grava em arquivo próprio.
+
 ### 8.2 Métricas e log
 
 - `/metrics` ganha, por fila: mensagens em processamento, confirmadas e mortas por motivo; e a lista de conexões v2 com nome do cliente, processo, máquina e filas vinculadas.
@@ -343,12 +355,12 @@ Ao parar, o serviço envia `bye` às conexões e espera até 5 segundos pelas co
 
 Um servidor que não conhece um desses campos o ignora; um cliente que precisa do recurso consulta a versão do servidor recebida no `hello`.
 
-## 11. Decisões em aberto
+## 11. Decisões tomadas
 
-1. **Reentrega opcional por fila.** A regra geral é nunca reentregar. Há filas em que processar duas vezes não causa dano (notificações de tela, por exemplo) e em que perder a mensagem numa queda de rede incomoda mais. Uma opção `RedeliverUnconfirmed` por fila, desligada por padrão, permitiria devolver a mensagem não confirmada à fila nesses casos. Entra ou não?
-2. **RPC não respondido nas mensagens mortas.** A proposta é não guardar, porque os keep-alives de um processo parado gerariam uma entrada a cada ciclo. A alternativa é guardar com um motivo próprio (`unanswered`).
-3. **Limites padrão das mensagens mortas.** Propostos: 1.000 mensagens e 7 dias por fila.
-4. **Rotas `/admin` na porta da mensageria.** Na 2.1 elas ficariam na porta 5679, sem controle de acesso, até o painel existir em porta própria na 2.2. Quem alcança a 5679 já consegue publicar em qualquer fila hoje; a novidade seria conseguir ler o conteúdo das mensagens mortas.
+1. **Reentrega opcional por fila.** Entra. A opção `RedeliverUnconfirmed` de uma fila, desligada por padrão, devolve a mensagem não confirmada ao início da fila em vez de enviá-la às mensagens mortas. Só deve ser ligada em filas cujo processamento repetido não causa dano. A opção tem de poder ser alterada pelo painel, com o serviço rodando.
+2. **RPC não respondido não vai para as mensagens mortas.** É descartado pela retenção e contado nas métricas.
+3. **Limites padrão das mensagens mortas:** 1.000 mensagens e 7 dias por fila.
+4. **Rotas `/admin` na porta da mensageria durante a 2.1**, sem controle de acesso, e na porta do painel a partir da 2.2. Nenhuma versão é levada ao ambiente seguinte antes de estar funcionando por completo no de desenvolvimento.
 
 ## 12. Verificação
 

@@ -24,7 +24,8 @@ Estas regras valem para todo o projeto. Qualquer proposta de desenho ou de códi
 4. **Somente serviço Windows.** Não há requisito de Linux ou contêiner.
 5. **O ZapMQ é um produto independente.** O painel e os recursos fazem parte do ZapMQ e não dependem de nenhum sistema que o utilize.
 6. **O trace online continua existindo.** A forma de transporte pode mudar; o recurso, não.
-7. **Workers iniciam como SYSTEM.** Após reinício do servidor, o Worker Control sobe sozinho e inicia todas as instâncias configuradas sob a conta SYSTEM, como hoje.
+7. **Um ambiente por vez.** Nenhuma versão é levada ao ambiente seguinte antes de estar funcionando por completo no de desenvolvimento.
+8. **Workers iniciam como SYSTEM.** Após reinício do servidor, o Worker Control sobe sozinho e inicia todas as instâncias configuradas sob a conta SYSTEM, como hoje.
 
 ## 3. Decisões tomadas
 
@@ -288,7 +289,7 @@ A troca do servidor (fase 4) é parar um serviço e iniciar o outro na mesma por
 | 2 | Feita: `src/ZapMQ.Server` com a camada de compatibilidade v1, retenção configurável, `/health`, `/metrics` e log diário em arquivo. A instalação é manual, descrita no `README.md` |
 | 3 | Feita. O wrapper .NET 1.x roda sem modificação nos testes (`tests/ZapMQ.Server.Tests`), e a primeira instalação mostrou serviços .NET e clientes Delphi (via wrapper Delphi) publicando, consumindo e fazendo RPC contra o servidor novo |
 | 4 | Feita no ambiente de desenvolvimento em 2026-10-07. Demais ambientes pendentes |
-| 5 | Especificação proposta em [`PROTOCOLO-V2.md`](PROTOCOLO-V2.md), aguardando revisão. Implementação não iniciada |
+| 5 | Especificação aprovada em [`PROTOCOLO-V2.md`](PROTOCOLO-V2.md). Implementação em andamento |
 
 Para repetir a comparação: `contract.py record http://host:porta saida.json` contra o servidor novo e `contract.py compare delphi-1.x.json saida.json`.
 
@@ -322,5 +323,4 @@ Diferenças intencionais em relação à 1.x:
 1. Forma de login e de controle de acesso do painel.
 2. Tecnologia da interface do painel.
 3. Porta padrão do painel.
-4. As decisões em aberto do protocolo v2, listadas na seção 11 de [`PROTOCOLO-V2.md`](PROTOCOLO-V2.md).
 5. Publicar uma Release no GitHub para a última versão Delphi.
