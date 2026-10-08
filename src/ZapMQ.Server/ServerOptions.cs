@@ -51,6 +51,8 @@ public sealed class ServerOptions
     /// </summary>
     public string PanelUsersFile { get; set; } = "users.json";
 
+    public TransportOptions Transport { get; set; } = new();
+
     public V2Options V2 { get; set; } = new();
 
     public DeadLetterOptions DeadLetters { get; set; } = new();
@@ -143,4 +145,20 @@ public sealed class QueueDeadLetterOptions
     public int? MaxMessagesPerQueue { get; set; }
 
     public int? MaxAgeHours { get; set; }
+}
+
+/// <summary>
+/// The carrying of changes from one environment to the next.
+/// </summary>
+public sealed class TransportOptions
+{
+    /// <summary>
+    /// How this environment is called: DEV, QAS, PRD. Empty takes the name of the machine.
+    /// </summary>
+    public string Environment { get; set; } = "";
+
+    /// <summary>
+    /// Where the packages are kept, relative to the executable unless it is a full path.
+    /// </summary>
+    public string Directory { get; set; } = "transport";
 }

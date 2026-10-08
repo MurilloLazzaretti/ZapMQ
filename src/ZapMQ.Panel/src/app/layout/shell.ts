@@ -15,6 +15,7 @@ import { Auth } from '../core/auth';
 import { Live } from '../core/live';
 import { Theme } from '../core/theme';
 import { PasswordDialog } from '../shared/user-dialogs';
+import { Transport } from '../core/transport';
 
 interface Destination {
   path: string;
@@ -44,6 +45,7 @@ export class Shell implements OnInit, OnDestroy {
   protected readonly auth = inject(Auth);
   protected readonly live = inject(Live);
   protected readonly theme = inject(Theme);
+  private readonly transport = inject(Transport);
 
   private readonly breakpoints = inject(BreakpointObserver);
   /** Below this the navigation becomes a drawer that opens over the content. */
@@ -67,6 +69,7 @@ export class Shell implements OnInit, OnDestroy {
     { path: '/trafego', label: 'Tráfego', icon: 'monitoring' },
     { path: '/web', label: 'Aplicação web', icon: 'web' },
     { path: '/banco', label: 'Banco de dados', icon: 'database' },
+    { path: '/transporte', label: 'Transporte', icon: 'local_shipping', badge: this.transport.waiting },
   ];
 
   protected readonly themeIcon = computed(() => (this.theme.choice() === 'auto' ? 'tune' : this.theme.choice() === 'dark' ? 'dark_mode' : 'light_mode'));

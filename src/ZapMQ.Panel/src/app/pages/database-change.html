@@ -46,19 +46,7 @@
       } @else if (compared() && !counts().added && !counts().removed) {
         <div class="empty"><span>Só mudaram espaços no fim das linhas ou as quebras de linha.</span></div>
       } @else {
-        <div class="diff" role="table" aria-label="Comparação linha a linha">
-          @for (part of parts(); track $index) {
-            @if (isLines(part)) {
-              @for (line of $any(part).lines; track $index) {
-                <div class="line" [class.plus]="compared() && line.kind === '+'" [class.minus]="compared() && line.kind === '-'">
-                  <span class="number">{{ line.before ?? '' }}</span><span class="number">{{ line.after ?? '' }}</span><span class="sign">{{ compared() ? line.kind : '' }}</span><span class="text">{{ line.text }}</span>
-                </div>
-              }
-            } @else {
-              <div class="gap">{{ $any(part).skipped | num }} {{ $any(part).skipped === 1 ? 'linha igual' : 'linhas iguais' }}</div>
-            }
-          }
-        </div>
+        <zap-diff [lines]="lines()" [compared]="compared()" [whole]="whole()" />
       }
     </section>
   } @else {

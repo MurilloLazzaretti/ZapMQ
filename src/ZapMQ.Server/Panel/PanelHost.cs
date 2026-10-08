@@ -50,6 +50,7 @@ public static class PanelHost
             panel.UseEndpoints(endpoints =>
             {
                 endpoints.MapPanelApi(options, startedAt);
+                Transport.TransportEndpoints.MapTransport(endpoints);
                 endpoints.MapAdmin();
                 endpoints.MapGet("/health", () => Results.Json(new { status = "ok" }));
                 endpoints.MapGet("/metrics", (Broker broker, V2Connections connections) => Results.Json(ServerHost.Metrics(broker, connections)));

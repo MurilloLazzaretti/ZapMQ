@@ -1,8 +1,11 @@
 # Transporte entre ambientes
 
 Especificação do transporte e da aprovação de mudanças entre ambientes (por exemplo DEV → QAS →
-PRD) pelo painel do ZapMQ. **Ainda não implementado**: este documento é o que foi combinado e o
-que falta decidir. Complementa [AMBIENTE.md](AMBIENTE.md) e [BANCO.md](BANCO.md).
+PRD) pelo painel do ZapMQ. Complementa [AMBIENTE.md](AMBIENTE.md) e [BANCO.md](BANCO.md).
+
+**O que já existe** (ZapMQ 2.2.20, Worker Control 2.10): a etapa 1 da seção 9, isto é, itens de
+banco de ponta a ponta, com o pacote levado de um ambiente ao outro como arquivo. O resto deste
+documento é o que foi combinado e ainda falta fazer; a seção 11 diz como o que existe funciona.
 
 ## 1. Regras
 
@@ -32,8 +35,21 @@ que falta decidir. Complementa [AMBIENTE.md](AMBIENTE.md) e [BANCO.md](BANCO.md)
 | `api` | uma aplicação atrás do proxy, hospedada no servidor web | a pasta publicada |
 | `frontend` | um módulo da aplicação web, ou a aplicação que os carrega | a pasta do módulo |
 
-Tabela não tem tipo próprio: mudança de tabela é sempre um **script livre**, escrito por quem fez
-e revisado na aprovação. Calcular a alteração a partir de duas definições pode perder dados.
+**Banco.** O programador desenvolve direto no banco de DEV. O item nasce escolhendo o objeto no
+próprio banco, e o agente captura o script atual; o `.sql` é só a forma em que ele viaja dentro
+do pacote. Importar ou escrever um `.sql` em DEV também é possível, e é o caminho para o que não
+é um objeto.
+
+- **Tabela nova** viaja como o `CREATE` que o agente monta.
+- **Tabela que já existe no destino e mudou** não tem alteração automática: calcular a mudança a
+  partir de duas definições pode perder dados. O painel mostra a diferença e alguém escreve o
+  script de alteração, que viaja como script livre.
+- **Objeto apagado** viaja como um `DROP`, sempre como item explícito, destacado na aprovação.
+- **Criar um banco de dados não faz parte do transporte.**
+
+**Coisas novas.** Um pacote também pode levar o que ainda não existe no destino: uma API, um
+micro serviço, um serviço do Windows ou um módulo novo. Para objetos de banco isso é natural (o
+`CREATE`). Para os tipos de arquivos é a seção 4.1.
 
 ## 3. O pacote
 
@@ -89,7 +105,27 @@ para onde ele aponta na sua máquina.
 - **Frontend:** o nome do módulo, sob a raiz de `Frontends`.
 
 O que não puder ser deduzido é declarado em uma seção `Transport.Targets` da configuração do
-agente. Um item cujo alvo não existe no destino aparece como problema antes da aprovação.
+agente.
+
+**O banco, enquanto houver um só.** Quem sabe onde aplicar é o destino, não a origem. Com um único
+banco em `Databases`, o pacote não nomeia banco nenhum: diz "o banco do ambiente" e cada destino
+aplica no seu. Só quando um ambiente acompanhar mais de um banco é que os itens passam a levar um
+nome, que precisa ser o mesmo nos ambientes (um apelido, traduzido por cada agente).
+
+### 4.1 Alvo que ainda não existe
+
+Um item de arquivos cujo alvo não existe no destino é uma **instalação**, e a aprovação muda:
+
+- o pacote leva, além dos arquivos, o que o alvo é: o executável, o tipo e, quando fizer sentido,
+  um **modelo** dos arquivos de configuração, sem os valores do ambiente de origem;
+- quem aprova informa o que é próprio do ambiente: a pasta, as instâncias e as portas, o número
+  de processos do grupo, o nome e a conta do serviço, e preenche a configuração a partir do
+  modelo;
+- o agente cria a pasta, copia os arquivos e registra o alvo: o grupo no `ConfigWorkers.json`, o
+  serviço no Windows, o site no servidor web, o módulo no manifesto da aplicação web.
+
+O que envolve o proxy reverso (uma rota nova para uma API nova) fica fora da instalação
+automática: o painel mostra o trecho a incluir, e a mudança no proxy é feita por alguém.
 
 ## 5. O caminho de uma mudança
 
@@ -97,8 +133,9 @@ agente. Um item cujo alvo não existe no destino aparece como problema antes da 
 
 De duas formas, que dão no mesmo lugar, a **área** do ambiente:
 
-- **Pelo painel:** escolher objetos do banco (o script é o atual, lido pelo agente), escrever um
-  script livre, ou enviar o zip de uma pasta publicada dizendo o tipo e o alvo.
+- **Pelo painel:** escolher objetos do banco, nas abas Objetos e Alterações (esta marca o que
+  mudou e ainda não entrou em nenhum pacote); escrever ou importar um script; ou enviar o zip de
+  uma pasta publicada dizendo o tipo e o alvo.
 - **Por pasta:** uma pasta de entrada observada pelo agente, com uma subpasta por tipo
   (`banco/`, `worker/`, `service/`, `api/`, `frontend/`). O nome do arquivo é o nome do alvo:
   `api/cadastro.zip`, `banco/ajuste-pedido.sql`.
@@ -108,8 +145,14 @@ atual do alvo.
 
 ### 5.2 Montagem
 
-Na área, escolhem-se os itens, a ordem e a descrição, e o pacote é fechado. Fechado, não muda
-mais: uma correção é outro pacote.
+Na área, escolhem-se os itens, a ordem e a descrição, e o pacote é fechado. O script de cada
+objeto é capturado nesse momento, não quando ele entrou na área. A ordem é calculada pelas
+dependências (types e tabelas antes de functions, views e procedures) e pode ser ajustada à mão.
+Fechado, o pacote não muda mais: uma correção é outro pacote.
+
+Um pacote fechado pode ser **baixado** como arquivo e **importado** no painel de outro ambiente.
+É o caminho que existe antes do envio direto, e o que continua valendo entre ambientes que não
+se alcançam pela rede.
 
 ### 5.3 Envio
 
@@ -139,7 +182,10 @@ o motivo. Um conflito não impede a aprovação, mas exige que ela seja dada sab
 O agente aplica os itens na ordem do pacote:
 
 - **Banco:** executa o script com o usuário de banco da aplicação, lote por lote, em uma transação
-  por item quando o script permite. Antes, guarda o script atual do objeto.
+  por item. Um objeto que já existe é alterado (`ALTER`) e não recriado, para não perder
+  permissões nem quebrar quem depende dele. Antes, o painel guarda o script que estava lá.
+- **Resposta que não chega.** Se o agente não responder a tempo, o item fica com resultado
+  desconhecido e a aplicação para. Nada é tentado de novo sozinho.
 - **Arquivos:** para o alvo (desliga o grupo, para o serviço, tira a aplicação do ar), copia a
   pasta atual para a guarda, troca os arquivos preservando a configuração, inicia de novo e espera
   o alvo responder (o processo no ar, o serviço rodando, a URL de verificação respondendo).
@@ -207,7 +253,55 @@ No painel:
 
 ## 10. Em aberto
 
-- Onde aplicar durante os testes da etapa 1, já que em DEV os objetos são alterados direto no
-  banco: um banco de rascunho na mesma instância.
-- O apelido de cada banco.
+- A aplicação no banco só foi exercitada com um banco simulado; a primeira execução real será no
+  primeiro destino que receber um pacote.
 - Como tirar do ar uma aplicação que roda dentro do processo do servidor web.
+- Os comandos de administração do agente chegam por uma fila do ZapMQ, e o protocolo de
+  mensageria não tem autenticação. Antes de o transporte valer em produção, quem pode pedir uma
+  aplicação ao agente precisa ser restrito.
+
+## 11. O que está implementado
+
+**Telas.** Item **Transporte** no menu, com um aviso de quantos pacotes esperam por alguém.
+
+- **Área** (`/transporte`): o que espera para entrar em um pacote. Objetos entram pelo botão
+  *Transportar* das telas Objetos e Alterações do banco (esta marca cada alteração como ainda
+  não transportada, ou já em pacote); um script é escrito ali ou importado de um `.sql`. Fechar o
+  pacote pede um nome e a descrição.
+- **Pacotes** (`/transporte/pacotes`): os montados aqui e os que chegaram, com a situação de
+  cada um, e *Importar pacote*.
+- **Pacote** (`/transporte/pacotes/{id}`): os itens na ordem de aplicação, cada um com o que traz
+  comparado linha a linha ao que existe aqui; a decisão (aprovar e aplicar agora, agendar,
+  recusar, cancelar a aprovação); o resultado de cada item; e o histórico no ambiente.
+
+**Como cada item é comparado com o destino:**
+
+| Estado | Quando |
+|---|---|
+| novo aqui | o objeto não existe: será criado |
+| já está igual | o que o pacote traz é o que está aqui |
+| altera | existe e é diferente; está como a origem estava antes da mudança, ou não se sabe de onde a mudança partiu |
+| diferente do ponto de partida | existe, e não é o que a origem tinha antes da mudança |
+| já existe: precisa de script | tabela ou type que já existe e é diferente. **Impede a aprovação** |
+| será apagado / já não existe | para um item de exclusão |
+
+Além disso, um item que usa algo que não existe no destino nem vem no pacote é apontado.
+
+**Ordem dos itens**, quando não é dada à mão: types, tabelas, scripts, functions, views,
+procedures e, por fim, exclusões; dentro disso, cada objeto depois dos que ele usa.
+
+**Aplicação.** O painel pede ao agente um item por vez (`DatabaseApply`), esperando até 6 minutos
+por resposta. Cada item é uma transação. Antes de cada objeto, o script que estava no destino é
+guardado com o resultado. A situação final é *aplicado*, *aplicado em parte* ou *falhou*.
+
+**Onde fica.** No painel, a pasta `transport` ao lado do executável (`ZapMQ:Transport:Directory`):
+`area.json` e, por pacote, `packages/{id}/package.zpkg` e `state.json`. O nome do ambiente vem de
+`ZapMQ:Transport:Environment`; sem ele, vale o nome da máquina.
+
+**Rotas** (todas sob `api/transport`, atrás do login): `summary`; `area`, `area/objects`,
+`area/scripts`, `area/{id}`; `packaged`; `packages`, `packages/import`, `packages/{id}`,
+`packages/{id}/download`, `/check`, `/items/{n}`, `/approve`, `/reject`.
+
+**No agente:** o comando `DatabaseApply` e o componente `SqlServerWriter`, o único que escreve
+no banco. Ele recusa um banco fora de `Databases`, cria ou altera conforme o objeto exista, não
+recria tabela nem type, e escreve o `DROP` a partir do nome, nunca de um texto do pacote.

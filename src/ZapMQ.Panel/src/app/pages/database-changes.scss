@@ -72,3 +72,7 @@ tr.clickable:hover, tr.clickable:focus-visible { background: var(--mat-sys-surfa
 td:first-child { white-space: nowrap; }
 .foot { padding: 10px 20px 14px; }
 .was { margin: 2px 0 0 28px; font-size: 12.5px; }
+
+.actions { white-space: nowrap; text-align: right; padding-top: 0; padding-bottom: 0; }
+.carried { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.carried mat-icon { width: 16px; height: 16px; }

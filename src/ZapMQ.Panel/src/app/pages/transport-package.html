@@ -1,0 +1,178 @@
+<div class="page">
+  <header class="head">
+    <a mat-icon-button routerLink="/transporte/pacotes" matTooltip="Voltar aos pacotes" aria-label="Voltar aos pacotes"><mat-icon svgIcon="arrow_back" /></a>
+    @if (detail(); as now) {
+      <div class="title">
+        <h1>{{ now.package.name }} <span class="pill" [class]="'pill ' + statusTone(now.package.status)">{{ statusName(now.package.status) }}</span></h1>
+        <p class="muted">
+          Montado em <strong>{{ now.package.origin }}</strong> por {{ now.package.createdBy }}, {{ now.package.createdAt | when }} ·
+          {{ now.items.length }} {{ now.items.length === 1 ? 'item' : 'itens' }} · {{ size(now.package.size / 1024) }} ·
+          <span class="mono" matTooltip="Impressão digital do arquivo do pacote: a mesma em todos os ambientes">{{ now.sha256.slice(0, 12) }}</span>
+        </p>
+        @if (now.package.description) { <p class="description">{{ now.package.description }}</p> }
+      </div>
+    } @else {
+      <div class="title"><h1>Pacote</h1></div>
+    }
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível ler o pacote</strong><span>{{ problem() }}</span></section>
+  } @else if (missing()) {
+    <section class="panel empty"><mat-icon svgIcon="search" /><strong>Este pacote não está neste ambiente</strong></section>
+  } @else if (detail(); as now) {
+    <!-- What there is to do about it, which depends on where it stands. -->
+    @switch (now.package.status) {
+      @case ('Closed') {
+        <section class="panel decide">
+          <div>
+            <strong>Pacote fechado em {{ now.environment }}.</strong>
+            <span class="muted">Leve o arquivo ao ambiente seguinte e importe-o lá, em Transporte → Pacotes. É lá que ele é aprovado e aplicado.</span>
+          </div>
+          <span class="spacer"></span>
+          <button mat-flat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button>
+        </section>
+      }
+      @case ('Pending') {
+        <section class="panel decide" [class.warned]="warnings().blocked || warnings().conflicts || warnings().missing">
+          <div>
+            <strong>Aguardando aprovação em {{ now.environment }}.</strong>
+            @if (checkProblem()) {
+              <span class="bad">Não foi possível comparar com este ambiente: {{ checkProblem() }}</span>
+            } @else if (!checks()) {
+              <span class="muted">Comparando com o que existe aqui…</span>
+            } @else if (warnings().blocked || warnings().conflicts || warnings().missing || warnings().drops) {
+              <span class="muted">
+                Antes de aprovar, veja:
+                @if (warnings().blocked) { <b class="bad">{{ warnings().blocked }} que não podem ser aplicados aqui (tabela ou type que já existe), o que impede a aprovação</b>; }
+                @if (warnings().conflicts) { <b>{{ warnings().conflicts }} diferentes do ponto de partida</b>; }
+                @if (warnings().missing) { <b>{{ warnings().missing }} que usam algo que falta aqui</b>; }
+                @if (warnings().drops) { <b>{{ warnings().drops }} que serão apagados</b>. }
+              </span>
+            } @else {
+              <span class="muted">Nada no pacote entra em choque com o que existe aqui.</span>
+            }
+          </div>
+          <span class="spacer"></span>
+          <button mat-button (click)="refusing.set(!refusing()); scheduling.set(false)" [disabled]="busy()">Recusar</button>
+          <button mat-button (click)="scheduling.set(!scheduling()); refusing.set(false)" [disabled]="busy() || !!warnings().blocked"><mat-icon svgIcon="event" /> Agendar</button>
+          <button mat-flat-button (click)="approve(false)" [disabled]="busy() || !!warnings().blocked" [matTooltip]="warnings().blocked ? 'Há item que não pode ser aplicado neste ambiente: o pacote só pode ser recusado' : ''"><mat-icon svgIcon="task_alt" /> Aprovar e aplicar agora</button>
+        </section>
+        @if (scheduling()) {
+          <section class="panel form">
+            <label>Aplicar em <input type="datetime-local" [(ngModel)]="when" /></label>
+            <span class="spacer"></span>
+            <button mat-button (click)="scheduling.set(false)">Cancelar</button>
+            <button mat-flat-button (click)="approve(true)" [disabled]="busy() || !when">Aprovar e agendar</button>
+          </section>
+        }
+        @if (refusing()) {
+          <section class="panel form">
+            <label class="grow">Motivo <input type="text" [(ngModel)]="reason" placeholder="O que falta, ou o que está errado" /></label>
+            <button mat-button (click)="refusing.set(false)">Cancelar</button>
+            <button mat-flat-button class="danger" (click)="reject()" [disabled]="busy()">Recusar o pacote</button>
+          </section>
+        }
+      }
+      @case ('Approved') {
+        <section class="panel decide">
+          <div>
+            <strong>Aprovado por {{ now.package.approvedBy }}.</strong>
+            <span class="muted">Será aplicado em {{ now.package.applyAt | when }}.</span>
+          </div>
+          <span class="spacer"></span>
+          <button mat-button (click)="reject()" [disabled]="busy()">Cancelar a aprovação</button>
+        </section>
+      }
+      @case ('Applying') {
+        <section class="panel decide"><div><strong>Aplicando…</strong><span class="muted">{{ now.results.length }} de {{ now.items.length }} itens.</span></div></section>
+      }
+      @case ('Applied') {
+        <section class="panel decide done"><div><strong>Aplicado em {{ now.environment }}.</strong><span class="muted">Todos os {{ now.items.length }} itens. O mesmo arquivo pode seguir para o próximo ambiente.</span></div><span class="spacer"></span><button mat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button></section>
+      }
+      @case ('Partial') {
+        <section class="panel decide warned"><div><strong class="bad">Aplicado em parte.</strong><span class="muted">A aplicação parou no primeiro item que falhou. O que foi aplicado antes continua aplicado; nada foi desfeito.</span></div></section>
+      }
+      @case ('Failed') {
+        <section class="panel decide warned"><div><strong class="bad">Nenhum item foi aplicado.</strong><span class="muted">Veja o motivo no primeiro item.</span></div></section>
+      }
+      @case ('Rejected') {
+        <section class="panel decide"><div><strong>Recusado.</strong><span class="muted">Um pacote recusado não é aplicado. A correção vem em outro pacote.</span></div></section>
+      }
+    }
+
+    <section class="panel">
+      <div class="panel-head"><h2>Itens</h2><span class="hint">na ordem em que são aplicados · clique para ver o conteúdo</span></div>
+      <div class="items">
+        @for (item of now.items; track item.number) {
+          <div class="item" [class.open]="open() === item.number">
+            <button type="button" class="row" (click)="toggle(item)" [attr.aria-expanded]="open() === item.number">
+              <span class="number num">{{ item.number }}</span>
+              <span class="what">
+                @if (item.action === 'Script') {
+                  <mat-icon svgIcon="code" /><strong>{{ item.title }}</strong>
+                } @else {
+                  <mat-icon [svgIcon]="kindIcon(item.objectKind)" [matTooltip]="kindName(item.objectKind)" /><span><span class="muted">{{ item.schema }}.</span><strong>{{ item.name }}</strong></span>
+                }
+              </span>
+              <span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span>
+              <span class="standing">
+                @if (result(item.number); as done) {
+                  @switch (done.status) {
+                    @case ('applied') { <span class="pill ok">{{ done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
+                    @case ('failed') { <span class="pill danger">falhou</span> }
+                    @default { <span class="pill warn" matTooltip="O pedido foi feito e a resposta não chegou: pode ter sido aplicado ou não. Confira no banco.">resultado desconhecido</span> }
+                  }
+                } @else if (now.package.status === 'Partial' || now.package.status === 'Failed') {
+                  <span class="pill" matTooltip="A aplicação parou antes de chegar a este item">não aplicado</span>
+                } @else if (item.action !== 'Script' && state(item); as standing) {
+                  <span class="pill" [class]="'pill ' + standing.tone" [matTooltip]="standing.hint">{{ standing.text }}</span>
+                }
+              </span>
+              <mat-icon class="chevron" svgIcon="keyboard_arrow_down" />
+            </button>
+
+            @if (result(item.number); as done) {
+              @if (done.problem) {
+                <p class="trouble"><mat-icon svgIcon="error" /> <span>{{ done.problem }}@if (done.line) { <span class="muted"> (lote {{ done.batch }}, linha {{ done.line }})</span> }</span></p>
+              }
+            }
+            @if (lacking(item).length) {
+              <p class="trouble mild"><mat-icon svgIcon="warning" /> <span>Usa o que não existe aqui nem vem no pacote: <span class="mono">{{ lacking(item).join(', ') }}</span></span></p>
+            }
+
+            @if (open() === item.number) {
+              @if (compared(); as side) {
+                <div class="content">
+                  <div class="content-head">
+                    <strong>{{ side.title }}</strong>
+                    @if (side.both) { <span class="muted"><span class="plus">+{{ side.added | num }}</span> <span class="minus">−{{ side.removed | num }}</span> linhas</span> }
+                    @if (content()?.problem) { <span class="bad">{{ content()!.problem }}</span> }
+                  </div>
+                  @if (side.both && !side.added && !side.removed) {
+                    <p class="muted same">O que o pacote traz é igual ao que está aqui.</p>
+                  } @else {
+                    <zap-diff [lines]="side.lines" [compared]="side.both" />
+                  }
+                </div>
+              } @else {
+                <p class="muted same">Lendo…</p>
+              }
+            }
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Histórico</h2><span class="hint">neste ambiente</span></div>
+      <ul class="history">
+        @for (entry of now.history; track $index) {
+          <li><span class="num muted">{{ entry.at | when }}</span><strong>{{ historyText(entry.what) }}</strong><span class="muted">{{ entry.by }}</span>@if (entry.detail) { <span>{{ entry.detail }}</span> }</li>
+        }
+      </ul>
+    </section>
+  } @else {
+    <section class="panel empty"><span>Lendo…</span></section>
+  }
+</div>

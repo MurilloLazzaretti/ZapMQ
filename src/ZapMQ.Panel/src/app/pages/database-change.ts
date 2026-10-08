@@ -7,14 +7,15 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api } from '../core/api';
 import { actionName, actionTone, kindIcon, kindName } from '../core/database';
-import { around, diff } from '../core/diff';
+import { diff } from '../core/diff';
 import { NumPipe, WhenPipe } from '../core/format';
 import { ObjectChange } from '../core/models';
+import { DiffView } from '../shared/diff-view';
 
 /** One change to an object of a database: what it was and what it became, line by line. */
 @Component({
   selector: 'zap-database-change',
-  imports: [RouterLink, MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, NumPipe, WhenPipe],
+  imports: [RouterLink, MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, DiffView, NumPipe, WhenPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './database-change.html',
   styleUrl: './database-change.scss',
@@ -47,8 +48,6 @@ export class DatabaseChangePage implements OnInit {
   /** Both sides there are to compare; a created or dropped object has one. */
   protected readonly compared = computed(() => !!this.change()?.OldScript && !!this.change()?.NewScript);
 
-  protected readonly parts = computed(() => (this.whole() || !this.compared() ? [{ lines: this.lines() }] : around(this.lines())));
-
   protected readonly who = computed(() => {
     const change = this.change();
     return change ? [change.Login, change.Host, change.Application].filter(Boolean).join(' · ') : '';
@@ -65,9 +64,5 @@ export class DatabaseChangePage implements OnInit {
         }
       },
     });
-  }
-
-  protected isLines(part: object): boolean {
-    return 'lines' in part;
   }
 }

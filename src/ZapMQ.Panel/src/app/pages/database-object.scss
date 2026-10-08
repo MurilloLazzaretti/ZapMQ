@@ -4,6 +4,7 @@
   gap: 8px;
 
   .title { min-width: 0; }
+  .spacer { flex: 1; }
   h1 { margin: 4px 0 0; font: var(--mat-sys-headline-small); font-weight: 650; letter-spacing: -0.02em; overflow-wrap: anywhere; }
   p { display: flex; align-items: center; gap: 4px 6px; flex-wrap: wrap; margin: 4px 0 0; }
   p mat-icon { width: 18px; height: 18px; }

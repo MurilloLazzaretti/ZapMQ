@@ -1,0 +1,101 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Transporte</h1>
+      <p class="muted">O que está em <strong>{{ environment() || 'este ambiente' }}</strong> esperando para entrar em um pacote.</p>
+    </div>
+    <span class="spacer"></span>
+    <zap-transport-tabs />
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível ler a área</strong><span>{{ problem() }}</span></section>
+  } @else if (items(); as list) {
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Área</h2>
+        <span class="hint">{{ list.length }} {{ list.length === 1 ? 'item' : 'itens' }}</span>
+        <span class="spacer"></span>
+        <a mat-button routerLink="/banco/alteracoes"><mat-icon svgIcon="history" /> Alterações do banco</a>
+        <a mat-button routerLink="/banco/objetos"><mat-icon svgIcon="table" /> Objetos do banco</a>
+        <button mat-button (click)="writing.set(!writing())"><mat-icon svgIcon="code" /> Escrever script</button>
+        <button mat-button (click)="file.click()"><mat-icon svgIcon="upload" /> Importar .sql</button>
+        <input #file type="file" accept=".sql,text/plain" hidden (change)="pick($event)" />
+      </div>
+
+      @if (writing()) {
+        <form class="script" (ngSubmit)="addScript()">
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>Para que é este script</mat-label>
+            <input matInput name="title" [(ngModel)]="title" placeholder="Nova coluna Canal na tabela de pedidos" required />
+          </mat-form-field>
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>Script</mat-label>
+            <textarea matInput name="script" [(ngModel)]="script" rows="9" spellcheck="false" class="mono" required></textarea>
+            <mat-hint>Roda como está no destino, dentro de uma transação. Separe os lotes com GO.</mat-hint>
+          </mat-form-field>
+          <div class="buttons">
+            <button mat-button type="button" (click)="writing.set(false)">Cancelar</button>
+            <button mat-flat-button type="submit" [disabled]="busy() || !title.trim() || !script.trim()">Incluir na área</button>
+          </div>
+        </form>
+      }
+
+      @if (list.length) {
+        <div class="table-wrap">
+          <table class="data stack">
+            <thead><tr><th>Item</th><th>O que fazer no destino</th><th>Incluído</th><th></th></tr></thead>
+            <tbody>
+              @for (item of list; track item.id) {
+                <tr>
+                  <td class="wide" data-label="Item">
+                    @if (item.action === 'Script') {
+                      <span class="object"><mat-icon svgIcon="code" /><strong>{{ item.title }}</strong></span>
+                    } @else {
+                      <a class="object" [routerLink]="item.action === 'Drop' || !(item.database || database()) ? null : ['/banco/objetos', item.database || database(), item.objectKind, item.schema, item.name]">
+                        <mat-icon [svgIcon]="kindIcon(item.objectKind)" [matTooltip]="kindName(item.objectKind)" /><span><span class="muted">{{ item.schema }}.</span><strong>{{ item.name }}</strong></span>
+                      </a>
+                    }
+                  </td>
+                  <td data-label="O que fazer no destino"><span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span></td>
+                  <td data-label="Incluído">{{ item.addedAt | ago }} <span class="muted">por {{ item.addedBy }}</span></td>
+                  <td class="actions"><button mat-icon-button (click)="remove(item)" matTooltip="Tirar da área" [attr.aria-label]="'Tirar da área'"><mat-icon svgIcon="close" /></button></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else if (!writing()) {
+        <div class="empty">
+          <mat-icon svgIcon="playlist_add" />
+          <strong>A área está vazia</strong>
+          <span>Inclua objetos pelas telas <a routerLink="/banco/alteracoes">Alterações</a> e <a routerLink="/banco/objetos">Objetos</a> do banco, ou escreva um script.</span>
+        </div>
+      }
+    </section>
+
+    @if (list.length) {
+      <section class="panel">
+        <div class="panel-head"><h2>Fechar pacote</h2><span class="hint">com tudo o que está na área</span></div>
+        <form class="close" (ngSubmit)="close()">
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>Nome do pacote</mat-label>
+            <input matInput name="name" [(ngModel)]="name" placeholder="Fechamento de faturamento por canal" required />
+          </mat-form-field>
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>O que muda</mat-label>
+            <textarea matInput name="description" [(ngModel)]="description" rows="3"></textarea>
+            <mat-hint>É o que quem aprova no destino vai ler.</mat-hint>
+          </mat-form-field>
+          <p class="muted note">
+            O script de cada objeto é o do momento do fechamento. A ordem segue as dependências: types e tabelas, scripts, functions, views, procedures e, por último, o que é apagado.
+            Fechado, o pacote não muda mais.
+          </p>
+          <div class="buttons"><button mat-flat-button type="submit" [disabled]="busy() || !name.trim()"><mat-icon svgIcon="inventory_2" /> Fechar pacote</button></div>
+        </form>
+      </section>
+    }
+  } @else {
+    <section class="panel empty"><span>Lendo…</span></section>
+  }
+</div>

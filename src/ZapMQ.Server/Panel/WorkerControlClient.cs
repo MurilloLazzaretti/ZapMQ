@@ -34,7 +34,13 @@ public sealed class WorkerControlClient(Broker broker, TimeProvider time)
     /// </summary>
     public bool IsConnected => broker.GetQueue(Queue) is { Consumers: > 0 };
 
-    public async Task<WorkerControlAnswer> AskAsync(string command, string? by, Action<JsonObject>? more = null, CancellationToken cancellation = default)
+    public Task<WorkerControlAnswer> AskAsync(string command, string? by, Action<JsonObject>? more = null, CancellationToken cancellation = default) =>
+        AskAsync(command, by, Patience, more, cancellation);
+
+    /// <summary>
+    /// Asks and waits for as long as said: what changes something on the machine may take a while.
+    /// </summary>
+    public async Task<WorkerControlAnswer> AskAsync(string command, string? by, TimeSpan patience, Action<JsonObject>? more = null, CancellationToken cancellation = default)
     {
         // Asking a queue nobody consumes would only leave a dead letter behind each time.
         if (!IsConnected)
@@ -48,11 +54,11 @@ public sealed class WorkerControlClient(Broker broker, TimeProvider time)
         // Each question has a receiver of its own, so the answer needs no id to be matched and
         // cannot arrive before somebody is waiting for it.
         var answer = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        broker.Publish(Queue, request.ToJsonString(), rpc: true, ttl: Patience, replyTo: new Receiver(answer), publisher: "panel");
+        broker.Publish(Queue, request.ToJsonString(), rpc: true, ttl: patience, replyTo: new Receiver(answer), publisher: "panel");
 
         try
         {
-            var response = await answer.Task.WaitAsync(Patience, time, cancellation);
+            var response = await answer.Task.WaitAsync(patience, time, cancellation);
             return response is null
                 ? new WorkerControlAnswer(false, null, "O Worker Control não soube responder a esse pedido.")
                 : new WorkerControlAnswer(true, JsonNode.Parse(response), null);

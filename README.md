@@ -113,6 +113,8 @@ Only `Port` is commonly changed. Everything else may be left out.
 | `Panel.User` | `admin` | The master the panel starts with, the first time it runs |
 | `Panel.Password` | `admin` | Its password. Both are read only while there is no user yet; from then on the users are in their own file and the password is changed in the panel |
 | `PanelUsersFile` | `users.json` | Where the users of the panel are kept, relative to the executable. No password is in it, only what tells whether one is right |
+| `Transport.Environment` | name of the machine | How this environment is called in the packages it makes and takes in: `DEV`, `QAS`, `PRD` |
+| `Transport.Directory` | `transport` | Where the packages are kept, relative to the executable |
 | `Panel.SessionHours` | 8 | How long a login lasts |
 | `V2.Enabled` | true | `false` turns the v2 protocol off: the service answers 1.x only and v2 wrappers fall back to it |
 | `V2.MaxFrameBytes` | 4194304 | Largest v2 frame accepted |

@@ -10,6 +10,7 @@ import { Api } from '../core/api';
 import { kindIcon, kindName, size, variety } from '../core/database';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
 import { CatalogObject, CatalogPage } from '../core/models';
+import { Transport } from '../core/transport';
 import { DatabaseTabs } from '../shared/database-tabs';
 
 const PAGE = 100;
@@ -29,6 +30,7 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  protected readonly transport = inject(Transport);
   private typing: ReturnType<typeof setTimeout> | null = null;
   private asked = 0;
 
@@ -121,7 +123,7 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
           this.loading.set(false);
           if (failure.status === 501) {
             this.outdated.set(true);
-          } else if (failure.status === 404 || failure.error?.code === 'not-configured') {
+          } else if (failure.status === 404 || ['not-configured', 'unknown-database'].includes(failure.error?.code)) {
             this.page.set(null);
             this.unset.set(failure.error?.code ?? 'not-found');
           } else if (failure.status !== 401) {

@@ -772,3 +772,101 @@ export interface ObjectTracking {
   ScannedAt: string | null;
   Problem: string | null;
 }
+
+/** Something waiting in the area of the environment to go into a package. */
+export interface AreaItem {
+  id: string;
+  kind: string;
+  action: 'Define' | 'Drop' | 'Script';
+  objectKind: CatalogKind | null;
+  variety: string | null;
+  schema: string | null;
+  name: string | null;
+  title: string | null;
+  script: string | null;
+  database: string | null;
+  addedBy: string;
+  addedAt: string;
+}
+
+export type PackageStatus = 'Closed' | 'Pending' | 'Rejected' | 'Approved' | 'Applying' | 'Applied' | 'Partial' | 'Failed';
+
+export interface PackageSummary {
+  id: string;
+  name: string;
+  description: string;
+  origin: string;
+  createdAt: string;
+  createdBy: string;
+  items: number;
+  status: PackageStatus;
+  /** It came from another environment, to be applied here. */
+  received: boolean;
+  applyAt: string | null;
+  approvedBy: string | null;
+  size: number;
+  changedAt: string;
+}
+
+export interface PackageItem {
+  number: number;
+  kind: string;
+  action: 'Define' | 'Drop' | 'Script';
+  objectKind: CatalogKind | null;
+  variety: string | null;
+  schema: string | null;
+  name: string | null;
+  title: string | null;
+  database: string | null;
+  fingerprint: string | null;
+  base: string | null;
+  size: number;
+}
+
+export interface PackageResult {
+  number: number;
+  status: 'applied' | 'failed' | 'unknown';
+  did: string | null;
+  problem: string | null;
+  batch: number | null;
+  line: number | null;
+  messages: string[];
+  at: string;
+  hasPrevious: boolean;
+}
+
+export interface PackageDetail {
+  environment: string;
+  package: PackageSummary;
+  sha256: string;
+  items: PackageItem[];
+  history: { at: string; by: string; what: string; detail: string | null }[];
+  results: PackageResult[];
+}
+
+/** How one item of a package stands against what this environment has. */
+export interface ItemCheck {
+  number: number;
+  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'unknown';
+  currentFingerprint: string | null;
+  missing: string[];
+  problem: string | null;
+}
+
+export interface PackageItemDetail {
+  item: PackageItem;
+  script: string | null;
+  current: string | null;
+  currentFingerprint: string | null;
+  previous: string | null;
+  previousFingerprint: string | null;
+  problem: string | null;
+}
+
+export interface TransportSummary {
+  environment: string;
+  area: number;
+  pending: number;
+  scheduled: number;
+  troubled: number;
+}

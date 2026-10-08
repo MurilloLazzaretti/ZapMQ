@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult, TapEvent,
   PanelUser,
+  AreaItem, ItemCheck, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, DatabasePoint, DatabaseQuery, DatabaseState,
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
@@ -223,6 +224,63 @@ export class Api {
 
   databaseChange(id: number): Observable<{ Change: ObjectChange }> {
     return this.http.get<{ Change: ObjectChange }>(`api/workers/database/changes/${id}`);
+  }
+
+  transportSummary(): Observable<TransportSummary> {
+    return this.http.get<TransportSummary>('api/transport/summary');
+  }
+
+  area(): Observable<{ environment: string; items: AreaItem[] }> {
+    return this.http.get<{ environment: string; items: AreaItem[] }>('api/transport/area');
+  }
+
+  addToArea(item: { database?: string; kind: string; schema: string; name: string; drop?: boolean }): Observable<AreaItem> {
+    return this.http.post<AreaItem>('api/transport/area/objects', item);
+  }
+
+  addScript(script: { title: string; script: string }): Observable<AreaItem> {
+    return this.http.post<AreaItem>('api/transport/area/scripts', script);
+  }
+
+  removeFromArea(id: string): Observable<void> {
+    return this.http.delete<void>(`api/transport/area/${id}`);
+  }
+
+  /** When each object last went into a package made here, by "kind|schema|name" in lower case. */
+  packaged(): Observable<Record<string, string>> {
+    return this.http.get<Record<string, string>>('api/transport/packaged');
+  }
+
+  packages(): Observable<{ environment: string; packages: PackageSummary[] }> {
+    return this.http.get<{ environment: string; packages: PackageSummary[] }>('api/transport/packages');
+  }
+
+  closePackage(request: { name: string; description: string; items?: string[] }): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>('api/transport/packages', request);
+  }
+
+  importPackage(file: Blob): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>('api/transport/packages/import', file, { headers: { 'Content-Type': 'application/octet-stream' } });
+  }
+
+  package(id: string): Observable<PackageDetail> {
+    return this.http.get<PackageDetail>(`api/transport/packages/${id}`);
+  }
+
+  packageCheck(id: string): Observable<{ checks: ItemCheck[] }> {
+    return this.http.get<{ checks: ItemCheck[] }>(`api/transport/packages/${id}/check`);
+  }
+
+  packageItem(id: string, number: number): Observable<PackageItemDetail> {
+    return this.http.get<PackageItemDetail>(`api/transport/packages/${id}/items/${number}`);
+  }
+
+  approvePackage(id: string, at: string | null): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/approve`, { at });
+  }
+
+  rejectPackage(id: string, reason: string): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/reject`, { reason });
   }
 
   frontends(): Observable<{ Frontends: WebApplication[]; Publications: WebPublication[] }> {

@@ -10,6 +10,7 @@ import { actionName, actionTone, kindIcon, kindName, size, variety } from '../co
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
 import { CatalogColumn, CatalogDetail, CatalogReference, ObjectChange } from '../core/models';
 import { colour } from '../core/sql';
+import { Transport } from '../core/transport';
 
 /** The parts of an object, as the screen calls them. */
 const PARTS: Record<string, string> = {
@@ -40,6 +41,7 @@ const PARTS: Record<string, string> = {
 export class DatabaseObjectPage implements OnInit, OnDestroy {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
+  protected readonly transport = inject(Transport);
   private watching: Subscription | null = null;
   private copiedTimer: ReturnType<typeof setTimeout> | null = null;
 

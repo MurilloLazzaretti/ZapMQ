@@ -10,6 +10,7 @@ import { Api } from '../core/api';
 import { actionName, actionTone, kindIcon, kindName } from '../core/database';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
 import { ObjectChange, ObjectTracking } from '../core/models';
+import { Transport } from '../core/transport';
 import { DatabaseTabs } from '../shared/database-tabs';
 
 const PERIODS = [
@@ -35,6 +36,9 @@ export class DatabaseChangesPage implements OnInit, OnDestroy {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly transport = inject(Transport);
+  /** When each object last went into a package made here. */
+  private readonly packaged = signal<Record<string, string>>({});
   private timer: ReturnType<typeof setInterval> | null = null;
   private typing: ReturnType<typeof setTimeout> | null = null;
   private asked = 0;
@@ -86,6 +90,17 @@ export class DatabaseChangesPage implements OnInit, OnDestroy {
     this.typing = setTimeout(() => this.refresh(), 300);
   }
 
+  /** The change came after the last package that carried the object, or no package ever did. */
+  protected pending(change: ObjectChange): boolean {
+    const last = this.packaged()[`${change.Kind}|${change.Schema}|${change.Name}`.toLowerCase()];
+    return !last || Date.parse(last) < Date.parse(change.At);
+  }
+
+  protected async carry(change: ObjectChange, event: Event): Promise<void> {
+    event.stopPropagation();
+    await this.transport.add({ database: change.Database, kind: change.Kind, schema: change.Schema, name: change.Name, drop: change.Action === 'Dropped' });
+  }
+
   protected who(change: ObjectChange): string {
     return [change.Login, change.Host, change.Application].filter(Boolean).join(' · ');
   }
@@ -93,6 +108,7 @@ export class DatabaseChangesPage implements OnInit, OnDestroy {
   private refresh(): void {
     const mine = ++this.asked;
     this.router.navigate([], { queryParams: { dias: this.days() === 30 ? null : this.days(), tipo: this.kind() || null, busca: this.search() || null }, replaceUrl: true });
+    this.api.packaged().subscribe({ next: (packaged) => this.packaged.set(packaged), error: () => undefined });
     this.api.databaseChanges({ days: this.days(), kind: this.kind(), search: this.search(), limit: 300 }).subscribe({
       next: (answer) => {
         if (mine !== this.asked) {

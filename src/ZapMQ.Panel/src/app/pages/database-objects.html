@@ -78,7 +78,7 @@
           <div class="table-wrap" [class.loading]="loading()">
             <table class="data stack">
               <thead>
-                <tr><th>Objeto</th><th>Tipo</th><th class="right">Alterado</th><th class="right">Linhas</th><th class="right">Tamanho</th></tr>
+                <tr><th>Objeto</th><th>Tipo</th><th class="right">Alterado</th><th class="right">Linhas</th><th class="right">Tamanho</th><th></th></tr>
               </thead>
               <tbody>
                 @for (item of now.Objects; track item.Kind + item.Schema + item.Name) {
@@ -90,6 +90,7 @@
                     <td class="right" data-label="Alterado" [matTooltip]="item.ModifiedAt | when">{{ item.ModifiedAt | ago }}</td>
                     <td class="right num" data-label="Linhas">{{ item.Rows === null ? '—' : (item.Rows | num) }}</td>
                     <td class="right num" data-label="Tamanho">{{ item.SizeKb === null ? '—' : size(item.SizeKb) }}</td>
+                    <td class="actions"><button mat-icon-button (click)="transport.add({ database: now.Database, kind: item.Kind, schema: item.Schema, name: item.Name })" matTooltip="Incluir na área de transporte" aria-label="Incluir na área de transporte"><mat-icon svgIcon="local_shipping" /></button></td>
                   </tr>
                 }
               </tbody>

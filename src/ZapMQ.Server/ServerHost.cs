@@ -91,6 +91,10 @@ public static class ServerHost
         {
             Path = Path.GetFullPath(options.MessageModelsFile, AppContext.BaseDirectory)
         });
+        builder.Services.AddSingleton(services => new Transport.TransportStore(options.Transport, services.GetRequiredService<ILogger<Transport.TransportStore>>()));
+        builder.Services.AddSingleton<Transport.TransportService>();
+        if (options.Panel.Enabled)
+            builder.Services.AddHostedService<Transport.TransportRunner>();
         builder.Services.AddSingleton<MetricsSampler>();
         builder.Services.AddHostedService(services => services.GetRequiredService<MetricsSampler>());
 
