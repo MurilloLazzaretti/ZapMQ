@@ -49,14 +49,17 @@ export class Auth {
     try {
       await firstValueFrom(this.api.logout());
     } finally {
-      this.expire();
+      // Whoever comes in next starts at the beginning, not where this user was.
+      this.expire(false);
     }
   }
 
   /** The service refused the session: back to the way in, remembering where the user was. */
-  expire(): void {
-    const wasIn = this.user() !== null;
+  expire(comeBack = true): void {
+    const wasIn = comeBack && this.user() !== null;
     this.user.set(null);
+    this.name.set('');
+    this.master.set(false);
     const url = this.router.url;
     if (!url.startsWith('/login')) {
       void this.router.navigate(['/login'], { queryParams: wasIn && url !== '/' ? { voltar: url } : {} });
@@ -99,6 +102,8 @@ export const sessionInterceptor: HttpInterceptorFn = (request, next) => {
 /** The users are the master's business alone. */
 export const requireMaster: CanActivateFn = async () => {
   const auth = inject(Auth);
+  // Asked for before waiting: afterwards there is nowhere to ask it from.
+  const router = inject(Router);
   await auth.ensure();
-  return auth.master() ? true : inject(Router).createUrlTree(['/']);
+  return auth.master() ? true : router.createUrlTree(['/']);
 };
