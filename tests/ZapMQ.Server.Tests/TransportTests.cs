@@ -26,6 +26,32 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         public List<JObject> Changes { get; } = [];
         public Func<JObject, JObject?>? OnApply { get; set; }
         public string[] Databases { get; set; } = ["Sales"];
+        /// <summary>
+        /// What can be replaced on the machine, as "kind:name", each with its files.
+        /// </summary>
+        public Dictionary<string, Dictionary<string, string>> Targets { get; } = [];
+        public string? TargetProblem { get; set; }
+        public Dictionary<string, string>? Deployed { get; private set; }
+
+        public static string Sha(string text) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+        public static byte[] Zipped(Dictionary<string, string> files, string outer = "")
+        {
+            using var memory = new MemoryStream();
+            using (var zip = new ZipArchive(memory, ZipArchiveMode.Create, leaveOpen: true))
+                foreach (var (path, text) in files)
+                {
+                    using var writer = new StreamWriter(zip.CreateEntry(outer + path).Open(), new UTF8Encoding(false));
+                    writer.Write(text);
+                }
+            return memory.ToArray();
+        }
+
+        public static Dictionary<string, string> Unzipped(byte[] bytes)
+        {
+            using var zip = new ZipArchive(new MemoryStream(bytes));
+            return zip.Entries.ToDictionary(entry => entry.FullName, entry => new StreamReader(entry.Open()).ReadToEnd());
+        }
 
         public static string Print(string script) => "fp-" + script.GetHashCode().ToString("x8");
 
@@ -53,6 +79,29 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                     return new JObject { ["Ok"] = true, ["Objects"] = new JArray(Objects.Select(pair => new JObject { ["Kind"] = pair.Value.Kind, ["Schema"] = "dbo", ["Name"] = pair.Key })) };
                 case "DatabaseChanges":
                     return new JObject { ["Ok"] = true, ["Changes"] = new JArray(Changes.Where(change => (string?)change["Name"] == (string?)request["Name"])) };
+                case "TransportTargets":
+                    return new JObject { ["Ok"] = true, ["Targets"] = new JArray(Targets.Select(pair => new JObject { ["Kind"] = pair.Key.Split(':')[0], ["Name"] = pair.Key.Split(':')[1], ["Version"] = "1.0" })) };
+                case "TransportTarget":
+                    return Targets.TryGetValue($"{request["Kind"]}:{request["Name"]}", out var files)
+                        ? new JObject
+                        {
+                            ["Ok"] = true, ["Target"] = new JObject { ["Kind"] = request["Kind"], ["Name"] = request["Name"], ["Version"] = "1.0", ["Problem"] = TargetProblem },
+                            ["Files"] = new JArray(files.Select(file => new JObject { ["Path"] = file.Key, ["Size"] = file.Value.Length, ["Sha256"] = Sha(file.Value) }))
+                        }
+                        : new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "not-found", ["Message"] = "no such target" } };
+                case "TransportCapture":
+                {
+                    var running = Targets[$"{request["Kind"]}:{request["Name"]}"];
+                    var file = Path.Combine(Path.GetTempPath(), "zapmq-capture-" + Guid.NewGuid().ToString("N") + ".zip");
+                    File.WriteAllBytes(file, Zipped(running));
+                    return new JObject { ["Ok"] = true, ["File"] = file, ["Target"] = new JObject { ["Kind"] = request["Kind"], ["Name"] = request["Name"], ["Version"] = "2.0" } };
+                }
+                case "TransportDeploy":
+                    lock (Applied)
+                        Applied.Add(request);
+                    // The files are there to be read while the answer is being made, and not after.
+                    Deployed = Unzipped(File.ReadAllBytes((string)request["File"]!));
+                    return OnApply?.Invoke(request) ?? new JObject { ["Ok"] = true, ["Applied"] = true, ["Did"] = "replaced", ["Backup"] = "/backup/there", ["Messages"] = new JArray("stopped", "replaced", "started") };
                 case "DatabaseApply":
                     lock (Applied)
                         Applied.Add(request);
@@ -112,19 +161,21 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         using (var target = new ZipArchive(memory, ZipArchiveMode.Create, leaveOpen: true))
             foreach (var entry in source.Entries)
             {
-                using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
-                var text = reader.ReadToEnd();
+                using var content = new MemoryStream();
+                using (var stream = entry.Open())
+                    stream.CopyTo(content);
+                var bytes = content.ToArray();
                 if (entry.FullName == "package.json")
                 {
-                    var manifest = JObject.Parse(text);
+                    var manifest = JObject.Parse(Encoding.UTF8.GetString(bytes));
                     manifest["id"] = Guid.NewGuid().ToString("N");
                     manifest["origin"] = "DEV";
-                    text = manifest.ToString();
+                    bytes = Encoding.UTF8.GetBytes(manifest.ToString());
                 }
-                else if (tamper is not null)
-                    text = tamper(text);
-                using var writer = new StreamWriter(target.CreateEntry(entry.FullName).Open(), new UTF8Encoding(false));
-                writer.Write(text);
+                else if (tamper is not null && entry.FullName.EndsWith(".sql"))
+                    bytes = Encoding.UTF8.GetBytes(tamper(Encoding.UTF8.GetString(bytes)));
+                using var written = target.CreateEntry(entry.FullName).Open();
+                written.Write(bytes);
             }
         return memory.ToArray();
     }
@@ -440,5 +491,111 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         Assert.Contains("entregue a QAS", (string?)refused["error"]);
         Assert.Equal("QAS", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{second}"))["package"]!["deliveries"]![0]!["to"]);
         Assert.Empty(JObject.Parse(await Api.GetStringAsync("api/transport/area"))["items"]!);
+    }
+
+    [Fact]
+    public async Task What_runs_from_a_folder_goes_in_a_package_and_replaces_what_is_at_the_other_side()
+    {
+        var origin = new PretendDatabase();
+        origin.Objects["spNew"] = ("Procedure", "CREATE PROCEDURE dbo.spNew AS RETURN", []);
+        origin.Targets["service:Sockets"] = new() { ["server.js"] = "v2", ["lib/io.js"] = "io" };
+        byte[] made;
+        await using (await Serve(origin))
+        {
+            await ClearArea();
+            Assert.Equal(1, JObject.Parse(await Api.GetStringAsync("api/transport/targets"))["Targets"]!.Count());
+
+            // Brought as a zip made by a careless hand: the folder on the outside, and the configuration in it.
+            var zip = PretendDatabase.Zipped(new() { ["Orders.Api.dll"] = "v2", ["wwwroot/index.html"] = "<html>", ["appsettings.json"] = "{dev}", ["web.config"] = "<x/>", ["logs/today.log"] = "noise" }, outer: "publish/");
+            var uploaded = await Json(await Api.PostAsync("api/transport/area/upload?kind=api&name=Orders&version=2.3.0", new ByteArrayContent(zip)), HttpStatusCode.Created);
+            Assert.Equal(["Orders.Api.dll", "wwwroot/index.html"], uploaded["files"]!.Select(file => (string?)file["path"]));
+            Assert.Equal(("api", "Orders", "2.3.0", "Replace"), ((string?)uploaded["kind"], (string?)uploaded["name"], (string?)uploaded["version"], (string?)uploaded["action"]));
+            // And what is running, packed by the Worker Control.
+            var running = await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "service", name = "Sockets" }), HttpStatusCode.Created);
+            Assert.Equal(("2.0", 2), ((string?)running["version"], running["files"]!.Count()));
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "Procedure", schema = "dbo", name = "spNew" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsync("api/transport/area/upload?kind=database&name=x", new ByteArrayContent(zip)), HttpStatusCode.BadRequest);
+            await Json(await Api.PostAsync("api/transport/area/upload?kind=api&name=Orders", new ByteArrayContent(Encoding.UTF8.GetBytes("not a zip"))), HttpStatusCode.BadRequest);
+
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Orders 2.3" }), HttpStatusCode.Created);
+            // The database first, then what runs.
+            Assert.Equal(["database", "api", "service"], closed["items"]!.Select(item => (string?)item["kind"]));
+            Assert.Equal((2, "2.3.0"), ((int)closed["items"]![1]!["files"]!, (string?)closed["items"]![1]!["version"]));
+            made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
+        }
+
+        var here = new PretendDatabase();
+        here.Targets["api:Orders"] = new() { ["Orders.Api.dll"] = "v1", ["wwwroot/index.html"] = "<html>", ["wwwroot/old.css"] = "x" };
+        here.Targets["service:Sockets"] = new() { ["server.js"] = "v2", ["lib/io.js"] = "io" };
+        await using var _ = await Serve(here);
+        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+
+        var checks = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]!;
+        Assert.Equal(["new", "changes", "same"], checks.Select(check => (string?)check["state"]));
+        Assert.Equal((0, 1, 1), ((int)checks[1]!["added"]!, (int)checks[1]!["changed"]!, (int)checks[1]!["removed"]!));
+        var compared = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/items/2"));
+        Assert.Equal(["Orders.Api.dll:changed", "wwwroot/index.html:same", "wwwroot/old.css:removed"], compared["changes"]!.Select(change => $"{change["path"]}:{change["state"]}"));
+
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
+        var applied = await WaitFor(id, "Applied", "Partial", "Failed");
+
+        Assert.Equal("Applied", (string?)applied["package"]!["status"]);
+        Assert.Equal(["created", "replaced", "replaced"], applied["results"]!.Select(result => (string?)result["did"] == "altered" ? "created" : (string?)result["did"]));
+        Assert.Equal("/backup/there", (string?)applied["results"]![1]!["backup"]);
+        lock (here.Applied)
+            Assert.Equal(["DatabaseApply", "TransportDeploy", "TransportDeploy"], here.Applied.Select(request => (string?)request["Command"]));
+        // What reached the machine is what the package carried, and nothing of the configuration.
+        Assert.Equal(new Dictionary<string, string> { ["server.js"] = "v2", ["lib/io.js"] = "io" }, here.Deployed);
+        // Nothing is left behind where the files were handed over.
+        lock (here.Applied)
+            Assert.All(here.Applied.Where(request => (string?)request["Command"] == "TransportDeploy"), request => Assert.False(File.Exists((string)request["File"]!)));
+    }
+
+    [Fact]
+    public async Task What_is_not_on_this_machine_is_not_approved_and_what_did_not_come_up_stops_the_rest()
+    {
+        var origin = new PretendDatabase();
+        origin.Targets["worker:Orders"] = new() { ["Orders.exe"] = "v2" };
+        origin.Targets["frontend:orders"] = new() { ["remoteEntry.js"] = "v2" };
+        byte[] made;
+        await using (await Serve(origin))
+        {
+            await ClearArea();
+            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "frontend", name = "orders" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "worker", name = "Orders" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Orders worker" }), HttpStatusCode.Created);
+            // What runs before the screens that call it.
+            Assert.Equal(["worker", "frontend"], closed["items"]!.Select(item => (string?)item["kind"]));
+            made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
+        }
+
+        // Nowhere to put the worker here: it has to be installed first.
+        var bare = new PretendDatabase();
+        bare.Targets["frontend:orders"] = new() { ["remoteEntry.js"] = "v1" };
+        await using (await Serve(bare))
+        {
+            var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+            Assert.Equal(["missing", "changes"], JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]!.Select(check => (string?)check["state"]));
+            var refused = await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }), HttpStatusCode.Conflict);
+            Assert.Contains("não existe neste ambiente", (string?)refused["error"]);
+        }
+
+        var here = new PretendDatabase
+        {
+            OnApply = request => (string?)request["Kind"] == "worker"
+                ? new JObject { ["Ok"] = true, ["Applied"] = false, ["Replaced"] = true, ["Problem"] = "The files were replaced, but it did not come up again", ["Backup"] = "/backup/x", ["Messages"] = new JArray("stopped", "replaced") }
+                : null
+        };
+        here.Targets["worker:Orders"] = new() { ["Orders.exe"] = "v1" };
+        here.Targets["frontend:orders"] = new() { ["remoteEntry.js"] = "v1" };
+        await using var _ = await Serve(here);
+        var failing = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{failing}/approve", new { }));
+        var ended = await WaitFor(failing, "Applied", "Partial", "Failed");
+
+        Assert.Equal("Failed", (string?)ended["package"]!["status"]);
+        Assert.Equal(("failed", "/backup/x"), ((string?)ended["results"]!.Single()["status"], (string?)ended["results"]![0]!["backup"]));
+        lock (here.Applied)
+            Assert.Single(here.Applied);
     }
 }

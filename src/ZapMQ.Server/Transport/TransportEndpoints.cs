@@ -17,6 +17,8 @@ public static class TransportEndpoints
 
     public sealed record AddScriptRequest(string? Database, string? Title, string? Script);
 
+    public sealed record AddTargetRequest(string? Kind, string? Name);
+
     public sealed record CloseRequest(string? Name, string? Description, List<string>? Items, bool KeepOrder);
 
     public sealed record ApproveRequest(DateTimeOffset? At);
@@ -37,6 +39,14 @@ public static class TransportEndpoints
         }
     }
 
+    /// <summary>
+    /// An item without the list of its files, which is given apart, compared.
+    /// </summary>
+    private static object Shown(PackageItem item) => new
+    {
+        item.Number, item.Kind, item.Action, item.Name, item.Version, item.Fingerprint, item.Size, files = item.Files.Count
+    };
+
     private static object Summary(PackageRecord record) => new
     {
         id = record.Manifest.Id, name = record.Manifest.Name, description = record.Manifest.Description, origin = record.Manifest.Origin,
@@ -53,11 +63,11 @@ public static class TransportEndpoints
         items = record.Manifest.Items.Select(item => new
         {
             item.Number, item.Kind, item.Action, item.ObjectKind, item.Variety, item.Schema, item.Name, item.Title, item.Database, item.Fingerprint, item.Base, item.Size,
-            uses = item.Uses.Count
+            item.Version, files = item.Files.Count, uses = item.Uses.Count
         }),
         history = record.History,
         // What was there before is given with the item, when it is asked for.
-        results = record.Results.Select(result => new { result.Number, result.Status, result.Did, result.Problem, result.Batch, result.Line, result.Messages, result.At, hasPrevious = result.Previous is not null })
+        results = record.Results.Select(result => new { result.Number, result.Status, result.Did, result.Problem, result.Batch, result.Line, result.Messages, result.At, result.Backup, hasPrevious = result.Previous is not null })
     };
 
     public static void MapTransport(this IEndpointRouteBuilder routes)
@@ -85,6 +95,22 @@ public static class TransportEndpoints
 
         api.MapPost("/area/scripts", (AddScriptRequest request, TransportService transport, HttpContext context) => Guarded(() =>
             Task.FromResult(Results.Json(transport.AddScript(request.Database, request.Title, request.Script, User(context)), statusCode: StatusCodes.Status201Created))));
+
+        // What can be replaced on the machine of this environment.
+        api.MapGet("/targets", (TransportService transport, HttpContext context) => Guarded(async () =>
+            Results.Content((await transport.Targets(User(context), context.RequestAborted)).ToJsonString(), "application/json; charset=utf-8")));
+
+        // What a target is running right now, packed and put in the area.
+        api.MapPost("/area/running", (AddTargetRequest request, TransportService transport, HttpContext context) => Guarded(async () =>
+            Results.Json(await transport.AddRunning(request.Kind, request.Name, User(context), context.RequestAborted), statusCode: StatusCodes.Status201Created)));
+
+        // The zip of a published folder, brought by somebody.
+        api.MapPost("/area/upload", (string? kind, string? name, string? version, HttpContext context, TransportService transport) => Guarded(async () =>
+        {
+            using var memory = new MemoryStream();
+            await context.Request.Body.CopyToAsync(memory, context.RequestAborted);
+            return Results.Json(transport.AddUpload(kind, name, version, memory.ToArray(), User(context)), statusCode: StatusCodes.Status201Created);
+        })).WithMetadata(new RequestSizeLimitAttribute(MaxPackage));
 
         api.MapDelete("/area/{id}", (string id, TransportStore store) => store.Remove(id) ? Results.NoContent() : Results.NotFound());
 
@@ -142,6 +168,19 @@ public static class TransportEndpoints
             var record = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
             var item = record.Manifest.Items.FirstOrDefault(candidate => candidate.Number == number) ?? throw new TransportRefused("O pacote não tem esse item", StatusCodes.Status404NotFound);
             var result = record.Results.FirstOrDefault(candidate => candidate.Number == number);
+            if (item.Kind != "database")
+            {
+                // File by file against what the target has here; without a target, only what comes.
+                try
+                {
+                    var (target, changes) = await transport.CompareFiles(item, User(context), context.RequestAborted);
+                    return Results.Json(new { item = Shown(item), target = target is null ? null : System.Text.Json.JsonSerializer.Deserialize<object>(target.ToJsonString()), changes = target is null ? item.Files.Select(file => new FileChange(file.Path, "added", file.Size)) : changes, problem = (string?)null });
+                }
+                catch (TransportRefused refused)
+                {
+                    return Results.Json(new { item = Shown(item), target = (object?)null, changes = item.Files.Select(file => new FileChange(file.Path, "added", file.Size)), problem = refused.Message });
+                }
+            }
             string? brought, current = null, currentFingerprint = null, problem = null;
             try
             {

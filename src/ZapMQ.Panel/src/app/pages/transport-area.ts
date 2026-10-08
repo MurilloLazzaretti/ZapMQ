@@ -11,9 +11,10 @@ import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { kindIcon, kindName } from '../core/database';
+import { size } from '../core/database';
 import { AgoPipe } from '../core/format';
-import { AreaItem } from '../core/models';
-import { Transport, itemAction, itemTone } from '../core/transport';
+import { AreaItem, TransportTarget } from '../core/models';
+import { TARGET_KINDS, Transport, itemAction, itemTone, targetIcon, targetName } from '../core/transport';
 import { TransportTabs } from '../shared/transport-tabs';
 
 /**
@@ -41,6 +42,15 @@ export class TransportAreaPage implements OnInit {
   protected readonly busy = signal(false);
   /** The form for a script is open. */
   protected readonly writing = signal(false);
+
+  /** The list of what can be replaced on the machine is open. */
+  protected readonly choosing = signal(false);
+  protected readonly targets = signal<TransportTarget[] | null>(null);
+  protected readonly targetsProblem = signal('');
+  protected readonly targetKinds = TARGET_KINDS;
+  protected readonly targetName = targetName;
+  protected readonly targetIcon = targetIcon;
+  protected readonly size = size;
 
   protected name = '';
   protected description = '';
@@ -72,6 +82,53 @@ export class TransportAreaPage implements OnInit {
       this.writing.set(true);
     }
     input.value = '';
+  }
+
+  protected choose(): void {
+    this.choosing.set(!this.choosing());
+    if (!this.choosing()) {
+      return;
+    }
+    this.api.transportTargets().subscribe({
+      next: (answer) => {
+        this.targets.set(answer.Targets);
+        this.targetsProblem.set('');
+      },
+      error: (failure: HttpErrorResponse) =>
+        this.targetsProblem.set(failure.status === 501 ? 'O Worker Control instalado é anterior a este recurso (existe a partir da versão 2.11).' : (failure.error?.error ?? 'Não foi possível perguntar ao Worker Control.')),
+    });
+  }
+
+  protected of(kind: string): TransportTarget[] {
+    return (this.targets() ?? []).filter((target) => target.Kind === kind);
+  }
+
+  /** What the target is running right now goes into the area. */
+  protected async running(target: TransportTarget): Promise<void> {
+    await this.place(this.api.addRunning(target.Kind, target.Name), `${target.Name}: o que está rodando foi para a área`);
+  }
+
+  /** A zip of the published folder, chosen from the machine of whoever is at the panel. */
+  protected async upload(target: TransportTarget, event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) {
+      await this.place(this.api.addFiles(target.Kind, target.Name, file), `${target.Name}: ${file.name} foi para a área`);
+    }
+  }
+
+  private async place(request: ReturnType<Api['addRunning']>, done: string): Promise<void> {
+    this.busy.set(true);
+    try {
+      await firstValueFrom(request);
+      this.snack.open(done, undefined, { duration: 3000 });
+      this.load();
+    } catch (failure) {
+      this.say(failure);
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected async addScript(): Promise<void> {

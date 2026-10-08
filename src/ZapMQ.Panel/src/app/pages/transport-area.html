@@ -18,10 +18,44 @@
         <span class="spacer"></span>
         <a mat-button routerLink="/banco/alteracoes"><mat-icon svgIcon="history" /> Alterações do banco</a>
         <a mat-button routerLink="/banco/objetos"><mat-icon svgIcon="table" /> Objetos do banco</a>
+        <button mat-button (click)="choose()"><mat-icon svgIcon="deployed_code" /> Aplicações</button>
         <button mat-button (click)="writing.set(!writing())"><mat-icon svgIcon="code" /> Escrever script</button>
         <button mat-button (click)="file.click()"><mat-icon svgIcon="upload" /> Importar .sql</button>
         <input #file type="file" accept=".sql,text/plain" hidden (change)="pick($event)" />
       </div>
+
+      @if (choosing()) {
+        <div class="targets">
+          @if (targetsProblem()) {
+            <p class="muted">{{ targetsProblem() }}</p>
+          } @else if (!targets()) {
+            <p class="muted">Perguntando ao Worker Control o que há nesta máquina…</p>
+          } @else {
+            @for (kind of targetKinds; track kind) {
+              @if (of(kind).length) {
+                <h3><mat-icon [svgIcon]="targetIcon(kind)" /> {{ targetName(kind, true) }}</h3>
+                <ul>
+                  @for (target of of(kind); track target.Name) {
+                    <li>
+                      <span class="who">
+                        <strong>{{ target.Name }}</strong>
+                        @if (target.Version) { <span class="muted">{{ target.Version }}</span> }
+                        @if (target.Problem) { <span class="bad" [matTooltip]="target.Problem">sem pasta conhecida</span> }
+                      </span>
+                      <span class="muted mono path">{{ target.Paths[0] }}@if (target.Paths.length > 1) { <span> (+{{ target.Paths.length - 1 }})</span> }</span>
+                      <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" matTooltip="Empacota o que está nesta máquina agora, sem a configuração">O que está rodando</button>
+                      <button mat-button (click)="zip.click()" [disabled]="busy()" matTooltip="O zip da pasta publicada">Enviar .zip</button>
+                      <input #zip type="file" accept=".zip" hidden (change)="upload(target, $event)" />
+                    </li>
+                  }
+                </ul>
+              }
+            }
+            @if (!targets()!.length) { <p class="muted">O Worker Control não conhece nada que possa ser substituído nesta máquina.</p> }
+            <p class="muted note">Arquivos de configuração (<code>appsettings*.json</code>, <code>web.config</code>, bancos locais e logs) nunca entram no pacote nem são substituídos no destino.</p>
+          }
+        </div>
+      }
 
       @if (writing()) {
         <form class="script" (ngSubmit)="addScript()">
@@ -49,7 +83,10 @@
               @for (item of list; track item.id) {
                 <tr>
                   <td class="wide" data-label="Item">
-                    @if (item.action === 'Script') {
+                    @if (item.kind !== 'database') {
+                      <span class="object"><mat-icon [svgIcon]="targetIcon(item.kind)" [matTooltip]="targetName(item.kind)" /><span><strong>{{ item.name }}</strong>
+                        <span class="muted"> · {{ item.version || 'sem versão' }} · {{ item.files.length }} arquivos · {{ size(item.size / 1024) }}</span></span></span>
+                    } @else if (item.action === 'Script') {
                       <span class="object"><mat-icon svgIcon="code" /><strong>{{ item.title }}</strong></span>
                     } @else {
                       <a class="object" [routerLink]="item.action === 'Drop' || !(item.database || database()) ? null : ['/banco/objetos', item.database || database(), item.objectKind, item.schema, item.name]">
@@ -65,11 +102,11 @@
             </tbody>
           </table>
         </div>
-      } @else if (!writing()) {
+      } @else if (!writing() && !choosing()) {
         <div class="empty">
           <mat-icon svgIcon="playlist_add" />
           <strong>A área está vazia</strong>
-          <span>Inclua objetos pelas telas <a routerLink="/banco/alteracoes">Alterações</a> e <a routerLink="/banco/objetos">Objetos</a> do banco, ou escreva um script.</span>
+          <span>Inclua objetos pelas telas <a routerLink="/banco/alteracoes">Alterações</a> e <a routerLink="/banco/objetos">Objetos</a> do banco, escreva um script, ou escolha uma aplicação.</span>
         </div>
       }
     </section>
@@ -88,7 +125,7 @@
             <mat-hint>É o que quem aprova no destino vai ler.</mat-hint>
           </mat-form-field>
           <p class="muted note">
-            O script de cada objeto é o do momento do fechamento. A ordem segue as dependências: types e tabelas, scripts, functions, views, procedures e, por último, o que é apagado.
+            O script de cada objeto é o do momento do fechamento. A ordem segue as dependências: types e tabelas, scripts, functions, views, procedures, o que é apagado e, depois do banco, as aplicações.
             Fechado, o pacote não muda mais.
           </p>
           <div class="buttons"><button mat-flat-button type="submit" [disabled]="busy() || !name.trim()"><mat-icon svgIcon="inventory_2" /> Fechar pacote</button></div>

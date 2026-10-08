@@ -39,6 +39,16 @@ public sealed class TransportStore
 
     private string AreaPath => Path.Combine(_root, "area.json");
 
+    /// <summary>
+    /// The files of an item of the area that is made of them, packed.
+    /// </summary>
+    public string AreaFile(string id) => Path.Combine(_root, "area-files", id + ".zip");
+
+    /// <summary>
+    /// Where something is put for the Worker Control, on the same machine, to pick up.
+    /// </summary>
+    public string WorkFile(string name) => Path.Combine(_root, "work", name);
+
     private string Folder(string id) => Path.Combine(_root, "packages", id);
 
     public string FilePath(string id) => Path.Combine(Folder(id), PackageFile);
@@ -96,7 +106,7 @@ public sealed class TransportStore
     /// <summary>
     /// Puts something in the area. An object that is already there is not put twice.
     /// </summary>
-    public AreaItem Add(AreaItem item)
+    public AreaItem Add(AreaItem item, byte[]? files = null)
     {
         lock (_gate)
         {
@@ -105,18 +115,33 @@ public sealed class TransportStore
                 // Asked to be dropped after having been asked to be carried, or the other way round: the last word stands.
                 already.Action = item.Action;
                 already.Fingerprint = item.Fingerprint;
+                already.Version = item.Version;
+                already.Files = item.Files;
+                already.Size = item.Size;
+                already.AddedBy = item.AddedBy;
+                already.AddedAt = item.AddedAt;
+                if (files is not null)
+                    WriteBytes(AreaFile(already.Id), files);
                 SaveArea();
                 return Copy(already);
             }
             item.Id = Guid.NewGuid().ToString("N")[..12];
+            if (files is not null)
+                WriteBytes(AreaFile(item.Id), files);
             _area.Add(item);
             SaveArea();
             return Copy(item);
         }
     }
 
+    private static void WriteBytes(string path, byte[] bytes)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, bytes);
+    }
+
     private static bool Same(AreaItem one, AreaItem other) =>
-        one.Action != "Script" && other.Action != "Script" && one.ObjectKind == other.ObjectKind
+        one.Action != "Script" && other.Action != "Script" && one.Kind == other.Kind && one.ObjectKind == other.ObjectKind
         && string.Equals(one.Schema, other.Schema, StringComparison.OrdinalIgnoreCase) && string.Equals(one.Name, other.Name, StringComparison.OrdinalIgnoreCase)
         && string.Equals(one.Database, other.Database, StringComparison.OrdinalIgnoreCase);
 
@@ -126,6 +151,8 @@ public sealed class TransportStore
         {
             if (_area.RemoveAll(item => item.Id == id) == 0)
                 return false;
+            if (File.Exists(AreaFile(id)))
+                File.Delete(AreaFile(id));
             SaveArea();
             return true;
         }
@@ -149,9 +176,9 @@ public sealed class TransportStore
     /// Closes a package: writes its file from the items and their scripts, and takes out of the
     /// area what went into it.
     /// </summary>
-    public PackageRecord Close(PackageManifest manifest, IReadOnlyList<string> scripts, IEnumerable<string> areaIds, string by, DateTimeOffset now)
+    public PackageRecord Close(PackageManifest manifest, IReadOnlyList<byte[]> contents, IEnumerable<string> areaIds, string by, DateTimeOffset now)
     {
-        var bytes = Write(manifest, scripts);
+        var bytes = Write(manifest, contents);
         lock (_gate)
         {
             var record = new PackageRecord
@@ -165,20 +192,22 @@ public sealed class TransportStore
             Save(record);
             var gone = areaIds.ToHashSet();
             _area.RemoveAll(item => gone.Contains(item.Id));
+            foreach (var id in gone.Where(id => File.Exists(AreaFile(id))))
+                File.Delete(AreaFile(id));
             SaveArea();
             return Copy(record);
         }
     }
 
-    private static byte[] Write(PackageManifest manifest, IReadOnlyList<string> scripts)
+    private static byte[] Write(PackageManifest manifest, IReadOnlyList<byte[]> contents)
     {
         // The files first, so that the manifest can say what each one is.
         var files = new List<(string Name, byte[] Bytes)>();
         for (var index = 0; index < manifest.Items.Count; index++)
         {
             var item = manifest.Items[index];
-            var content = Encoding.UTF8.GetBytes(scripts[index]);
-            item.File = $"items/{item.Number:00}/script.sql";
+            var content = contents[index];
+            item.File = $"items/{item.Number:00}/{(item.Kind == "database" ? "script.sql" : "files.zip")}";
             item.Sha256 = Hash(content);
             item.Size = content.Length;
             files.Add((item.File, content));
@@ -195,7 +224,8 @@ public sealed class TransportStore
 
         static void Put(ZipArchive zip, string name, byte[] content)
         {
-            var entry = zip.CreateEntry(name, CompressionLevel.Optimal);
+            // What is already packed is not packed again.
+            var entry = zip.CreateEntry(name, name.EndsWith(".zip", StringComparison.Ordinal) ? CompressionLevel.NoCompression : CompressionLevel.Optimal);
             using var stream = entry.Open();
             stream.Write(content);
         }
@@ -277,10 +307,18 @@ public sealed class TransportStore
                 {
                     Id = Guid.NewGuid().ToString("N")[..12], Kind = item.Kind, Action = item.Action, ObjectKind = item.ObjectKind, Variety = item.Variety, Schema = item.Schema, Name = item.Name,
                     Title = item.Title, Database = item.Database, Fingerprint = item.Fingerprint, AddedBy = by, AddedAt = now,
-                    Script = item.Action == "Script" ? Script(id, item.Number) : null
+                    Script = item.Action == "Script" ? Script(id, item.Number) : null, Version = item.Version, Files = item.Files, Size = item.Size
                 };
-                if (back.Action == "Script" ? back.Script is not null : !_area.Any(other => Same(other, back)))
-                    _area.Add(back);
+                if (back.Action == "Script" ? back.Script is null : _area.Any(other => Same(other, back)))
+                    continue;
+                // What is made of files comes back with them.
+                if (item.Kind != "database")
+                {
+                    if (Content(id, item.Number) is not { } files)
+                        continue;
+                    WriteBytes(AreaFile(back.Id), files);
+                }
+                _area.Add(back);
             }
             SaveArea();
 
@@ -301,7 +339,12 @@ public sealed class TransportStore
     /// <summary>
     /// The script an item carries, read from the file of the package.
     /// </summary>
-    public string? Script(string id, int number)
+    public string? Script(string id, int number) => Content(id, number) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
+
+    /// <summary>
+    /// What an item carries, as it is in the file of the package: a script, or the files packed.
+    /// </summary>
+    public byte[]? Content(string id, int number)
     {
         PackageItem? item;
         lock (_gate)
@@ -311,8 +354,10 @@ public sealed class TransportStore
         using var zip = ZipFile.OpenRead(FilePath(id));
         if (zip.GetEntry(item.File) is not { } entry)
             return null;
-        using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
-        return reader.ReadToEnd();
+        using var memory = new MemoryStream();
+        using (var stream = entry.Open())
+            stream.CopyTo(memory);
+        return memory.ToArray();
     }
 
     /// <summary>

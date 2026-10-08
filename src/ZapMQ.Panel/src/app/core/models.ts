@@ -777,7 +777,7 @@ export interface ObjectTracking {
 export interface AreaItem {
   id: string;
   kind: string;
-  action: 'Define' | 'Drop' | 'Script';
+  action: 'Define' | 'Drop' | 'Script' | 'Replace';
   objectKind: CatalogKind | null;
   variety: string | null;
   schema: string | null;
@@ -787,6 +787,22 @@ export interface AreaItem {
   database: string | null;
   addedBy: string;
   addedAt: string;
+  /** For what is made of files: the version it says it is, what it carries and how much it weighs. */
+  version: string | null;
+  files: { path: string; size: number; sha256: string }[];
+  size: number;
+}
+
+/** Something on the machine of the environment that a package may replace. */
+export interface TransportTarget {
+  Kind: 'worker' | 'service' | 'api' | 'frontend';
+  Name: string;
+  Paths: string[];
+  Version: string | null;
+  Groups: string[];
+  Service: string | null;
+  Sites: string[];
+  Problem: string | null;
 }
 
 export type PackageStatus = 'Closed' | 'Pending' | 'Rejected' | 'Approved' | 'Applying' | 'Applied' | 'Partial' | 'Failed';
@@ -813,7 +829,10 @@ export interface PackageSummary {
 export interface PackageItem {
   number: number;
   kind: string;
-  action: 'Define' | 'Drop' | 'Script';
+  action: 'Define' | 'Drop' | 'Script' | 'Replace';
+  /** For what is made of files. */
+  version?: string | null;
+  files?: number;
   objectKind: CatalogKind | null;
   variety: string | null;
   schema: string | null;
@@ -834,6 +853,8 @@ export interface PackageResult {
   line: number | null;
   messages: string[];
   at: string;
+  /** Where, on the machine, the folder that was replaced is kept as it was. */
+  backup: string | null;
   hasPrevious: boolean;
 }
 
@@ -849,7 +870,10 @@ export interface PackageDetail {
 /** How one item of a package stands against what this environment has. */
 export interface ItemCheck {
   number: number;
-  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'unknown';
+  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'unknown' | 'missing';
+  added: number;
+  changed: number;
+  removed: number;
   currentFingerprint: string | null;
   missing: string[];
   problem: string | null;
@@ -863,6 +887,9 @@ export interface PackageItemDetail {
   previous: string | null;
   previousFingerprint: string | null;
   problem: string | null;
+  /** For what is made of files: the target here, and what the item does to each file of it. */
+  target?: TransportTarget | null;
+  changes?: { path: string; state: 'added' | 'changed' | 'removed' | 'same'; size: number }[];
 }
 
 export interface TransportSummary {

@@ -3,9 +3,11 @@
 Especificação do transporte e da aprovação de mudanças entre ambientes (por exemplo DEV → QAS →
 PRD) pelo painel do ZapMQ. Complementa [AMBIENTE.md](AMBIENTE.md) e [BANCO.md](BANCO.md).
 
-**O que já existe** (ZapMQ 2.2.20, Worker Control 2.10): a etapa 1 da seção 9, isto é, itens de
-banco de ponta a ponta, com o pacote levado de um ambiente ao outro como arquivo. O resto deste
-documento é o que foi combinado e ainda falta fazer; a seção 11 diz como o que existe funciona.
+**O que já existe** (ZapMQ 2.2.22, Worker Control 2.11): as etapas 1 e 2 da seção 9, isto é,
+itens de banco e de arquivos (micro serviços, serviços do Windows, APIs e módulos web) de ponta a
+ponta, para alvos que já existem no destino, com o pacote levado de um ambiente ao outro como
+arquivo. O resto deste documento é o que foi combinado e ainda falta fazer; a seção 11 diz como o
+que existe funciona.
 
 ## 1. Regras
 
@@ -310,3 +312,59 @@ registrado tudo o que trazia.
 **No agente:** o comando `DatabaseApply` e o componente `SqlServerWriter`, o único que escreve
 no banco. Ele recusa um banco fora de `Databases`, cria ou altera conforme o objeto exista, não
 recria tabela nem type, e escreve o `DROP` a partir do nome, nunca de um texto do pacote.
+
+### 11.1 Arquivos (etapa 2)
+
+**Alvos.** O agente monta sozinho a lista do que pode ser substituído na máquina:
+
+| Tipo | De onde vem | Nome | O que para e inicia |
+|---|---|---|---|
+| `worker` | os grupos do `ConfigWorkers.json` | o nome do grupo | todos os grupos que rodam o programa da mesma pasta; só os que estavam ligados voltam |
+| `service` | os serviços de `Services.Items` | o nome do serviço | o serviço |
+| `api` | os sites do servidor web | o nome da pasta do site (a pasta de cima, quando a do site é só um número de instância) | os application pools dos sites que servem a pasta |
+| `frontend` | os módulos do manifesto de `Frontends` | o nome do módulo | nada |
+
+Sites que servem a mesma aplicação viram um alvo só, com todas as pastas, e todas são trocadas.
+Um serviço executado por um empacotador (`nssm`) não diz onde está o programa: a pasta é informada
+em `Transport.Targets`, que também serve para corrigir ou acrescentar qualquer alvo.
+
+**Entrada.** Em Transporte → Área → *Aplicações*, para cada alvo: *O que está rodando* (o agente
+empacota a pasta como está agora) ou *Enviar .zip* (a pasta publicada, com ou sem a pasta de
+fora). Nos dois casos o que é do ambiente fica de fora: `appsettings*.json`, `web.config`,
+`ConfigWorkers.json`, bancos locais (`*.db`) e `logs/`.
+
+**Comparação no destino.** Arquivo por arquivo, pelo conteúdo: novo, alterado, removido ou igual.
+Um alvo que o destino não tem aparece como *não existe aqui* e **impede a aprovação**: instalar o
+que ainda não existe (seção 4.1) não está feito.
+
+**Aplicação**, pelo agente, um alvo por vez:
+
+1. para o que roda da pasta e espera parar (até 3 minutos); se não parar, nada é tocado e o que
+   foi desligado volta a ligar;
+2. guarda uma cópia da pasta inteira, com a configuração, em
+   `transport/backup/{tipo}/{nome}/{data}-{pacote}`;
+3. faz a pasta ter exatamente os arquivos do pacote, sem tocar no que é do ambiente; se não
+   conseguir trocar todos, devolve a cópia antes de iniciar qualquer coisa;
+4. inicia e espera estar no ar (até 3 minutos). Trocado e sem subir, o item **falha** com os
+   arquivos novos no lugar, e diz isso;
+5. mantém as últimas cópias de cada alvo (`Transport.KeepVersions`, padrão 3).
+
+Um zip com arquivo que cairia fora da pasta de destino é recusado inteiro, antes de qualquer
+escrita. O agente não substitui a si mesmo.
+
+**Ordem em um pacote misto:** o banco primeiro, depois micro serviços, serviços e APIs, e por
+último os módulos web.
+
+**Painel e agente na mesma máquina.** Os arquivos passam de um para o outro por uma pasta local;
+um agente em outra máquina não é atendido.
+
+**Comandos do agente:** `TransportTargets`, `TransportTarget`, `TransportCapture` e
+`TransportDeploy`. **Rotas novas:** `targets`, `area/running` e `area/upload`.
+
+**Ainda não feito na etapa 2:**
+
+- instalar um alvo que não existe no destino (seção 4.1);
+- os arquivos da aplicação web que não são de um módulo (a casca que os carrega);
+- a parada e a partida de sites no servidor web foram escritas e não puderam ser exercitadas fora
+  do Windows: a primeira troca real de uma API é que as prova. O mesmo vale para serviços do
+  Windows de verdade; o que foi exercitado são as pastas, os arquivos e a ordem dos passos.

@@ -51,7 +51,7 @@
             } @else if (warnings().blocked || warnings().conflicts || warnings().missing || warnings().drops) {
               <span class="muted">
                 Antes de aprovar, veja:
-                @if (warnings().blocked) { <b class="bad">{{ warnings().blocked }} que não podem ser aplicados aqui (tabela ou type que já existe), o que impede a aprovação</b>; }
+                @if (warnings().blocked) { <b class="bad">{{ warnings().blocked }} que não podem ser aplicados aqui (tabela ou type que já existe, ou aplicação que este ambiente não tem), o que impede a aprovação</b>; }
                 @if (warnings().conflicts) { <b>{{ warnings().conflicts }} diferentes do ponto de partida</b>; }
                 @if (warnings().missing) { <b>{{ warnings().missing }} que usam algo que falta aqui</b>; }
                 @if (warnings().drops) { <b>{{ warnings().drops }} que serão apagados</b>. }
@@ -116,7 +116,9 @@
             <button type="button" class="row" (click)="toggle(item)" [attr.aria-expanded]="open() === item.number">
               <span class="number num">{{ item.number }}</span>
               <span class="what">
-                @if (item.action === 'Script') {
+                @if (item.kind !== 'database') {
+                  <mat-icon [svgIcon]="targetIcon(item.kind)" [matTooltip]="targetName(item.kind)" /><span><strong>{{ item.name }}</strong> <span class="muted">· {{ targetName(item.kind) }} · {{ item.version || 'sem versão' }} · {{ item.files }} arquivos</span></span>
+                } @else if (item.action === 'Script') {
                   <mat-icon svgIcon="code" /><strong>{{ item.title }}</strong>
                 } @else {
                   <mat-icon [svgIcon]="kindIcon(item.objectKind)" [matTooltip]="kindName(item.objectKind)" /><span><span class="muted">{{ item.schema }}.</span><strong>{{ item.name }}</strong></span>
@@ -126,7 +128,7 @@
               <span class="standing">
                 @if (result(item.number); as done) {
                   @switch (done.status) {
-                    @case ('applied') { <span class="pill ok">{{ done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
+                    @case ('applied') { <span class="pill ok">{{ done.did === 'replaced' ? 'substituído' : done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
                     @case ('failed') { <span class="pill danger">falhou</span> }
                     @default { <span class="pill warn" matTooltip="O pedido foi feito e a resposta não chegou: pode ter sido aplicado ou não. Confira no banco.">resultado desconhecido</span> }
                   }
@@ -143,12 +145,38 @@
               @if (done.problem) {
                 <p class="trouble"><mat-icon svgIcon="error" /> <span>{{ done.problem }}@if (done.line) { <span class="muted"> (lote {{ done.batch }}, linha {{ done.line }})</span> }</span></p>
               }
+              @if (done.backup) {
+                <p class="kept muted"><mat-icon svgIcon="folder" /> <span>A pasta como estava antes ficou guardada em <span class="mono">{{ done.backup }}</span></span></p>
+              }
             }
             @if (lacking(item).length) {
               <p class="trouble mild"><mat-icon svgIcon="warning" /> <span>Usa o que não existe aqui nem vem no pacote: <span class="mono">{{ lacking(item).join(', ') }}</span></span></p>
             }
 
-            @if (open() === item.number) {
+            @if (open() === item.number && item.kind !== 'database') {
+              @if (content(); as files) {
+                <div class="content">
+                  <div class="content-head">
+                    <strong>{{ files.target ? 'O que muda na pasta' : 'O que o pacote traz' }}</strong>
+                    @if (files.target; as target) {
+                      <span class="muted">aqui: versão {{ target.Version || 'desconhecida' }} · <span class="mono">{{ target.Paths[0] }}</span>@if (target.Paths.length > 1) { e mais {{ target.Paths.length - 1 }} }</span>
+                    }
+                    @if (files.problem) { <span class="bad">{{ files.problem }}</span> }
+                  </div>
+                  @if (fileChanges().shown.length) {
+                    <ul class="files">
+                      @for (change of fileChanges().shown; track change.path) {
+                        <li><span class="pill" [class.info]="change.state === 'changed'" [class.ok]="change.state === 'added'" [class.danger]="change.state === 'removed'">{{ change.state === 'changed' ? 'alterado' : change.state === 'added' ? 'novo' : 'removido' }}</span><span class="mono">{{ change.path }}</span></li>
+                      }
+                    </ul>
+                  }
+                  <p class="muted same">{{ fileChanges().same === 1 ? '1 arquivo igual ao daqui.' : fileChanges().same ? fileChanges().same + ' arquivos iguais aos daqui.' : '' }} A configuração do ambiente não é tocada.</p>
+                </div>
+              } @else {
+                <p class="muted same">Lendo…</p>
+              }
+            }
+            @if (open() === item.number && item.kind === 'database') {
               @if (compared(); as side) {
                 <div class="content">
                   <div class="content-head">

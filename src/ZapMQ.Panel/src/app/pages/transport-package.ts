@@ -13,7 +13,7 @@ import { kindIcon, kindName, size } from '../core/database';
 import { diff } from '../core/diff';
 import { NumPipe, WhenPipe } from '../core/format';
 import { ItemCheck, PackageDetail, PackageItem, PackageItemDetail, PackageResult } from '../core/models';
-import { Transport, historyText, itemAction, itemTone, statusName, statusTone } from '../core/transport';
+import { Transport, historyText, itemAction, itemTone, statusName, statusTone, targetIcon, targetName } from '../core/transport';
 import { confirm } from '../shared/dialogs';
 import { DiffView } from '../shared/diff-view';
 
@@ -29,6 +29,7 @@ const STATES: Record<string, { text: string; tone: string; hint: string }> = {
   absent: { text: 'já não existe', tone: '', hint: 'O objeto a apagar não existe aqui: nada será feito.' },
   script: { text: 'script', tone: 'primary', hint: 'Roda como está, dentro de uma transação.' },
   unknown: { text: 'não foi possível comparar', tone: 'warn', hint: '' },
+  missing: { text: 'não existe aqui', tone: 'danger', hint: 'Este ambiente não tem esse alvo. Instalar o que ainda não existe não é feito pelo transporte, por ora.' },
 };
 
 /**
@@ -74,6 +75,8 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected readonly itemAction = itemAction;
   protected readonly itemTone = itemTone;
   protected readonly historyText = historyText;
+  protected readonly targetName = targetName;
+  protected readonly targetIcon = targetIcon;
 
   protected readonly status = computed(() => this.detail()?.package.status ?? null);
 
@@ -81,7 +84,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected readonly warnings = computed(() => {
     const checks = this.checks() ?? [];
     return {
-      blocked: checks.filter((check) => check.state === 'blocked').length,
+      blocked: checks.filter((check) => check.state === 'blocked' || check.state === 'missing').length,
       conflicts: checks.filter((check) => check.state === 'conflict').length,
       drops: checks.filter((check) => check.state === 'drops').length,
       missing: checks.filter((check) => check.missing.length > 0).length,
@@ -91,7 +94,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   /** The two sides of the open item: what is here against what comes, or what was here against what is here now. */
   protected readonly compared = computed(() => {
     const content = this.content();
-    if (!content) {
+    if (!content || content.item.kind !== 'database') {
       return null;
     }
     const done = this.result(content.item.number)?.status === 'applied';
@@ -122,8 +125,27 @@ export class TransportPackagePage implements OnInit, OnDestroy {
 
   protected state(item: PackageItem): { text: string; tone: string; hint: string } | null {
     const check = this.checks()?.find((candidate) => candidate.number === item.number);
-    return check ? { ...STATES[check.state], hint: check.problem ?? STATES[check.state].hint } : null;
+    if (!check) {
+      return null;
+    }
+    if (item.kind !== 'database' && check.state === 'changes') {
+      // How much of it changes, which for a folder says more than "changes".
+      const count = (amount: number, one: string, many: string) => (amount ? `${amount} ${amount === 1 ? one : many}` : '');
+      const parts = [count(check.added, 'novo', 'novos'), count(check.changed, 'alterado', 'alterados'), count(check.removed, 'removido', 'removidos')].filter(Boolean);
+      return { text: parts.join(' · '), tone: 'info', hint: `Aqui está na versão ${check.currentFingerprint ?? 'desconhecida'}. O alvo é parado, a pasta é guardada, os arquivos são trocados e ele é iniciado de novo.` };
+    }
+    return { ...STATES[check.state], hint: check.problem ?? STATES[check.state].hint };
   }
+
+  /** The files of the open item that are not the same here, the ones that go away last. */
+  protected readonly fileChanges = computed(() => {
+    const changes = this.content()?.changes ?? [];
+    const rank = { changed: 0, added: 1, removed: 2, same: 3 } as const;
+    return {
+      shown: changes.filter((change) => change.state !== 'same').sort((a, b) => rank[a.state] - rank[b.state] || a.path.localeCompare(b.path)),
+      same: changes.filter((change) => change.state === 'same').length,
+    };
+  });
 
   protected lacking(item: PackageItem): string[] {
     return this.checks()?.find((candidate) => candidate.number === item.number)?.missing ?? [];

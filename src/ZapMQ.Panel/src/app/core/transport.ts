@@ -28,7 +28,26 @@ const ACTIONS: Record<string, { text: string; tone: string }> = {
   Define: { text: 'levar', tone: 'info' },
   Drop: { text: 'apagar', tone: 'danger' },
   Script: { text: 'script', tone: 'primary' },
+  Replace: { text: 'substituir', tone: 'info' },
 };
+
+const TARGETS: Record<string, { one: string; many: string; icon: string }> = {
+  worker: { one: 'Micro serviço', many: 'Micro serviços', icon: 'memory' },
+  service: { one: 'Serviço do Windows', many: 'Serviços do Windows', icon: 'settings_applications' },
+  api: { one: 'API', many: 'APIs', icon: 'dns' },
+  frontend: { one: 'Módulo web', many: 'Módulos da aplicação web', icon: 'widgets' },
+};
+
+export const TARGET_KINDS = ['worker', 'service', 'api', 'frontend'];
+
+export function targetName(kind: string, many = false): string {
+  const known = TARGETS[kind];
+  return known ? (many ? known.many : known.one) : kind;
+}
+
+export function targetIcon(kind: string): string {
+  return TARGETS[kind]?.icon ?? 'deployed_code';
+}
 
 export function itemAction(action: string): string {
   return ACTIONS[action]?.text ?? action;

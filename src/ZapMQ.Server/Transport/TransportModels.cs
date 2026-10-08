@@ -35,6 +35,23 @@ public sealed class AreaItem
     public string? Fingerprint { get; set; }
     public string AddedBy { get; set; } = "";
     public DateTimeOffset AddedAt { get; set; }
+
+    /// <summary>
+    /// For what is made of files: the version it says it is, and what it carries.
+    /// </summary>
+    public string? Version { get; set; }
+    public List<FileReference> Files { get; set; } = [];
+    public long Size { get; set; }
+}
+
+/// <summary>
+/// One file of a published folder, by its path from the folder with forward slashes.
+/// </summary>
+public sealed class FileReference
+{
+    public string Path { get; set; } = "";
+    public long Size { get; set; }
+    public string Sha256 { get; set; } = "";
 }
 
 public sealed class ItemReference
@@ -74,6 +91,12 @@ public sealed class PackageItem
     public string? Sha256 { get; set; }
     public long Size { get; set; }
     public List<ItemReference> Uses { get; set; } = [];
+
+    /// <summary>
+    /// For what is made of files: the version it says it is, and every file it carries.
+    /// </summary>
+    public string? Version { get; set; }
+    public List<FileReference> Files { get; set; } = [];
 }
 
 /// <summary>
@@ -119,6 +142,11 @@ public sealed class ItemResult
     /// </summary>
     public string? Previous { get; set; }
     public string? PreviousFingerprint { get; set; }
+
+    /// <summary>
+    /// Where, on the machine, the folder that was replaced is kept as it was.
+    /// </summary>
+    public string? Backup { get; set; }
 }
 
 /// <summary>

@@ -6,7 +6,20 @@ namespace ZapMQ.Server.Transport;
 /// <summary>
 /// How one item of a package stands against what this environment has.
 /// </summary>
-public sealed record ItemCheck(int Number, string State, string? CurrentFingerprint, IReadOnlyList<string> Missing, string? Problem);
+public sealed record ItemCheck(int Number, string State, string? CurrentFingerprint, IReadOnlyList<string> Missing, string? Problem)
+{
+    /// <summary>
+    /// For what is made of files: how many are new, change and go away.
+    /// </summary>
+    public int Added { get; init; }
+    public int Changed { get; init; }
+    public int Removed { get; init; }
+}
+
+/// <summary>
+/// What an item does to one file of its target: added, changed, removed or the same.
+/// </summary>
+public sealed record FileChange(string Path, string State, long Size);
 
 /// <summary>
 /// What the transport does with the help of the Worker Control, which is the one that reads
@@ -112,6 +125,172 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
         return store.Add(new AreaItem { Action = "Script", Title = title.Trim(), Script = script, Database = string.IsNullOrEmpty(database) ? null : database, AddedBy = by, AddedAt = time.GetUtcNow() });
     }
 
+    // ---------------------------------------------------------------- what is made of files
+
+    /// <summary>
+    /// What is never carried, whatever a zip that was brought has in it. The Worker Control
+    /// keeps the same list, and keeps it again when it puts the files in place.
+    /// </summary>
+    private static readonly string[] NeverCarried = ["appsettings*.json", "web.config", "ConfigWorkers.json", "*.db", "*.db-wal", "*.db-shm", "logs/"];
+
+    public static readonly string[] FileKinds = ["worker", "service", "api", "frontend"];
+
+    private static bool Kept(string path)
+    {
+        var name = path[(path.LastIndexOf('/') + 1)..];
+        foreach (var pattern in NeverCarried)
+        {
+            if (pattern.EndsWith('/'))
+            {
+                if (path.StartsWith(pattern, StringComparison.OrdinalIgnoreCase) || path.Contains("/" + pattern, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            else if (System.Text.RegularExpressions.Regex.IsMatch(name, "^" + System.Text.RegularExpressions.Regex.Escape(pattern).Replace("\\*", ".*") + "$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// What tells one set of files from another, whatever way they were packed.
+    /// </summary>
+    private static string Fingerprint(IEnumerable<FileReference> files) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            string.Join("\n", files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).Select(file => $"{file.Path.ToLowerInvariant()}:{file.Sha256}")))));
+
+    /// <summary>
+    /// A zip of a published folder, packed again the way a package carries it: the files at
+    /// the root, without what belongs to an environment. Gives what it carries.
+    /// </summary>
+    private static (byte[] Zip, List<FileReference> Files) Normalize(byte[] brought)
+    {
+        var files = new List<FileReference>();
+        using var memory = new MemoryStream();
+        try
+        {
+            using var source = new System.IO.Compression.ZipArchive(new MemoryStream(brought), System.IO.Compression.ZipArchiveMode.Read);
+            var entries = source.Entries.Where(entry => !entry.FullName.EndsWith('/') && !entry.FullName.EndsWith('\\')).ToList();
+            var paths = entries.Select(entry => entry.FullName.Replace('\\', '/')).ToList();
+            if (paths.Any(path => path.StartsWith('/') || path.Contains(':') || path.Split('/').Any(part => part is ".." or ".")))
+                throw new TransportRefused("O zip tem um arquivo que cairia fora da pasta de destino");
+            // Zipped with the folder itself on the outside: the folder is taken off.
+            var outer = paths.Count > 0 && paths.All(path => path.Contains('/')) && paths.Select(path => path[..path.IndexOf('/')]).Distinct().Count() == 1 ? paths[0][..(paths[0].IndexOf('/') + 1)] : "";
+
+            using (var target = new System.IO.Compression.ZipArchive(memory, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+                foreach (var (entry, full) in entries.Zip(paths).OrderBy(pair => pair.Second, StringComparer.OrdinalIgnoreCase))
+                {
+                    var path = full[outer.Length..];
+                    if (path.Length == 0 || Kept(path))
+                        continue;
+                    using var content = new MemoryStream();
+                    using (var stream = entry.Open())
+                        stream.CopyTo(content);
+                    var bytes = content.ToArray();
+                    var copy = target.CreateEntry(path, System.IO.Compression.CompressionLevel.Optimal);
+                    copy.LastWriteTime = entry.LastWriteTime;
+                    using (var stream = copy.Open())
+                        stream.Write(bytes);
+                    files.Add(new FileReference { Path = path, Size = bytes.Length, Sha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)) });
+                }
+        }
+        catch (InvalidDataException)
+        {
+            throw new TransportRefused("O arquivo enviado não é um zip que se possa ler");
+        }
+        if (files.Count == 0)
+            throw new TransportRefused("O zip não tem nenhum arquivo para levar");
+        return (memory.ToArray(), files);
+    }
+
+    private static void RequireFileKind(string? kind, string? name)
+    {
+        if (kind is null || !FileKinds.Contains(kind))
+            throw new TransportRefused("O tipo precisa ser worker, service, api ou frontend");
+        if (string.IsNullOrWhiteSpace(name))
+            throw new TransportRefused("Informe o nome do alvo");
+    }
+
+    /// <summary>
+    /// What can be replaced on the machine of this environment, as the Worker Control tells it.
+    /// </summary>
+    public async Task<JsonNode> Targets(string by, CancellationToken cancellation) => await Ask("TransportTargets", by, _ => { }, cancellation);
+
+    /// <summary>
+    /// Puts in the area what a target is running right now, packed by the Worker Control.
+    /// </summary>
+    public async Task<AreaItem> AddRunning(string? kind, string? name, string by, CancellationToken cancellation)
+    {
+        RequireFileKind(kind, name);
+        var body = await Ask("TransportCapture", by, request =>
+        {
+            request["Kind"] = kind;
+            request["Name"] = name;
+        }, cancellation);
+        // Left by the Worker Control where the panel, on the same machine, picks it up.
+        var file = body["File"]?.GetValue<string>();
+        if (file is null || !File.Exists(file))
+            throw new TransportRefused("O Worker Control empacotou os arquivos, mas o painel não os alcança: os dois precisam estar na mesma máquina", StatusCodes.Status502BadGateway);
+        try
+        {
+            var (zip, files) = Normalize(await File.ReadAllBytesAsync(file, cancellation));
+            return Place(kind!, body["Target"]?["Name"]?.GetValue<string>() ?? name!, body["Target"]?["Version"]?.GetValue<string>(), zip, files, by);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    /// <summary>
+    /// Puts in the area the zip of a published folder somebody brought.
+    /// </summary>
+    public AreaItem AddUpload(string? kind, string? name, string? version, byte[] brought, string by)
+    {
+        RequireFileKind(kind, name);
+        var (zip, files) = Normalize(brought);
+        return Place(kind!, name!.Trim(), string.IsNullOrWhiteSpace(version) ? null : version.Trim(), zip, files, by);
+    }
+
+    private AreaItem Place(string kind, string name, string? version, byte[] zip, List<FileReference> files, string by) =>
+        store.Add(new AreaItem
+        {
+            Kind = kind, Action = "Replace", Name = name, Version = version, Files = files, Size = zip.Length, Fingerprint = Fingerprint(files), AddedBy = by, AddedAt = time.GetUtcNow()
+        }, zip);
+
+    /// <summary>
+    /// The files a target has here beside the ones an item brings: what is new, what changes
+    /// and what goes away. Null when the target is not on this machine.
+    /// </summary>
+    private async Task<(JsonNode Target, List<FileChange> Changes)?> AgainstTarget(PackageItem item, string by, CancellationToken cancellation)
+    {
+        JsonNode body;
+        try
+        {
+            body = await Ask("TransportTarget", by, request =>
+            {
+                request["Kind"] = item.Kind;
+                request["Name"] = item.Name;
+            }, cancellation);
+        }
+        catch (TransportRefused refused) when (refused.Status == StatusCodes.Status404NotFound)
+        {
+            return null;
+        }
+        var here = (body["Files"] as JsonArray ?? []).ToDictionary(file => file!["Path"]!.GetValue<string>(), file => file!["Sha256"]!.GetValue<string>(), StringComparer.OrdinalIgnoreCase);
+        var changes = new List<FileChange>();
+        foreach (var file in item.Files)
+            changes.Add(new FileChange(file.Path, !here.TryGetValue(file.Path, out var has) ? "added" : has == file.Sha256 ? "same" : "changed", file.Size));
+        var brought = item.Files.Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        changes.AddRange(here.Keys.Where(path => !brought.Contains(path)).Select(path => new FileChange(path, "removed", 0)));
+        return (body["Target"]!, [.. changes.OrderBy(change => change.Path, StringComparer.OrdinalIgnoreCase)]);
+    }
+
+    /// <summary>
+    /// What an item of files does to its target here, file by file.
+    /// </summary>
+    public async Task<(JsonNode? Target, List<FileChange> Changes)> CompareFiles(PackageItem item, string by, CancellationToken cancellation) =>
+        await AgainstTarget(item, by, cancellation) is { } found ? (found.Target, found.Changes) : (null, []);
+
     // ---------------------------------------------------------------- closing
 
     /// <summary>
@@ -129,13 +308,26 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
 
         var now = time.GetUtcNow();
         var packaged = LastPackaged();
-        var items = new List<(AreaItem Area, PackageItem Item, string Script)>();
+        var items = new List<(AreaItem Area, PackageItem Item, byte[] Content)>();
         foreach (var area_ in chosen)
         {
             var item = new PackageItem
             {
                 Kind = area_.Kind, Action = area_.Action, ObjectKind = area_.ObjectKind, Variety = area_.Variety, Schema = area_.Schema, Name = area_.Name, Title = area_.Title, Database = area_.Database
             };
+            if (area_.Kind != "database")
+            {
+                // What is made of files goes as it was packed when it came into the area.
+                if (!File.Exists(store.AreaFile(area_.Id)))
+                    throw new TransportRefused($"Os arquivos de {area_.Name} não estão mais na área. Tire o item e inclua de novo.");
+                item.Action = "Replace";
+                item.Fingerprint = area_.Fingerprint;
+                item.Version = area_.Version;
+                item.Files = area_.Files;
+                items.Add((area_, item, await File.ReadAllBytesAsync(store.AreaFile(area_.Id), cancellation)));
+                continue;
+            }
+
             string script;
             if (area_.Action == "Script")
                 script = area_.Script ?? "";
@@ -151,7 +343,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
                 item.Uses = found.Uses;
                 item.Base = await Base(area_, packaged.GetValueOrDefault(Key(area_.ObjectKind, area_.Schema, area_.Name)), by, cancellation);
             }
-            items.Add((area_, item, script));
+            items.Add((area_, item, System.Text.Encoding.UTF8.GetBytes(script)));
         }
 
         if (!keepOrder)
@@ -164,7 +356,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             Id = Guid.NewGuid().ToString("N"), Name = name.Trim(), Description = description?.Trim() ?? "", Origin = store.Environment, CreatedAt = now, CreatedBy = by,
             Items = [.. items.Select(item => item.Item)]
         };
-        var record = store.Close(manifest, [.. items.Select(item => item.Script)], chosen.Select(item => item.Id), by, now);
+        var record = store.Close(manifest, [.. items.Select(item => item.Content)], chosen.Select(item => item.Id), by, now);
         logger.LogInformation("Transport: package {Name} ({Id}) closed with {Items} items (by {User})", manifest.Name, manifest.Id, manifest.Items.Count, by);
         return record;
     }
@@ -204,7 +396,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     {
         var last = new Dictionary<string, DateTimeOffset>();
         foreach (var record in store.Packages().Where(record => !record.Received))
-            foreach (var item in record.Manifest.Items.Where(item => item.Action != "Script"))
+            foreach (var item in record.Manifest.Items.Where(item => item.Kind == "database" && item.Action != "Script"))
             {
                 var key = Key(item.ObjectKind, item.Schema, item.Name);
                 if (!last.TryGetValue(key, out var at) || record.Manifest.CreatedAt > at)
@@ -217,13 +409,16 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// Types and tables before what is made of them, each object after the ones it uses that
     /// come in the same package, and what is dropped at the end.
     /// </summary>
-    private static List<(AreaItem Area, PackageItem Item, string Script)> Arrange(List<(AreaItem Area, PackageItem Item, string Script)> items)
+    private static List<(AreaItem Area, PackageItem Item, byte[] Content)> Arrange(List<(AreaItem Area, PackageItem Item, byte[] Content)> items)
     {
-        int Rank((AreaItem Area, PackageItem Item, string Script) item) =>
-            item.Item.Action == "Drop" ? Order.Length : Math.Max(0, Array.IndexOf(Order, item.Item.Action == "Script" ? "Script" : item.Item.ObjectKind));
+        // The database first, so that what runs afterwards finds it as it expects; the web application last.
+        int Rank((AreaItem Area, PackageItem Item, byte[] Content) item) =>
+            item.Item.Kind == "frontend" ? Order.Length + 2
+            : item.Item.Kind != "database" ? Order.Length + 1
+            : item.Item.Action == "Drop" ? Order.Length : Math.Max(0, Array.IndexOf(Order, item.Item.Action == "Script" ? "Script" : item.Item.ObjectKind));
 
         var pending = items.Select((item, index) => (item, index)).OrderBy(pair => Rank(pair.item)).ThenBy(pair => pair.index).Select(pair => pair.item).ToList();
-        var placed = new List<(AreaItem Area, PackageItem Item, string Script)>();
+        var placed = new List<(AreaItem Area, PackageItem Item, byte[] Content)>();
         var done = new HashSet<string>();
         var inside = pending.Where(item => item.Item.Action == "Define").Select(item => Key(item.Item.ObjectKind, item.Item.Schema, item.Item.Name)).ToHashSet();
 
@@ -251,7 +446,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// </summary>
     public async Task<List<ItemCheck>> Check(PackageRecord record, string by, CancellationToken cancellation)
     {
-        var here = await Everything(record, by, cancellation);
+        var here = record.Manifest.Items.Any(item => item.Kind == "database" && item.Action == "Define") ? await Everything(record, by, cancellation) : null;
         var brought = record.Manifest.Items.Where(item => item.Action == "Define").Select(item => Key(item.ObjectKind, item.Schema, item.Name)).ToHashSet();
         var checks = new List<ItemCheck>();
         foreach (var item in record.Manifest.Items)
@@ -259,6 +454,26 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             if (item.Action == "Script")
             {
                 checks.Add(new ItemCheck(item.Number, "script", null, [], null));
+                continue;
+            }
+            if (item.Kind != "database")
+            {
+                try
+                {
+                    if (await AgainstTarget(item, by, cancellation) is not { } found)
+                        checks.Add(new ItemCheck(item.Number, "missing", null, [], null));
+                    else if (found.Target["Problem"]?.GetValue<string>() is { } problem)
+                        checks.Add(new ItemCheck(item.Number, "unknown", found.Target["Version"]?.GetValue<string>(), [], problem));
+                    else
+                        checks.Add(new ItemCheck(item.Number, found.Changes.All(change => change.State == "same") ? "same" : "changes", found.Target["Version"]?.GetValue<string>(), [], null)
+                        {
+                            Added = found.Changes.Count(change => change.State == "added"), Changed = found.Changes.Count(change => change.State == "changed"), Removed = found.Changes.Count(change => change.State == "removed")
+                        });
+                }
+                catch (TransportRefused refused)
+                {
+                    checks.Add(new ItemCheck(item.Number, "unknown", null, [], refused.Message));
+                }
                 continue;
             }
             try
@@ -337,7 +552,13 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     public async Task<PackageRecord> Approve(string id, DateTimeOffset? at, string by, CancellationToken cancellation)
     {
         var waiting = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
-        if (waiting.Status == "Pending" && (await Check(waiting, by, cancellation)).FirstOrDefault(check => check.State == "blocked") is { } blocked)
+        var checks = waiting.Status == "Pending" ? await Check(waiting, by, cancellation) : [];
+        if (checks.FirstOrDefault(check => check.State == "missing") is { } absent)
+        {
+            var item = waiting.Manifest.Items.First(candidate => candidate.Number == absent.Number);
+            throw new TransportRefused($"O item {item.Number} ({item.Kind} {item.Name}) não existe neste ambiente. Instalar o que ainda não existe não é feito pelo transporte, por ora: instale-o aqui e aprove depois.", StatusCodes.Status409Conflict);
+        }
+        if (checks.FirstOrDefault(check => check.State == "blocked") is { } blocked)
         {
             var item = waiting.Manifest.Items.First(candidate => candidate.Number == blocked.Number);
             throw new TransportRefused($"O item {item.Number} ({item.Schema}.{item.Name}) é uma tabela ou um type que já existe neste ambiente e não pode ser recriado. A mudança precisa vir como um script de alteração, em outro pacote.", StatusCodes.Status409Conflict);
@@ -400,6 +621,59 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             await Apply(due.Manifest.Id, cancellation);
     }
 
+    /// <summary>
+    /// For how long the replacing of what runs from a folder is waited for: it stops, copies,
+    /// replaces, starts and waits for it to be up.
+    /// </summary>
+    public static readonly TimeSpan ReplacePatience = TimeSpan.FromMinutes(12);
+
+    /// <summary>
+    /// Hands the files of an item to the Worker Control, which stops the target, keeps a copy,
+    /// replaces the files and starts it again.
+    /// </summary>
+    private async Task Replace(string id, PackageItem item, ItemResult result, string by, CancellationToken cancellation)
+    {
+        var files = store.Content(id, item.Number) ?? throw new TransportRefused("O conteúdo do item não está mais no arquivo do pacote");
+        var work = store.WorkFile($"{id}-{item.Number:00}.zip");
+        Directory.CreateDirectory(Path.GetDirectoryName(work)!);
+        await File.WriteAllBytesAsync(work, files, cancellation);
+        try
+        {
+            var answer = await worker.AskAsync("TransportDeploy", by, ReplacePatience, request =>
+            {
+                request["Package"] = id;
+                request["Item"] = item.Number;
+                request["Kind"] = item.Kind;
+                request["Name"] = item.Name;
+                request["File"] = work;
+            }, cancellation);
+
+            if (!answer.Reached)
+            {
+                result.Status = "unknown";
+                result.Problem = answer.Problem;
+            }
+            else if (!answer.Ok)
+            {
+                result.Status = "failed";
+                result.Problem = answer.ErrorMessage;
+            }
+            else
+            {
+                var body = answer.Body!;
+                result.Status = body["Applied"]?.GetValue<bool>() == true ? "applied" : "failed";
+                result.Did = body["Did"]?.GetValue<string>();
+                result.Problem = body["Problem"]?.GetValue<string>();
+                result.Backup = body["Backup"]?.GetValue<string>();
+                result.Messages = [.. (body["Messages"] as JsonArray ?? []).Select(message => message?.GetValue<string>() ?? "")];
+            }
+        }
+        finally
+        {
+            File.Delete(work);
+        }
+    }
+
     private async Task Apply(string id, CancellationToken cancellation)
     {
         var record = store.Update(id, starting =>
@@ -420,6 +694,16 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             var result = new ItemResult { Number = item.Number };
             try
             {
+                if (item.Kind != "database")
+                {
+                    await Replace(id, item, result, by, cancellation);
+                    result.At = time.GetUtcNow();
+                    store.Update(id, applying => applying.Results.Add(result));
+                    if (result.Status != "applied")
+                        break;
+                    continue;
+                }
+
                 var script = store.Script(id, item.Number) ?? throw new TransportRefused("O conteúdo do item não está mais no arquivo do pacote");
                 if (item.Action != "Script")
                 {
