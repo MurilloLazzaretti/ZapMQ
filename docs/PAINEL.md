@@ -91,6 +91,13 @@ Filas de uso interno (keep-alive, safe stop e trace de cada processo) são recol
 
 Como ficou: o desenho é em colunas (quem publica, filas, quem consome, supervisão), feito com HTML e SVG próprios em vez do ECharts, que continua nos gráficos; assim os nós são botões comuns, com o tema e a acessibilidade do resto do painel. A vazão de cada ligação é medida pelo navegador entre uma leitura e outra (janela de um minuto). O servidor lembra quem publicou em cada fila por até 24 horas; a tela escolhe olhar 15 minutos, 1 hora ou 24 horas. Ao clicar, abre-se um resumo com as ligações do nó e o atalho para a tela dele. Uma fila é dita "acumulando" quando passa 30 segundos com mensagens esperando sem diminuir.
 
+Com muitas filas, o desenho se resume de duas formas, as duas na barra do mapa:
+
+- **Agrupar filas iguais** (ligado por padrão): filas que têm exatamente os mesmos publicadores e os mesmos consumidores são desenhadas como uma só, uma pilha com a quantidade, a partir de três. Clicar na pilha lista as filas e permite mostrá-las separadas. Uma fila com algo errado nunca entra em pilha: aparece sozinha, com a cor do problema.
+- **Só filas com movimento:** deixa de fora as filas em que nada foi publicado no período escolhido e que não têm nada pendente nem problema. A barra diz quantas ficaram ocultas.
+
+Há também um campo para localizar uma aplicação ou uma fila pelo nome, inclusive uma fila que está dentro de uma pilha. As colunas das pontas (o proxy e o Worker Control) são mais estreitas, e um nome com pontos que não cabe perde o começo, não o fim, que é o que distingue um do outro.
+
 ### 4.3 Filas
 
 Lista com pendentes, em processamento, consumidores, vazão e mensagens mortas, com busca e ordenação. Na fila:
@@ -135,6 +142,8 @@ Declarar um exchange e as filas que recebem cópia do que é publicado nele. Ent
 ### 4.10 Clientes do protocolo 1.x
 
 O protocolo 1.x não diz quem é o cliente. O servidor passa a reconhecê-lo de outra forma quando ele está na mesma máquina: pergunta ao sistema qual processo é dono da conexão, e com isso o cliente ganha nome e número de processo. Aparece assim nas conexões, entre os publicadores e consumidores de cada fila, no Observar e no mapa, onde passa a ser uma aplicação como as outras — ligada às filas em que publica e de que consome, e reconhecida como grupo do Worker Control ou como serviço Windows pelo número do processo. De outra máquina, o cliente continua sendo só o endereço.
+
+Um cliente que roda dentro do processo de trabalho do IIS (`w3wp`) é conhecido pela aplicação que esse processo hospeda — a maior biblioteca que ele carregou de fora do sistema — e não por `w3wp`, que é o mesmo executável para todas.
 
 Um consumidor 1.x escuta vindo perguntar. A partir de agora a fila passa a existir quando alguém pergunta por ela, com quem perguntou anotado, mesmo vazia: é o que faz as filas consumidas por clientes 1.x aparecerem nas telas e no mapa sem esperar uma mensagem passar. Uma fila definida no painel também é desenhada no mapa mesmo parada.
 

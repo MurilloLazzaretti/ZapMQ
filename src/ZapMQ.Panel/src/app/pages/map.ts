@@ -10,9 +10,10 @@ import { Api } from '../core/api';
 import { AgoPipe, NumPipe } from '../core/format';
 import { ParkMap, TrafficUpstreams, WorkerControlStatus } from '../core/models';
 import { Column, NODE_HEIGHT, ParkEdge, ParkNode, assemble, linkKey, place } from '../core/park';
+import { FormsModule } from '@angular/forms';
 
 const TITLES: Record<Column, string> = { [-1]: 'Entrada', 0: 'Publicam', 1: 'Filas', 2: 'Consomem', 3: 'Supervisão' };
-const ICONS = { application: 'deployed_code', queue: 'stacks', supervisor: 'precision_manufacturing', group: 'memory', proxy: 'dns' } as const;
+const ICONS = { application: 'deployed_code', queue: 'stacks', supervisor: 'precision_manufacturing', group: 'memory', proxy: 'dns', bundle: 'stacks' } as const;
 const RATE = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 const RATE_WHOLE = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 
@@ -28,7 +29,7 @@ const RATE_WINDOW = 60_000;
  */
 @Component({
   selector: 'zap-map',
-  imports: [RouterLink, MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, NumPipe, AgoPipe],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, NumPipe, AgoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './map.html',
   styleUrl: './map.scss',
@@ -56,13 +57,31 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly rates = signal<ReadonlyMap<string, number>>(new Map());
   private readonly waiting = signal<ReadonlySet<string>>(new Set());
 
-  protected readonly park = computed(() => {
+  /** Only the queues something was published in during the period, unless something is wrong with them. */
+  protected readonly activeOnly = signal(false);
+  /** Queues used by exactly the same applications are drawn as one. */
+  protected readonly bundling = signal(true);
+  private readonly expanded = signal<ReadonlySet<string>>(new Set());
+  protected readonly opened = computed(() => this.expanded().size);
+  protected readonly search = signal('');
+
+  private readonly assembled = computed(() => {
     const map = this.map();
-    if (!map || !this.available()) {
+    return map
+      ? assemble(map, this.status(), this.rates(), this.waiting(), Date.now(), this.upstreams(), { activeOnly: this.activeOnly(), bundle: this.bundling(), expanded: this.expanded() })
+      : null;
+  });
+
+  /** Queues left out for having had nothing published in them. */
+  protected readonly hidden = computed(() => this.assembled()?.hidden ?? 0);
+
+  protected readonly park = computed(() => {
+    const assembled = this.assembled();
+    if (!assembled || !this.available()) {
       return null;
     }
-    const { nodes, edges } = assemble(map, this.status(), this.rates(), this.waiting(), Date.now(), this.upstreams());
-    return place(nodes, edges, this.available());
+    // Placing writes on the nodes; each look gets its own.
+    return place(assembled.nodes.map((node) => ({ ...node })), assembled.edges.map((edge) => ({ ...edge })), this.available());
   });
 
   protected readonly selected = computed(() => this.park()?.nodes.find((node) => node.id === this.selectedId()) ?? null);
@@ -165,6 +184,32 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   protected edgeDimmed(edge: ParkEdge): boolean {
     const selected = this.selectedId();
     return this.related() !== null && edge.from !== selected && edge.to !== selected;
+  }
+
+  /** Draws the queues of a bundle one by one. */
+  protected expand(node: ParkNode): void {
+    this.expanded.update((expanded) => new Set([...expanded, node.id]));
+    this.selectedId.set(null);
+  }
+
+  protected collapseAll(): void {
+    this.expanded.set(new Set());
+  }
+
+  /** Picks what was typed: an application, a queue, or the bundle a queue is in. */
+  protected find(text: string): void {
+    this.search.set(text);
+    const wanted = text.trim().toLowerCase();
+    if (!wanted) {
+      this.selectedId.set(null);
+      return;
+    }
+    const nodes = this.park()?.nodes ?? [];
+    const found =
+      nodes.find((node) => node.label.toLowerCase() === wanted) ??
+      nodes.find((node) => node.label.toLowerCase().includes(wanted)) ??
+      nodes.find((node) => node.bundle?.some((queue) => queue.name.toLowerCase().includes(wanted)));
+    this.selectedId.set(found?.id ?? null);
   }
 
   protected select(node: ParkNode | null): void {

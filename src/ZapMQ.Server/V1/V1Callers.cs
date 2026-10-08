@@ -117,9 +117,59 @@ internal sealed class WindowsPeerResolver : IPeerResolver
             : Find(2, 24, 8, 16, 20, clientPort, serverPort) ?? Find(23, 56, 20, 44, 52, clientPort, serverPort);
         if (processId is null or 0)
             return null;
+        // Finding the name of what a host process runs means going through what it loaded;
+        // once is enough for a while.
+        var now = Environment.TickCount64;
+        if (_names.TryGetValue(processId.Value, out var known) && now - known.At < 60_000)
+            return (processId.Value, known.Name);
         using var process = Process.GetProcessById(processId.Value);
-        return (processId.Value, process.ProcessName);
+        var name = NameOf(process);
+        _names[processId.Value] = (name, now);
+        return (processId.Value, name);
     }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (string Name, long At)> _names = new();
+
+    /// <summary>
+    /// The name a process is known by. The worker process of IIS is the same executable for
+    /// every application it runs: it goes by the application instead, which is the largest
+    /// library it loaded from outside the system (what somebody published there).
+    /// </summary>
+    private static string NameOf(Process process)
+    {
+        if (!string.Equals(process.ProcessName, "w3wp", StringComparison.OrdinalIgnoreCase))
+            return process.ProcessName;
+        try
+        {
+            string? best = null;
+            long size = 0;
+            foreach (ProcessModule module in process.Modules)
+            {
+                using (module)
+                {
+                    var file = module.FileName;
+                    if (string.IsNullOrEmpty(file) || SystemFolders.Any(folder => file.StartsWith(folder, StringComparison.OrdinalIgnoreCase)) || module.ModuleMemorySize <= size)
+                        continue;
+                    (best, size) = (file, module.ModuleMemorySize);
+                }
+            }
+            return best is null ? process.ProcessName : Path.GetFileNameWithoutExtension(best);
+        }
+        catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException or NotSupportedException)
+        {
+            return process.ProcessName;
+        }
+    }
+
+    private static readonly string[] SystemFolders = [.. new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
+        }
+        .Where(folder => folder.Length > 0)
+        .Select(folder => folder.TrimEnd('\\') + "\\")];
 
     /// <summary>
     /// The client's end of the connection, as the system lists it: the port the client calls

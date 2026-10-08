@@ -26,6 +26,9 @@
         <span class="pill"><mat-icon svgIcon="deployed_code" /> {{ totals().applications | num }} aplicações · {{ totals().instances | num }} instâncias</span>
         <span class="pill"><mat-icon svgIcon="stacks" /> {{ totals().queues | num }} filas</span>
         <span class="pill"><mat-icon svgIcon="bolt" /> {{ rate(totals().perMinute) }}</span>
+        @if (hidden()) {
+          <span class="pill" matTooltip="Filas em que nada foi publicado no período escolhido">{{ hidden() | num }} filas paradas ocultas</span>
+        }
         @if (!status()) {
           <span class="pill warn" matTooltip="Sem o Worker Control, o mapa não sabe quais processos deveriam estar no ar"><mat-icon svgIcon="cloud_off" /> Worker Control sem resposta</span>
         }
@@ -38,12 +41,29 @@
         <span class="legend"><i class="line supervise"></i> supervisiona</span>
       </div>
 
+      <div class="controls">
+        <label class="search">
+          <mat-icon svgIcon="search" />
+          <input type="search" placeholder="Localizar aplicação ou fila" [ngModel]="search()" (ngModelChange)="find($event)" aria-label="Localizar no mapa" />
+        </label>
+        <span class="spacer"></span>
+        <button type="button" class="chip" [class.on]="activeOnly()" [attr.aria-pressed]="activeOnly()" (click)="activeOnly.set(!activeOnly())" matTooltip="Mostra só as filas em que algo foi publicado no período, e as que têm algum problema">
+          <mat-icon [svgIcon]="activeOnly() ? 'check_circle' : 'visibility'" /> Só filas com movimento
+        </button>
+        <button type="button" class="chip" [class.on]="bundling()" [attr.aria-pressed]="bundling()" (click)="bundling.set(!bundling())" matTooltip="Desenha como uma só as filas usadas exatamente pelas mesmas aplicações">
+          <mat-icon [svgIcon]="bundling() ? 'check_circle' : 'stacks'" /> Agrupar filas iguais
+        </button>
+        @if (bundling() && opened()) {
+          <button mat-button (click)="collapseAll()">Reagrupar</button>
+        }
+      </div>
+
       <div class="scroll" #canvas>
         <div class="canvas" (click)="select(null)">
           @if (park(); as park) {
             <div class="stage" [style.width.px]="park.width" [style.height.px]="park.height">
               @for (column of park.columns; track column.column) {
-                <span class="column" [style.left.px]="column.x" [style.width.px]="park.nodeWidth">{{ title(column.column) }}</span>
+                <span class="column" [style.left.px]="column.x" [style.width.px]="column.width">{{ title(column.column) }}</span>
               }
 
               <svg [attr.width]="park.width" [attr.height]="park.height" [attr.viewBox]="'0 0 ' + park.width + ' ' + park.height" aria-hidden="true">
@@ -75,7 +95,7 @@
                   [class.dim]="dimmed(node.id)"
                   [style.left.px]="node.x"
                   [style.top.px]="node.y"
-                  [style.width.px]="park.nodeWidth"
+                  [style.width.px]="node.width ?? park.nodeWidth"
                   [style.height.px]="nodeHeight"
                   [attr.aria-pressed]="selectedId() === node.id"
                   [matTooltip]="node.reasons.join(' ')"
@@ -83,7 +103,7 @@
                 >
                   <span class="mark"><mat-icon [svgIcon]="icon(node)" /></span>
                   <span class="text">
-                    <strong>{{ node.label }}</strong>
+                    <strong [class.tail]="node.kind === 'application' && node.label.includes('.')"><bdi>{{ node.label }}</bdi></strong>
                     <small>{{ node.detail }}</small>
                   </span>
                   @if (node.figure !== null) {
@@ -118,6 +138,18 @@
 
         @for (reason of node.reasons; track reason) {
           <p class="reason" [class]="'reason ' + node.tone"><mat-icon svgIcon="warning" /> {{ reason }}</p>
+        }
+
+        @if (node.bundle; as queues) {
+          <p class="muted note">Filas com os mesmos publicadores e os mesmos consumidores, desenhadas como uma só.</p>
+          <ul class="lines bundled">
+            @for (queue of queues; track queue.name) {
+              <li>
+                <a [routerLink]="['/filas', queue.name]"><i class="line publish"></i> <span class="truncate">{{ queue.name }}</span></a>
+                <span class="muted num">{{ queue.pending ? (queue.pending | num) + ' pend.' : 'vazia' }}</span>
+              </li>
+            }
+          </ul>
         }
 
         @if (node.queue; as queue) {
@@ -239,7 +271,9 @@
         }
 
         <footer>
-          @if (node.queue) {
+          @if (node.bundle) {
+            <button mat-flat-button (click)="expand(node)"><mat-icon svgIcon="stacks" /> Mostrar separadas</button>
+          } @else if (node.queue) {
             <a mat-flat-button [routerLink]="['/filas', node.queue.name]"><mat-icon svgIcon="open_in_new" /> Abrir a fila</a>
           } @else if (node.kind === 'proxy' || (node.http && !node.groups.length)) {
             <a mat-flat-button routerLink="/trafego"><mat-icon svgIcon="open_in_new" /> Abrir o tráfego</a>

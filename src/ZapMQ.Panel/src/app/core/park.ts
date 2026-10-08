@@ -1,7 +1,20 @@
 import { MapApplication, MapLink, MapQueue, MonitoredService, ParkMap, TrafficUpstreams, WorkerControlStatus, WorkerGroup } from './models';
 
 export type Tone = 'ok' | 'warn' | 'danger' | 'off' | 'neutral';
-export type NodeKind = 'application' | 'queue' | 'supervisor' | 'group' | 'proxy';
+export type NodeKind = 'application' | 'queue' | 'supervisor' | 'group' | 'proxy' | 'bundle';
+
+/** How much of what there is gets drawn. */
+export interface ParkView {
+  /** Leaves out the queues nothing was published in during the period, unless something is wrong with them. */
+  activeOnly: boolean;
+  /** Draws as one the queues that have exactly the same publishers and consumers. */
+  bundle: boolean;
+  /** Bundles that were opened, and stay drawn queue by queue. */
+  expanded: ReadonlySet<string>;
+}
+
+/** The fewest queues that are worth drawing as one. */
+const BUNDLE_FROM = 3;
 
 /** The reverse proxy (when its traffic is known), publishers, queues, consumers and, when there is one, the Worker Control. */
 export type Column = -1 | 0 | 1 | 2 | 3;
@@ -30,6 +43,8 @@ export interface ParkNode {
   figure: number | null;
   application?: MapApplication;
   queue?: MapQueue;
+  /** The queues drawn as one, when this node stands for several. */
+  bundle?: MapQueue[];
   /** Groups of the Worker Control this node stands for. */
   groups: WorkerGroup[];
   /** Windows services this application is, when it is one. */
@@ -38,6 +53,8 @@ export interface ParkNode {
   http?: HttpTraffic;
   x: number;
   y: number;
+  /** As wide as its column. */
+  width?: number;
 }
 
 export interface ParkEdge {
@@ -63,8 +80,8 @@ export interface Park {
   width: number;
   height: number;
   nodeWidth: number;
-  /** Left edge of each column in use, by column. */
-  columns: { column: Column; x: number }[];
+  /** Left edge and width of each column in use, by column. */
+  columns: { column: Column; x: number; width: number }[];
 }
 
 export const NODE_HEIGHT = 52;
@@ -74,6 +91,7 @@ const PADDING = 16;
 const MIN_NODE = 184;
 const MAX_NODE = 260;
 const MIN_GAP = 72;
+const SLIM_NODE = 178;
 
 export const linkKey = (link: MapLink) => `${link.kind}|${link.application}|${link.queue}`;
 
@@ -110,7 +128,8 @@ export function assemble(
   waiting: ReadonlySet<string>,
   now: number,
   traffic: TrafficUpstreams | null = null,
-): { nodes: ParkNode[]; edges: ParkEdge[] } {
+  view: ParkView = { activeOnly: false, bundle: false, expanded: new Set() },
+): { nodes: ParkNode[]; edges: ParkEdge[]; hidden: number } {
   const nodes: ParkNode[] = [];
   const edges: ParkEdge[] = [];
   const machine = status?.Service.Machine;
@@ -283,7 +302,7 @@ export function assemble(
       kind: 'supervisor',
       column: 3,
       label: 'Worker Control',
-      detail: `${plural(status.Groups.filter((group) => group.Enabled).length, 'grupo', 'grupos')} · ${status.Service.Machine}`,
+      detail: plural(status.Groups.filter((group) => group.Enabled).length, 'grupo', 'grupos'),
       tone: !status.Service.ZapMQ.Healthy ? 'warn' : unstable ? 'warn' : 'ok',
       reasons: [
         ...(status.Service.ZapMQ.Healthy ? [] : ['Sem contato estável com o ZapMQ.']),
@@ -313,7 +332,109 @@ export function assemble(
   }
 
   addProxy(nodes, edges, traffic);
-  return { nodes, edges };
+  const hidden = simplify(nodes, edges, view);
+  return { nodes, edges, hidden };
+}
+
+/**
+ * Makes a drawing with many queues readable: leaves out the queues nothing went through, and
+ * draws as one the queues that are used by exactly the same applications. A queue with
+ * something wrong is always drawn, and by itself. Returns how many queues were left out.
+ */
+function simplify(nodes: ParkNode[], edges: ParkEdge[], view: ParkView): number {
+  const remove = (ids: Set<string>) => {
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      if (ids.has(nodes[i].id)) {
+        nodes.splice(i, 1);
+      }
+    }
+    for (let i = edges.length - 1; i >= 0; i--) {
+      if (ids.has(edges[i].from) || ids.has(edges[i].to)) {
+        edges.splice(i, 1);
+      }
+    }
+  };
+  const calm = (node: ParkNode) => node.tone === 'ok' || node.tone === 'neutral';
+
+  let hidden = 0;
+  if (view.activeOnly) {
+    const publishedIn = new Set(edges.filter((edge) => edge.kind === 'publish').map((edge) => edge.to));
+    const idle = new Set(
+      nodes
+        .filter((node) => node.kind === 'queue' && calm(node) && !publishedIn.has(node.id) && !node.queue!.pending && !node.queue!.processing)
+        .map((node) => node.id),
+    );
+    hidden = idle.size;
+    remove(idle);
+  }
+
+  if (!view.bundle) {
+    return hidden;
+  }
+
+  // Queues with the same publishers and the same consumers tell the same story.
+  const signature = new Map<string, string>();
+  for (const node of nodes) {
+    if (node.kind === 'queue' && calm(node)) {
+      const from = edges.filter((edge) => edge.to === node.id).map((edge) => edge.kind + ':' + edge.from).sort();
+      const to = edges.filter((edge) => edge.from === node.id).map((edge) => edge.kind + ':' + edge.to).sort();
+      signature.set(node.id, from.join(',') + '>' + to.join(','));
+    }
+  }
+  const groups = new Map<string, ParkNode[]>();
+  for (const node of nodes) {
+    const key = signature.get(node.id);
+    if (key !== undefined) {
+      groups.set(key, [...(groups.get(key) ?? []), node]);
+    }
+  }
+
+  for (const [key, members] of groups) {
+    const id = 'bundle:' + key;
+    if (members.length < BUNDLE_FROM || view.expanded.has(id)) {
+      continue;
+    }
+    const ids = new Set(members.map((member) => member.id));
+    const queues = members.map((member) => member.queue!).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    const pending = queues.reduce((total, queue) => total + queue.pending, 0);
+
+    // One line for each application joined to the bundle, standing for all the lines to its queues.
+    const merged = new Map<string, ParkEdge>();
+    for (const edge of edges) {
+      const inward = ids.has(edge.to);
+      if (!inward && !ids.has(edge.from)) {
+        continue;
+      }
+      const other = inward ? edge.from : edge.to;
+      const mergedId = `${edge.kind}|${other}|${id}`;
+      const sum = merged.get(mergedId);
+      if (sum) {
+        sum.rate += edge.rate;
+        sum.active ||= edge.active;
+        sum.stale &&= edge.stale;
+      } else {
+        merged.set(mergedId, { ...edge, id: mergedId, from: inward ? other : id, to: inward ? id : other, link: undefined, path: '' });
+      }
+    }
+
+    remove(ids);
+    edges.push(...merged.values());
+    nodes.push({
+      id,
+      kind: 'bundle',
+      column: 1,
+      label: `${queues.length} filas`,
+      detail: queues.map((queue) => queue.name).join(', '),
+      tone: 'ok',
+      reasons: [],
+      figure: pending || null,
+      bundle: queues,
+      groups: [],
+      x: 0,
+      y: 0,
+    });
+  }
+  return hidden;
 }
 
 /**
@@ -336,7 +457,11 @@ function addProxy(nodes: ParkNode[], edges: ParkEdge[], traffic: TrafficUpstream
       // By the name of the process when it is known: an application connects to the broker under that name.
       const name = upstream.Processes[0]?.Name;
       const id = name ? 'v2:' + name : 'http:' + upstream.App;
-      node = byId.get(id) ?? [...byId.values()].find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
+      // An application talks to the broker under the name of its process, in either protocol.
+      node =
+        byId.get(id) ??
+        [...byId.values()].find((candidate) => candidate.id.toLowerCase() === id.toLowerCase()) ??
+        (name ? nodes.find((candidate) => candidate.kind === 'application' && candidate.application?.name.toLowerCase() === name.toLowerCase()) : undefined);
       if (!node) {
         // A site of the web server with nothing running from its folder: the application was put to rest for want of requests.
         const resting = !name && !!upstream.Site;
@@ -393,8 +518,8 @@ function addProxy(nodes: ParkNode[], edges: ParkEdge[], traffic: TrafficUpstream
     id: 'proxy',
     kind: 'proxy',
     column: -1,
-    label: 'Proxy reverso',
-    detail: `${all.perMinute >= 10 ? Math.round(all.perMinute) : all.perMinute.toFixed(1).replace('.', ',')} requisições/min`,
+    label: 'Proxy',
+    detail: `${all.perMinute >= 10 ? Math.round(all.perMinute) : all.perMinute.toFixed(1).replace('.', ',')}/min`,
     tone: failing ? 'danger' : 'ok',
     reasons: failing ? [`${((all.serverErrors / all.count) * 100).toFixed(1).replace('.', ',')}% do que foi encaminhado terminou em erro do servidor.`] : [],
     figure: targets.size,
@@ -413,9 +538,20 @@ export function place(nodes: ParkNode[], edges: ParkEdge[], available: number): 
   const used = ([-1, 0, 1, 2, 3] as Column[]).filter((column) => (column >= 0 && column < 3) || nodes.some((node) => node.column === column));
   const width = Math.max(available, minimumWidth(used.length));
   const least = sizes(used.length);
-  const nodeWidth = Math.min(MAX_NODE, Math.max(least.node, (width - PADDING * 2 - (used.length - 1) * least.gap) / used.length));
-  const gap = (width - PADDING * 2 - used.length * nodeWidth) / (used.length - 1);
-  const columns = used.map((column, index) => ({ column, x: PADDING + index * (nodeWidth + gap) }));
+  // The columns at the ends hold one node each (the proxy, the Worker Control): they get by
+  // with less, and what they give up goes to the names in the middle.
+  const slim = (column: Column) => column === -1 || column === 3;
+  const slims = used.filter(slim).length;
+  const room = width - PADDING * 2 - (used.length - 1) * least.gap;
+  const nodeWidth = Math.min(MAX_NODE, Math.max(least.node, (room - slims * SLIM_NODE) / (used.length - slims)));
+  const widthOf = (column: Column) => (slim(column) ? Math.min(SLIM_NODE, nodeWidth) : nodeWidth);
+  const gap = (width - PADDING * 2 - used.reduce<number>((total, column) => total + widthOf(column), 0)) / (used.length - 1);
+  let left = PADDING;
+  const columns = used.map((column) => {
+    const placed = { column, x: left, width: widthOf(column) };
+    left += placed.width + gap;
+    return placed;
+  });
 
   const byColumn = new Map<Column, ParkNode[]>(used.map((column) => [column, nodes.filter((node) => node.column === column).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))]));
   const flow = edges.filter((edge) => edge.kind !== 'supervise');
@@ -449,12 +585,13 @@ export function place(nodes: ParkNode[], edges: ParkEdge[], available: number): 
 
   const rows = Math.max(1, ...[...byColumn.values()].map((list) => list.length));
   const height = HEADER + rows * ROW + PADDING;
-  for (const { column, x } of columns) {
+  for (const { column, x, width: columnWidth } of columns) {
     const list = byColumn.get(column) ?? [];
     const top = HEADER + ((rows - list.length) * ROW) / 2;
     list.forEach((node, index) => {
       node.x = x;
       node.y = top + index * ROW;
+      node.width = columnWidth;
     });
   }
 
@@ -468,8 +605,8 @@ export function place(nodes: ParkNode[], edges: ParkEdge[], available: number): 
     // Lines that go against the flow run a little lower, so they do not hide the ones that go with it.
     const shift = edge.kind === 'supervise' || edge.kind === 'http' ? 0 : edge.back ? 9 : -4;
     const leftToRight = from.x < to.x;
-    const x1 = leftToRight ? from.x + nodeWidth : from.x;
-    const x2 = leftToRight ? to.x - 5 : to.x + nodeWidth + 5;
+    const x1 = leftToRight ? from.x + (from.width ?? nodeWidth) : from.x;
+    const x2 = leftToRight ? to.x - 5 : to.x + (to.width ?? nodeWidth) + 5;
     const y1 = from.y + NODE_HEIGHT / 2 + shift;
     const y2 = to.y + NODE_HEIGHT / 2 + shift;
     const bend = (x2 - x1) / 2;

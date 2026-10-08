@@ -179,7 +179,7 @@ Saber qual versão cada usuário tem aberta exige que o frontend informe, o que 
 O log do proxy diz para qual endereço cada requisição foi encaminhada (`127.0.0.1:9014`); o mapa conhece as aplicações pelos processos que se conectam ao broker. O que junta os dois é saber **qual processo atende em cada porta**, e o agente descobre isso de duas formas:
 
 - a porta é escutada pela própria aplicação: o processo é ela;
-- a porta é escutada pelo servidor web da máquina (IIS) em nome de um site: a aplicação é o que roda a partir da pasta do site, lida do `applicationHost.config`.
+- a porta é escutada pelo servidor web da máquina (IIS) em nome de um site: a aplicação é o que roda a partir da pasta do site, lida do `applicationHost.config`. Pode ser um processo próprio, com o executável nessa pasta, ou uma biblioteca carregada dentro do processo de trabalho do IIS (`w3wp`) — uma extensão ISAPI, por exemplo. Nesse segundo caso a aplicação é conhecida pelo nome da biblioteca, a maior carregada daquela pasta, e não por `w3wp`, que é o mesmo para todas.
 
 Com o processo em mãos, a linha do proxy vai para a aplicação do mapa que tem esse processo entre as instâncias. Se o processo existe mas não está conectado ao broker, a aplicação é desenhada mesmo assim, pelo nome do processo (é com esse nome que ela aparecerá quando se conectar). Se o processo não pôde ser identificado — o endereço é de outra máquina, ou ninguém conhecido escuta ali — ela aparece pelo nome com que o proxy a chama (`api/pedidos`).
 
