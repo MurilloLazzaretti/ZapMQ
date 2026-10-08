@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
+  HealthSample, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
 
 /**
@@ -83,5 +84,53 @@ export class Api {
 
   connections(): Observable<{ v2: Connection[]; v1: V1Client[] }> {
     return this.http.get<{ v2: Connection[]; v1: V1Client[] }>('api/connections');
+  }
+  // ── Worker Control ───────────────────────────────────────────────────────
+
+  workerStatus(): Observable<WorkerControlStatus> {
+    return this.http.get<WorkerControlStatus>('api/workers/status');
+  }
+
+  workerConfig(): Observable<{ Text: string; Config: WorkerConfig }> {
+    return this.http.get<{ Text: string; Config: WorkerConfig }>('api/workers/config');
+  }
+
+  saveWorkerConfig(config: WorkerConfig | string): Observable<unknown> {
+    return this.http.put('api/workers/config', { config });
+  }
+
+  setGroupEnabled(group: string, enabled: boolean): Observable<unknown> {
+    return this.http.post(`api/workers/groups/${encodeURIComponent(group)}/enabled`, { enabled });
+  }
+
+  setGroupWorkers(group: string, totalWorkers: number): Observable<unknown> {
+    return this.http.post(`api/workers/groups/${encodeURIComponent(group)}/workers`, { totalWorkers });
+  }
+
+  restartGroup(group: string): Observable<unknown> {
+    return this.http.post(`api/workers/groups/${encodeURIComponent(group)}/restart`, null);
+  }
+
+  restartWorker(pid: number): Observable<unknown> {
+    return this.http.post(`api/workers/processes/${pid}/restart`, null);
+  }
+
+  workerEvents(filter: { group?: string; kind?: string; limit?: number }): Observable<{ Events: WorkerEvent[] }> {
+    const params: Record<string, string | number> = { limit: filter.limit ?? 200 };
+    if (filter.group) {
+      params['group'] = filter.group;
+    }
+    if (filter.kind) {
+      params['kind'] = filter.kind;
+    }
+    return this.http.get<{ Events: WorkerEvent[] }>('api/workers/events', { params });
+  }
+
+  workerHealth(pid: number, limit = 1000): Observable<{ Samples: HealthSample[] }> {
+    return this.http.get<{ Samples: HealthSample[] }>('api/workers/health', { params: { pid, limit } });
+  }
+
+  detachWorkerControl(): Observable<unknown> {
+    return this.http.post('api/workers/detach', null);
   }
 }

@@ -1,0 +1,256 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Configuração</h1>
+      <p class="muted">O <code>ConfigWorkers.json</code> do Worker Control. O que for gravado passa a valer na hora.</p>
+    </div>
+    <span class="spacer"></span>
+    <zap-worker-tabs />
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Sem resposta do Worker Control</strong>
+      <span>{{ problem() }}</span>
+      <button mat-stroked-button (click)="load()"><mat-icon svgIcon="refresh" /> Tentar de novo</button>
+    </section>
+  }
+
+  @if (config(); as file) {
+    <div class="bar">
+      <mat-button-toggle-group [value]="mode()" (change)="switchMode($event.value)" hideSingleSelectionIndicator aria-label="Forma de editar">
+        <mat-button-toggle value="form"><mat-icon svgIcon="tune" /> Formulários</mat-button-toggle>
+        <mat-button-toggle value="text"><mat-icon svgIcon="data_object" /> Arquivo</mat-button-toggle>
+      </mat-button-toggle-group>
+      <span class="spacer"></span>
+      @if (dirty()) {
+        <span class="pill warn">alterações não gravadas</span>
+        <button mat-button (click)="discard()" [disabled]="saving()">Descartar</button>
+      }
+      <button mat-flat-button (click)="save()" [disabled]="saving() || !dirty()"><mat-icon svgIcon="save" /> Gravar</button>
+    </div>
+
+    @if (refusal()) {
+      <div class="refusal" role="alert">
+        <mat-icon svgIcon="error" />
+        <div><strong>A configuração não foi aceita.</strong> {{ refusal() }}</div>
+      </div>
+    }
+
+    @if (mode() === 'text') {
+      <section class="panel">
+        <textarea class="mono" [(ngModel)]="text" (ngModelChange)="dirty.set(true)" spellcheck="false" aria-label="ConfigWorkers.json"></textarea>
+      </section>
+    } @else {
+      <div class="layout">
+        <section class="panel list">
+          <ul>
+            <li>
+              <button type="button" [class.active]="selected() === -1" (click)="selected.set(-1)">
+                <mat-icon svgIcon="settings" /> <span class="truncate">Geral</span>
+              </button>
+            </li>
+            @for (item of file.WorkerGroups; track $index) {
+              <li>
+                <button type="button" [class.active]="selected() === $index" (click)="selected.set($index)">
+                  <span class="dot" [class.ok]="item.Enabled"></span>
+                  <span class="truncate">{{ item.Name || '(sem nome)' }}</span>
+                  <span class="muted num">{{ item.TotalWorkers }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+          <button mat-button class="add" (click)="addGroup()"><mat-icon svgIcon="add" /> Novo grupo</button>
+        </section>
+
+        <section class="panel form">
+          @if (group(); as item) {
+            <div class="title">
+              <h2>{{ item.Name || '(sem nome)' }}</h2>
+              <span class="spacer"></span>
+              <mat-slide-toggle [(ngModel)]="item.Enabled" (ngModelChange)="touch()">Habilitado</mat-slide-toggle>
+            </div>
+
+            <div class="fields">
+              <mat-form-field class="wide">
+                <mat-label>Nome do grupo</mat-label>
+                <input matInput [(ngModel)]="item.Name" (ngModelChange)="touch()" spellcheck="false" />
+              </mat-form-field>
+              <mat-form-field class="wide">
+                <mat-label>Executável</mat-label>
+                <input matInput [(ngModel)]="item.ApplicationFullPath" (ngModelChange)="touch()" spellcheck="false" placeholder="D:\Apps\Pedidos\Pedidos.exe" />
+                <mat-hint>Caminho completo, na máquina do Worker Control.</mat-hint>
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Argumentos</mat-label>
+                <input matInput [ngModel]="item.Arguments ?? ''" (ngModelChange)="optional(item, 'Arguments', $event)" spellcheck="false" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Pasta de trabalho</mat-label>
+                <input matInput [ngModel]="item.WorkingDirectory ?? ''" (ngModelChange)="optional(item, 'WorkingDirectory', $event)" spellcheck="false" placeholder="a do executável" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Processos</mat-label>
+                <input matInput type="number" min="0" [(ngModel)]="item.TotalWorkers" (ngModelChange)="touch()" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Intervalo do keep-alive (ms)</mat-label>
+                <input matInput type="number" min="1000" [(ngModel)]="item.MonitoringRate" (ngModelChange)="touch()" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Prazo do keep-alive (ms)</mat-label>
+                <input matInput type="number" min="1000" [(ngModel)]="item.TimeoutKeepAlive" (ngModelChange)="touch()" />
+                <mat-hint>Para um processo que já está no ar.</mat-hint>
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Carência ao iniciar (ms)</mat-label>
+                <input matInput type="number" min="0" [ngModel]="item.StartupGraceMs ?? null" (ngModelChange)="optional(item, 'StartupGraceMs', $event)" placeholder="o valor geral" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Prazo para parar (ms)</mat-label>
+                <input matInput type="number" min="0" [ngModel]="item.SafeStopTimeoutMs ?? null" (ngModelChange)="optional(item, 'SafeStopTimeoutMs', $event)" placeholder="o valor geral" />
+              </mat-form-field>
+            </div>
+
+            <div class="block">
+              <div class="block-head">
+                <mat-icon svgIcon="rocket_launch" />
+                <div>
+                  <h3>Boost</h3>
+                  <p class="muted">Processos a mais em horários definidos. Janelas que se sobrepõem não se somam: vale a maior.</p>
+                </div>
+                <span class="spacer"></span>
+                <button mat-stroked-button (click)="addWindow(item)"><mat-icon svgIcon="add" /> Janela</button>
+              </div>
+              @for (window of item.BoostWindows ?? []; track $index) {
+                <div class="window">
+                  <mat-form-field class="tiny">
+                    <mat-label>Processos</mat-label>
+                    <input matInput type="number" min="1" [(ngModel)]="window.Workers" (ngModelChange)="touch()" />
+                  </mat-form-field>
+                  <mat-form-field class="tiny">
+                    <mat-label>Das</mat-label>
+                    <input matInput [(ngModel)]="window.StartTime" (ngModelChange)="touch()" placeholder="hh:mm:ss" />
+                  </mat-form-field>
+                  <mat-form-field class="tiny">
+                    <mat-label>Até</mat-label>
+                    <input matInput [(ngModel)]="window.EndTime" (ngModelChange)="touch()" placeholder="hh:mm:ss" />
+                  </mat-form-field>
+                  <div class="days" role="group" aria-label="Dias da semana">
+                    @for (day of days; track day.key) {
+                      <button type="button" [class.on]="hasDay(window, day.key)" (click)="toggleDay(window, day.key)">{{ day.label }}</button>
+                    }
+                  </div>
+                  <button mat-icon-button (click)="removeWindow(item, $index)" aria-label="Remover janela"><mat-icon svgIcon="delete" /></button>
+                </div>
+              } @empty {
+                <p class="muted none">Nenhuma janela.</p>
+              }
+              @if (item.Boost?.Enabled) {
+                <p class="muted note">
+                  Este grupo também tem o boost no formato antigo: +{{ item.Boost?.BoostWorkers }} das {{ item.Boost?.StartTime }} às {{ item.Boost?.EndTime }}. Ele continua
+                  valendo; edite-o em "Arquivo".
+                </p>
+              }
+            </div>
+
+            <div class="block">
+              <div class="block-head">
+                <mat-icon svgIcon="trending_up" />
+                <div>
+                  <h3>Escala pela fila</h3>
+                  <p class="muted">Processos a mais enquanto uma fila do ZapMQ acumula mensagens.</p>
+                </div>
+                <span class="spacer"></span>
+                <mat-slide-toggle [checked]="!!item.QueueScaling" (change)="toggleScaling(item, $event.checked)" aria-label="Escala pela fila" />
+              </div>
+              @if (item.QueueScaling; as scaling) {
+                <div class="fields">
+                  <mat-form-field class="wide">
+                    <mat-label>Fila</mat-label>
+                    <input matInput [(ngModel)]="scaling.Queue" (ngModelChange)="touch()" spellcheck="false" />
+                  </mat-form-field>
+                  <mat-form-field>
+                    <mat-label>Um processo a mais a cada</mat-label>
+                    <input matInput type="number" min="1" [(ngModel)]="scaling.PendingPerWorker" (ngModelChange)="touch()" />
+                    <span matTextSuffix>pendentes</span>
+                  </mat-form-field>
+                  <mat-form-field>
+                    <mat-label>Máximo de processos do grupo</mat-label>
+                    <input matInput type="number" min="1" [(ngModel)]="scaling.MaxWorkers" (ngModelChange)="touch()" />
+                  </mat-form-field>
+                  <mat-form-field>
+                    <mat-label>Espera para devolver (ms)</mat-label>
+                    <input matInput type="number" min="0" [(ngModel)]="scaling.CooldownMs" (ngModelChange)="touch()" />
+                  </mat-form-field>
+                </div>
+              }
+            </div>
+
+            <div class="block">
+              <div class="block-head">
+                <mat-icon svgIcon="recycling" />
+                <div>
+                  <h3>Substituição programada</h3>
+                  <p class="muted">Num horário definido, os processos são trocados um a um, sem deixar o grupo desfalcado.</p>
+                </div>
+                <span class="spacer"></span>
+                <mat-slide-toggle [checked]="!!item.Recycle" (change)="toggleRecycle(item, $event.checked)" aria-label="Substituição programada" />
+              </div>
+              @if (item.Recycle; as recycle) {
+                <div class="window">
+                  <mat-form-field class="tiny">
+                    <mat-label>Às</mat-label>
+                    <input matInput [(ngModel)]="recycle.Time" (ngModelChange)="touch()" placeholder="hh:mm:ss" />
+                  </mat-form-field>
+                  <div class="days" role="group" aria-label="Dias da semana">
+                    @for (day of days; track day.key) {
+                      <button type="button" [class.on]="hasDay(recycle, day.key)" (click)="toggleDay(recycle, day.key)">{{ day.label }}</button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+
+            <div class="danger-zone">
+              <button mat-stroked-button class="danger" (click)="removeGroup()"><mat-icon svgIcon="delete" /> Remover grupo</button>
+            </div>
+          } @else {
+            <div class="title"><h2>Geral</h2></div>
+            <div class="fields">
+              <mat-form-field>
+                <mat-label>Servidor do ZapMQ</mat-label>
+                <input matInput [(ngModel)]="file.ZapMQHost" (ngModelChange)="touch()" spellcheck="false" />
+                <mat-hint>Mudar exige reiniciar o Worker Control.</mat-hint>
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Porta do ZapMQ</mat-label>
+                <input matInput type="number" [(ngModel)]="file.ZapMQPort" (ngModelChange)="touch()" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Processos iniciados por lote</mat-label>
+                <input matInput type="number" min="1" [ngModel]="file.StartBatchSize ?? null" (ngModelChange)="optional(file, 'StartBatchSize', $event)" placeholder="4" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Intervalo entre lotes (ms)</mat-label>
+                <input matInput type="number" min="0" [ngModel]="file.StartBatchIntervalMs ?? null" (ngModelChange)="optional(file, 'StartBatchIntervalMs', $event)" placeholder="2000" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Carência ao iniciar (ms)</mat-label>
+                <input matInput type="number" min="0" [ngModel]="file.StartupGraceMs ?? null" (ngModelChange)="optional(file, 'StartupGraceMs', $event)" placeholder="60000" />
+                <mat-hint>Tempo que um processo novo tem para responder pela primeira vez.</mat-hint>
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Prazo para parar (ms)</mat-label>
+                <input matInput type="number" min="0" [ngModel]="file.SafeStopTimeoutMs ?? null" (ngModelChange)="optional(file, 'SafeStopTimeoutMs', $event)" placeholder="30000" />
+                <mat-hint>Depois disso o processo é encerrado à força.</mat-hint>
+              </mat-form-field>
+            </div>
+            <p class="muted note">Os campos em branco usam o padrão mostrado dentro deles. Carência e prazo para parar valem para todos os grupos que não tiverem os seus.</p>
+          }
+        </section>
+      </div>
+    }
+  }
+</div>

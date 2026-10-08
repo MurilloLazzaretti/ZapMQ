@@ -198,6 +198,62 @@ public static class PanelEndpoints
             return Results.Json(new { discarded });
         });
 
+        // ── Worker Control ──────────────────────────────────────────────────
+        // Each route is one command of the Worker Control administration contract, sent over
+        // its queue. The answer goes back as it came, minus the envelope.
+
+        var workers = api.MapGroup("/workers");
+
+        workers.MapGet("/status", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Status"));
+
+        workers.MapGet("/config", (WorkerControlClient client, HttpContext context) => Forward(client, context, "GetConfig"));
+
+        workers.MapPut("/config", (ConfigRequest body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "SetConfig", request => request["Config"] = body.Config?.DeepClone(), loggers, "Worker Control: configuration replaced"));
+
+        workers.MapPost("/groups/{group}/enabled", (string group, EnabledRequest body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "SetGroupEnabled", request =>
+            {
+                request["Group"] = group;
+                request["Enabled"] = body.Enabled;
+            }, loggers, $"Worker Control: group {group} {(body.Enabled ? "enabled" : "disabled")}"));
+
+        workers.MapPost("/groups/{group}/workers", (string group, WorkersRequest body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "SetGroupWorkers", request =>
+            {
+                request["Group"] = group;
+                request["TotalWorkers"] = body.TotalWorkers;
+            }, loggers, $"Worker Control: group {group} set to {body.TotalWorkers} workers"));
+
+        workers.MapPost("/groups/{group}/restart", (string group, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "RestartGroup", request => request["Group"] = group, loggers, $"Worker Control: restart of group {group}"));
+
+        workers.MapPost("/processes/{pid:int}/restart", (int pid, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "RestartWorker", request => request["ProcessId"] = pid, loggers, $"Worker Control: restart of worker {pid}"));
+
+        workers.MapGet("/events", (string? group, string? kind, DateTimeOffset? from, DateTimeOffset? to, int? limit, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "Events", request =>
+            {
+                if (!string.IsNullOrEmpty(group)) request["Group"] = group;
+                if (!string.IsNullOrEmpty(kind)) request["Kind"] = kind;
+                if (from is not null) request["From"] = from;
+                if (to is not null) request["To"] = to;
+                request["Limit"] = limit ?? 200;
+            }));
+
+        workers.MapGet("/health", (string? group, int? pid, DateTimeOffset? from, DateTimeOffset? to, int? limit, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "Health", request =>
+            {
+                if (!string.IsNullOrEmpty(group)) request["Group"] = group;
+                if (pid is not null) request["ProcessId"] = pid;
+                if (from is not null) request["From"] = from;
+                if (to is not null) request["To"] = to;
+                request["Limit"] = limit ?? 1000;
+            }));
+
+        workers.MapPost("/detach", (WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "DetachAndStop", null, loggers, "Worker Control: asked to stop leaving the workers running"));
+
         // ── Who is connected ────────────────────────────────────────────────
 
         api.MapGet("/connections", (Broker broker, V2Connections connections) => Results.Json(new
@@ -208,6 +264,41 @@ public static class PanelEndpoints
     }
 
     public sealed record LoginRequest(string? User, string? Password);
+
+    public sealed record ConfigRequest(System.Text.Json.Nodes.JsonNode? Config);
+
+    public sealed record EnabledRequest(bool Enabled);
+
+    public sealed record WorkersRequest(int TotalWorkers);
+
+    /// <summary>
+    /// Sends a command to the Worker Control and turns its answer into an HTTP one: what it
+    /// answered when all went well; otherwise the reason, with a status that tells whether the
+    /// request was wrong (4xx) or the Worker Control could not be reached (503).
+    /// </summary>
+    private static async Task<IResult> Forward(WorkerControlClient client, HttpContext context, string command,
+        Action<System.Text.Json.Nodes.JsonObject>? more = null, ILoggerFactory? loggers = null, string? audit = null)
+    {
+        var answer = await client.AskAsync(command, context.Items[PanelHost.UserItem] as string, more, context.RequestAborted);
+        if (!answer.Reached)
+            return Results.Json(new { error = answer.Problem, code = "unreachable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+        if (!answer.Ok)
+        {
+            var status = answer.ErrorCode switch
+            {
+                "not-found" => StatusCodes.Status404NotFound,
+                "failed" or "history-unavailable" => StatusCodes.Status502BadGateway,
+                _ => StatusCodes.Status400BadRequest
+            };
+            return Results.Json(new { error = answer.ErrorMessage, code = answer.ErrorCode }, statusCode: status);
+        }
+
+        if (audit is not null && loggers is not null)
+            Audit(loggers, context, audit);
+        // As the Worker Control wrote it: its contract uses its own names for the fields.
+        return Results.Content(answer.Body!.ToJsonString(), "application/json; charset=utf-8");
+    }
 
     private static object Overview(Broker broker, V2Connections connections, MetricsSampler sampler, DateTimeOffset startedAt)
     {

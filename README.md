@@ -139,6 +139,9 @@ A web application served by the service itself, on a port of its own (5680), beh
 | Queues | Every queue with its counters, live. For each one: its definition (retention, redelivery, dead-letter limits), editable and kept across restarts; the pending messages, to read; who publishes and who consumes; pause, resume and empty |
 | Dead letters | What was not delivered or not confirmed, by queue and by reason: inspect, send back to the queue, discard |
 | Applications | Who is connected over v2, by application and process, and the addresses still talking 1.x |
+| Worker Control | The groups and processes kept running by [Worker Control](https://github.com/MurilloLazzaretti/Worker-Control) 2.0, live: state, processor, memory and keep-alive answer time of each process, with charts; enable and disable a group, change its number of processes, restart a process or a group; the history of events; and `ConfigWorkers.json`, edited in forms or as text and validated before it takes effect |
+
+The panel talks to the Worker Control through the broker (queue `WorkerControlAdmin`), so there is nothing to configure and the Worker Control may be on another machine. While it is not running, that screen says so and the rest of the panel works.
 
 Open `http://<server>:5680/` and log in with the user and password of the settings (`admin` / `admin` until you change them).
 

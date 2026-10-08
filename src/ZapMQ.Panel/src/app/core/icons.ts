@@ -29,6 +29,7 @@ import logout from '@material-symbols/svg-400/rounded/logout.svg';
 import mail from '@material-symbols/svg-400/rounded/mail.svg';
 import menu from '@material-symbols/svg-400/rounded/menu.svg';
 import moreVert from '@material-symbols/svg-400/rounded/more_vert.svg';
+import powerSettingsNew from '@material-symbols/svg-400/rounded/power_settings_new.svg';
 import pause from '@material-symbols/svg-400/rounded/pause.svg';
 import pending from '@material-symbols/svg-400/rounded/pending.svg';
 import playArrow from '@material-symbols/svg-400/rounded/play_arrow.svg';
@@ -45,12 +46,26 @@ import tune from '@material-symbols/svg-400/rounded/tune.svg';
 import verified from '@material-symbols/svg-400/rounded/verified.svg';
 import visibility from '@material-symbols/svg-400/rounded/visibility.svg';
 import warning from '@material-symbols/svg-400/rounded/warning.svg';
+import memory from '@material-symbols/svg-400/rounded/memory.svg';
+import history from '@material-symbols/svg-400/rounded/history.svg';
+import restartAlt from '@material-symbols/svg-400/rounded/restart_alt.svg';
+import add from '@material-symbols/svg-400/rounded/add.svg';
+import remove from '@material-symbols/svg-400/rounded/remove.svg';
+import monitorHeart from '@material-symbols/svg-400/rounded/monitor_heart.svg';
+import dataObject from '@material-symbols/svg-400/rounded/data_object.svg';
+import save from '@material-symbols/svg-400/rounded/save.svg';
+import rocketLaunch from '@material-symbols/svg-400/rounded/rocket_launch.svg';
+import recycling from '@material-symbols/svg-400/rounded/recycling.svg';
+import trendingUp from '@material-symbols/svg-400/rounded/trending_up.svg';
+import edit from '@material-symbols/svg-400/rounded/edit.svg';
+import precisionManufacturing from '@material-symbols/svg-400/rounded/precision_manufacturing.svg';
 
 const ICONS: Record<string, string> = {
+  memory, history, restart_alt: restartAlt, add, remove, monitor_heart: monitorHeart, data_object: dataObject, save, rocket_launch: rocketLaunch, recycling, trending_up: trendingUp, edit, precision_manufacturing: precisionManufacturing,
   account_circle: accountCircle, arrow_back: arrowBack, arrow_downward: arrowDownward, arrow_upward: arrowUpward, block, bolt,
   check_circle: checkCircle, chevron_right: chevronRight, close, cloud_off: cloudOff, content_copy: contentCopy, dark_mode: darkMode,
   dashboard, delete: deleteIcon, device_hub: deviceHub, dns, error, hourglass_empty: hourglassEmpty, inbox, info,
-  keyboard_arrow_down: keyboardArrowDown, lan, light_mode: lightMode, logout, mail, menu, more_vert: moreVert, pause, pending,
+  keyboard_arrow_down: keyboardArrowDown, lan, light_mode: lightMode, logout, mail, menu, more_vert: moreVert, power_settings_new: powerSettingsNew, pause, pending,
   play_arrow: playArrow, refresh, replay, schedule, search, settings, skull, speed, stacks, sync, tune, verified, visibility, warning,
 };
 

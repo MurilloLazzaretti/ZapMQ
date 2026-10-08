@@ -156,3 +156,102 @@ export interface LiveEvent {
   overview: Overview;
   queues: QueueRow[];
 }
+
+// ── Worker Control ─────────────────────────────────────────────────────────
+// These come from the Worker Control itself, through the panel, with the field names of its
+// administration contract.
+
+export type WorkerState = 'Starting' | 'Up' | 'Stopping' | 'Killing';
+
+export interface Worker {
+  ProcessId: number;
+  State: WorkerState;
+  StartedAt: string;
+  LastKeepAlive: string | null;
+  KeepAliveMs: number | null;
+  Adopted: boolean;
+  BeingReplaced: boolean;
+  CpuPercent: number | null;
+  MemoryBytes: number | null;
+}
+
+export interface WorkerGroup {
+  Name: string;
+  Enabled: boolean;
+  ApplicationFullPath: string;
+  TotalWorkers: number;
+  DesiredWorkers: number;
+  BoostWorkers: number;
+  ScaleWorkers: number;
+  Recycling: boolean;
+  Unstable: boolean;
+  MonitoringRate: number;
+  TimeoutKeepAlive: number;
+  LastSyncConfig: string;
+  Workers: Worker[];
+}
+
+export interface WorkerControlStatus {
+  Version: string;
+  Contract: number;
+  Service: { StartedAt: string; Machine: string; ProcessId: number; ZapMQ: { Host: string; Port: number; Healthy: boolean } };
+  Groups: WorkerGroup[];
+}
+
+export interface WorkerEvent {
+  Id: number;
+  At: string;
+  Kind: string;
+  Group: string | null;
+  ProcessId: number | null;
+  Detail: string;
+}
+
+export interface HealthSample {
+  At: string;
+  Group: string;
+  ProcessId: number;
+  State: string;
+  UptimeSeconds: number;
+  CpuPercent: number | null;
+  MemoryBytes: number | null;
+  KeepAliveMs: number | null;
+}
+
+/** ConfigWorkers.json as it is; only the keys the forms edit are named here. */
+export interface WorkerConfig {
+  ZapMQHost: string;
+  ZapMQPort: number;
+  RateLoadConfig?: number;
+  StartBatchSize?: number;
+  StartBatchIntervalMs?: number;
+  StartupGraceMs?: number;
+  SafeStopTimeoutMs?: number;
+  WorkerGroups: GroupConfig[];
+  [other: string]: unknown;
+}
+
+export interface BoostWindow {
+  Workers: number;
+  StartTime: string;
+  EndTime: string;
+  Days?: string[];
+}
+
+export interface GroupConfig {
+  Name: string;
+  Enabled: boolean;
+  ApplicationFullPath: string;
+  Arguments?: string;
+  WorkingDirectory?: string;
+  TotalWorkers: number;
+  MonitoringRate: number;
+  TimeoutKeepAlive: number;
+  StartupGraceMs?: number;
+  SafeStopTimeoutMs?: number;
+  Boost?: { Enabled: boolean; BoostWorkers: number; StartTime: string; EndTime: string };
+  BoostWindows?: BoostWindow[];
+  QueueScaling?: { Queue: string; PendingPerWorker: number; MaxWorkers: number; CooldownMs: number } | null;
+  Recycle?: { Time: string; Days?: string[] } | null;
+  [other: string]: unknown;
+}

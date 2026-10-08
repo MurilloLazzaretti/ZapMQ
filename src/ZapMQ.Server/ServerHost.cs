@@ -71,6 +71,7 @@ public static class ServerHost
         {
             Path = Path.GetFullPath(options.QueueDefinitionsFile, AppContext.BaseDirectory)
         });
+        builder.Services.AddSingleton<WorkerControlClient>();
         builder.Services.AddSingleton<MetricsSampler>();
         builder.Services.AddHostedService(services => services.GetRequiredService<MetricsSampler>());
 

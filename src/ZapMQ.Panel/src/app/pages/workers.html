@@ -1,0 +1,116 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Worker Control</h1>
+      @if (status(); as now) {
+        <p class="muted">
+          {{ now.Service.Machine }} · versão {{ now.Version }} · no ar há {{ now.Service.StartedAt | since }}
+          @if (!now.Service.ZapMQ.Healthy) {
+            <span class="pill warn">sem contato estável com o ZapMQ</span>
+          }
+        </p>
+      }
+    </div>
+    <span class="spacer"></span>
+    <zap-worker-tabs />
+    @if (status()) {
+      <button mat-icon-button [matMenuTriggerFor]="serviceMenu" aria-label="Ações do serviço"><mat-icon svgIcon="more_vert" /></button>
+      <mat-menu #serviceMenu="matMenu" xPosition="before">
+        <button mat-menu-item (click)="detach()"><mat-icon svgIcon="power_settings_new" /> Parar o serviço, mantendo os processos</button>
+      </mat-menu>
+    }
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Sem resposta do Worker Control</strong>
+      <span>{{ problem() }}</span>
+      <span>Esta tela tenta de novo sozinha.</span>
+    </section>
+  }
+
+  @if (status(); as now) {
+    <section class="grid stats">
+      <zap-stat label="Processos no ar" icon="check_circle" [tone]="totals().up === totals().desired ? 'ok' : 'warn'" [value]="totals().up | num" [unit]="'de ' + totals().desired"  [hint]="totals().starting ? totals().starting + ' iniciando' : totals().up < totals().desired ? totals().desired - totals().up + ' faltando' : 'todos os desejados'" />
+      <zap-stat label="Grupos" icon="precision_manufacturing" tone="neutral" [value]="totals().enabled | num" [unit]="'de ' + totals().groups" hint="habilitados" />
+      <zap-stat label="Grupos instáveis" icon="warning" [tone]="totals().unstable ? 'danger' : 'ok'" [value]="totals().unstable | num" [hint]="totals().unstable ? 'reiniciando em sequência' : 'nenhum reiniciando em laço'" />
+      <zap-stat label="Memória" icon="memory" tone="info" [value]="megabytes(totals().memory) | num" unit="MB" hint="soma dos processos" />
+      <zap-stat label="Processador" icon="speed" tone="info" [value]="totals().cpu | num: 'decimal'" unit="%" hint="soma dos processos" />
+    </section>
+
+    <section class="groups">
+      @for (group of now.Groups; track group.Name) {
+        <article class="panel group" [class.off]="!group.Enabled" [class.busy]="busy() === group.Name">
+          <header>
+            <div class="who">
+              <strong class="truncate">{{ group.Name }}</strong>
+              <span class="muted truncate" [matTooltip]="group.ApplicationFullPath">{{ executable(group.ApplicationFullPath) }}</span>
+            </div>
+            <mat-slide-toggle [checked]="group.Enabled" (change)="toggle(group)" [attr.aria-label]="'Habilitar ' + group.Name" [disabled]="busy() === group.Name" />
+          </header>
+
+          <div class="tags">
+            @if (group.Enabled) {
+              <span class="pill" [class.ok]="up(group) >= group.DesiredWorkers" [class.warn]="up(group) < group.DesiredWorkers">
+                {{ up(group) }} de {{ group.DesiredWorkers }} no ar
+              </span>
+            } @else {
+              <span class="pill">desabilitado</span>
+            }
+            @if (group.Unstable) {
+              <span class="pill danger" matTooltip="Os processos estão falhando logo depois de iniciar; o Worker Control espera cada vez mais entre as tentativas"><mat-icon svgIcon="warning" /> instável</span>
+            }
+            @if (group.BoostWorkers > 0) {
+              <span class="pill primary" matTooltip="Janela de boost aberta"><mat-icon svgIcon="rocket_launch" /> +{{ group.BoostWorkers }} boost</span>
+            }
+            @if (group.ScaleWorkers > 0) {
+              <span class="pill primary" matTooltip="A fila do grupo está acumulando"><mat-icon svgIcon="trending_up" /> +{{ group.ScaleWorkers }} pela fila</span>
+            }
+            @if (group.Recycling) {
+              <span class="pill info"><mat-icon svgIcon="recycling" /> substituindo</span>
+            }
+          </div>
+
+          @if (group.Workers.length) {
+            <ul class="workers">
+              @for (worker of group.Workers; track worker.ProcessId) {
+                <li>
+                  <span class="dot" [class]="state(worker).tone" [matTooltip]="state(worker).label"></span>
+                  <span class="pid mono">{{ worker.ProcessId }}</span>
+                  <span class="since muted nowrap" [matTooltip]="worker.Adopted ? 'Já estava rodando quando o Worker Control iniciou' : ''">{{ worker.StartedAt | since }}{{ worker.Adopted ? ' *' : '' }}</span>
+                  <span class="metric num" matTooltip="Processador">{{ worker.CpuPercent === null ? '—' : (worker.CpuPercent | num: 'decimal') + '%' }}</span>
+                  <span class="metric num" matTooltip="Memória">{{ megabytes(worker.MemoryBytes) === null ? '—' : megabytes(worker.MemoryBytes) + ' MB' }}</span>
+                  <span class="metric num" matTooltip="Tempo de resposta do último keep-alive">{{ worker.KeepAliveMs === null ? '—' : (worker.KeepAliveMs | num) + ' ms' }}</span>
+                  <button mat-icon-button class="more" [matMenuTriggerFor]="workerMenu" [attr.aria-label]="'Ações do processo ' + worker.ProcessId"><mat-icon svgIcon="more_vert" /></button>
+                  <mat-menu #workerMenu="matMenu" xPosition="before">
+                    <button mat-menu-item (click)="health(group, worker)"><mat-icon svgIcon="monitor_heart" /> <span>Saúde</span></button>
+                    <button mat-menu-item (click)="restartWorker(group, worker)" [disabled]="worker.State !== 'Up' && worker.State !== 'Starting'">
+                      <mat-icon svgIcon="restart_alt" /> <span>Reiniciar</span>
+                    </button>
+                  </mat-menu>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="muted none">Nenhum processo.</p>
+          }
+
+          <footer>
+            <div class="stepper" matTooltip="Quantidade de processos do grupo">
+              <button mat-icon-button (click)="resize(group, -1)" [disabled]="group.TotalWorkers === 0 || busy() === group.Name" aria-label="Um processo a menos"><mat-icon svgIcon="remove" /></button>
+              <span class="num">{{ group.TotalWorkers }}</span>
+              <button mat-icon-button (click)="resize(group, 1)" [disabled]="busy() === group.Name" aria-label="Um processo a mais"><mat-icon svgIcon="add" /></button>
+            </div>
+            <span class="spacer"></span>
+            <button mat-button (click)="restartGroup(group)" [disabled]="!group.Enabled || !group.Workers.length || busy() === group.Name">
+              <mat-icon svgIcon="restart_alt" /> Reiniciar grupo
+            </button>
+          </footer>
+        </article>
+      }
+    </section>
+
+    <p class="muted legend">* processo que já estava rodando quando o Worker Control iniciou e foi reconhecido por ele.</p>
+  }
+</div>

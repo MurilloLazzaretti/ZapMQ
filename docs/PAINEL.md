@@ -1,7 +1,7 @@
 # ZapMQ — Painel de administração
 
-Situação: aprovada em 2026-10-07. Etapa A implementada; ainda não instalada em ambiente algum.
-Última revisão: 2026-10-07.
+Situação: aprovada em 2026-10-07. Etapas A e B implementadas.
+Última revisão: 2026-10-08.
 
 Este documento especifica o painel web do ZapMQ (versão 2.2), que inclui a seção do Worker Control. Corresponde à fase 6 do [plano](PLANO-2.0.md) e à etapa 4 da [especificação do Worker Control 2.0](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md).
 
@@ -118,8 +118,8 @@ Declarar um exchange e as filas que recebem cópia do que é publicado nele. Ent
 - **Por worker:** tempo no ar, processador, memória e tempo de resposta do keep-alive, com gráfico das últimas horas.
 - **Ações:** habilitar e desabilitar grupo, mudar a quantidade, reiniciar um worker ou um grupo.
 - **Configuração:** formulário por grupo (incluindo janelas de boost, escala pela fila e reciclagem) e edição do arquivo inteiro, validada antes de gravar.
-- **Histórico de eventos**, com filtro por grupo, tipo e período.
-- **Serviço:** parar deixando os workers rodando. Iniciar e parar o serviço do Windows pelo painel só é possível com o Worker Control na mesma máquina do ZapMQ; nesse caso o painel oferece.
+- **Histórico de eventos**, com filtro por grupo e tipo, dos mais recentes para os mais antigos.
+- **Serviço:** parar deixando os workers rodando. Iniciar o serviço do Windows pelo painel não foi implementado: é feito na máquina do Worker Control.
 
 ### 4.8 Trace
 

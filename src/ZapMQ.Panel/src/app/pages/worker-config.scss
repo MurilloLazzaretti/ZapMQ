@@ -1,0 +1,173 @@
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+
+  h1 { margin: 0; font: var(--mat-sys-headline-small); font-weight: 650; letter-spacing: -0.02em; }
+  p { margin: 2px 0 0; }
+  .spacer { flex: 1; }
+}
+
+.bar {
+  position: sticky;
+  top: 72px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--zap-surface) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--zap-border);
+  box-shadow: var(--zap-shadow);
+
+  .spacer { flex: 1; }
+  mat-button-toggle mat-icon { width: 18px; height: 18px; margin-right: 4px; vertical-align: -4px; }
+}
+
+.refusal {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--zap-danger-container);
+  color: var(--zap-danger);
+  mat-icon { flex: none; }
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 62vh;
+  padding: 20px;
+  border: none;
+  border-radius: var(--zap-radius);
+  background: transparent;
+  color: inherit;
+  resize: vertical;
+  outline: none;
+  line-height: 1.55;
+  tab-size: 4;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: var(--zap-gap);
+  align-items: start;
+}
+
+.list {
+  padding: 12px;
+
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 64vh; overflow: auto; }
+
+  li button {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    color: inherit;
+    font: var(--mat-sys-label-large);
+    text-align: left;
+    cursor: pointer;
+
+    mat-icon { width: 18px; height: 18px; }
+    &:hover { background: var(--mat-sys-surface-container-high); }
+    &.active { background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); }
+  }
+
+  .add { width: 100%; margin-top: 8px; }
+}
+
+.form {
+  padding: 20px;
+  display: grid;
+  gap: 20px;
+
+  .title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .title h2 { margin: 0; font: var(--mat-sys-title-large); word-break: break-all; }
+  .spacer { flex: 1; }
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 16px;
+  align-items: start;
+
+  mat-form-field { width: 100%; }
+  .wide { grid-column: 1 / -1; }
+}
+
+.block {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--mat-sys-surface-container-low);
+  border: 1px solid var(--zap-border);
+}
+
+.block-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  > mat-icon { color: var(--mat-sys-primary); flex: none; }
+  > div { min-width: 0; flex: 1 1 220px; }
+  h3 { margin: 0; font: var(--mat-sys-title-small); }
+  p { margin: 2px 0 0; font: var(--mat-sys-body-small); }
+  .spacer { flex: 0; }
+}
+
+.window {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  .tiny { width: 120px; }
+}
+
+.days {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+
+  button {
+    min-width: 44px;
+    padding: 8px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--zap-border);
+    background: transparent;
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-label-medium);
+    cursor: pointer;
+
+    &.on { background: var(--mat-sys-primary); border-color: transparent; color: var(--mat-sys-on-primary); }
+  }
+}
+
+.none, .note { margin: 0; font: var(--mat-sys-body-small); }
+
+.danger-zone { display: flex; justify-content: flex-end; }
+.danger {
+  --mat-button-outlined-label-text-color: var(--zap-danger);
+  --mat-button-outlined-outline-color: color-mix(in srgb, var(--zap-danger) 50%, transparent);
+}
+
+@media (max-width: 959.98px) {
+  .layout { grid-template-columns: 1fr; }
+  .list ul { max-height: 220px; }
+  .bar { border-radius: 20px; top: 68px; }
+}
