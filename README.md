@@ -149,16 +149,21 @@ Nothing of the panel answers on the messaging port, and nothing is loaded from t
 The panel also answers under `Panel.BasePath`, so an existing site can publish it as a path of its own. For NGINX:
 
 ```nginx
-location /zapmq/ {
+location = /zapmq { return 301 /zapmq/; }
+
+location ^~ /zapmq/ {
     proxy_pass http://127.0.0.1:5680/zapmq/;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header Connection "";
     # The panel keeps one request open to receive updates as they happen.
     proxy_buffering off;
     proxy_read_timeout 1h;
 }
 ```
+
+The `^~` matters when the site has locations by file extension (`location ~* \.js$` and the like), as a site serving a single-page application usually does: without it those would take the scripts and styles of the panel and look for them on disk.
 
 ## 🛠 Administration
 
