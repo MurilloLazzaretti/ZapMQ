@@ -67,6 +67,15 @@ public static class ServerHost
             return new Broker(brokerOptions, services.GetRequiredService<TimeProvider>());
         });
         builder.Services.AddSingleton<V2Connections>();
+        // Which process is behind a 1.x client of this machine. A test may put its own first.
+        if (!builder.Services.Any(service => service.ServiceType == typeof(V1.IPeerResolver)))
+        {
+            if (OperatingSystem.IsWindows())
+                builder.Services.AddSingleton<V1.IPeerResolver, V1.WindowsPeerResolver>();
+            else
+                builder.Services.AddSingleton<V1.IPeerResolver, V1.NoPeerResolver>();
+        }
+        builder.Services.AddSingleton<V1.V1Callers>();
         builder.Services.AddHostedService<SweeperService>();
         builder.Services.AddSingleton(services => new PanelAuth(options.Panel, services.GetRequiredService<TimeProvider>()));
         builder.Services.AddSingleton(services => new QueueDefinitionStore(services.GetRequiredService<Broker>(), services.GetRequiredService<ILogger<QueueDefinitionStore>>())
@@ -75,6 +84,11 @@ public static class ServerHost
         });
         builder.Services.AddSingleton<WorkerControlClient>();
         builder.Services.AddSingleton<TraceHub>();
+        builder.Services.AddSingleton<MessageTap>();
+        builder.Services.AddSingleton(services => new MessageModelStore(services.GetRequiredService<ILogger<MessageModelStore>>())
+        {
+            Path = Path.GetFullPath(options.MessageModelsFile, AppContext.BaseDirectory)
+        });
         builder.Services.AddSingleton<MetricsSampler>();
         builder.Services.AddHostedService(services => services.GetRequiredService<MetricsSampler>());
 
@@ -104,6 +118,8 @@ public static class ServerHost
 
         // What the panel changed in the queues goes on top of what the settings file says.
         app.Services.GetRequiredService<QueueDefinitionStore>().Load();
+        // From now on the queues that ask for their last messages to be kept are watched.
+        app.Services.GetRequiredService<MessageTap>();
 
         var startedAt = DateTimeOffset.UtcNow;
         if (options.Panel.Enabled)

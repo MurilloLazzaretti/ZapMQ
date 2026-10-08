@@ -1,8 +1,11 @@
 <div class="page">
   <header class="head">
-    <a mat-icon-button routerLink="/workers" aria-label="Voltar ao Worker Control"><mat-icon svgIcon="arrow_back" /></a>
+    <a mat-icon-button [routerLink]="servico() ? '/workers/servicos' : '/workers'" aria-label="Voltar"><mat-icon svgIcon="arrow_back" /></a>
     <div>
-      @if (whole()) {
+      @if (servico()) {
+        <h1>Trace do serviço <span class="name">{{ servico() }}</span></h1>
+        <p class="muted">O que o serviço escreve com <code>Trace()</code>, quando ele usa o wrapper de worker. O trace só é enviado enquanto esta tela está aberta.</p>
+      } @else if (whole()) {
         <h1>Trace do grupo <span class="name">{{ grupo() }}</span></h1>
         <p class="muted">Todos os processos do grupo juntos, na ordem em que escrevem. O trace só é enviado enquanto esta tela está aberta.</p>
       } @else {

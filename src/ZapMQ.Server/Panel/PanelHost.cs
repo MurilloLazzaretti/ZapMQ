@@ -123,9 +123,11 @@ public static class PanelHost
             return;
         }
 
-        // A path with an extension that is not there is a missing file; anything else is a
-        // screen of the interface, which is one page.
-        if (Path.HasExtension(path))
+        // A file of the interface that is not there is a missing file; anything else is a screen
+        // of the interface, which is one page. The files are all at the root or under "media";
+        // deeper than that, a dot is part of a name (a queue called "orders.new"), not an extension.
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (Path.HasExtension(path) && (segments.Length == 1 || (segments.Length == 2 && segments[0] == "media")))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;

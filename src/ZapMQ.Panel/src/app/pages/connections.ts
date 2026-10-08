@@ -90,22 +90,28 @@ interface Application {
         <section class="panel">
           <div class="panel-head">
             <h2>Clientes v1</h2>
-            <span class="hint">O protocolo antigo não diz quem é a aplicação; só o endereço de onde ela fala.</span>
+            <span class="hint">O protocolo antigo não diz quem é a aplicação. Na máquina do ZapMQ ela é reconhecida pelo processo; de outra máquina, só pelo endereço.</span>
           </div>
           <div class="table-wrap">
             <table class="data stack">
               <thead>
                 <tr>
-                  <th>Endereço</th>
+                  <th>Aplicação</th>
                   <th>Visto</th>
                   <th>Consome</th>
                   <th>Publica em</th>
                 </tr>
               </thead>
               <tbody>
-                @for (client of v1(); track client.address) {
+                @for (client of v1(); track client.address + client.pid) {
                   <tr>
-                    <td class="mono" data-label="Endereço">{{ client.address }}</td>
+                    <td data-label="Aplicação">
+                      @if (client.application) {
+                        <strong>{{ client.application }}</strong> <span class="muted mono">pid {{ client.pid }}</span>
+                      } @else {
+                        <span class="mono">{{ client.address }}</span>
+                      }
+                    </td>
                     <td class="nowrap" data-label="Visto">{{ client.lastSeen | ago }}</td>
                     <td class="wide" data-label="Consome">
                       <span class="chips">

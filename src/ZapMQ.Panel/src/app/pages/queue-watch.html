@@ -1,0 +1,64 @@
+<div class="page">
+  <header class="head">
+    <a mat-icon-button [routerLink]="['/filas', name()]" aria-label="Voltar para a fila"><mat-icon svgIcon="arrow_back" /></a>
+    <div>
+      <h1>Observar <span class="name">{{ name() }}</span></h1>
+      <p class="muted">As mensagens que passam pela fila, enquanto esta tela está aberta. Olhar não tira nem atrasa nenhuma mensagem.</p>
+    </div>
+    <span class="spacer"></span>
+    <span class="pill" [class.ok]="connected()" [class.warn]="!connected()"><span class="dot" [class.ok]="connected()" [class.warn]="!connected()"></span> {{ connected() ? 'ao vivo' : 'reconectando' }}</span>
+    <button mat-stroked-button (click)="publish()"><mat-icon svgIcon="send" /> Publicar</button>
+  </header>
+
+  <section class="panel">
+    <div class="tools">
+      <label class="search">
+        <mat-icon svgIcon="search" />
+        <input type="search" placeholder="Buscar no conteúdo, em quem publicou ou recebeu" [ngModel]="search()" (ngModelChange)="search.set($event)" aria-label="Buscar nas mensagens" />
+      </label>
+      <span class="muted num count">{{ visible().length | num }} {{ search() ? 'de ' + (messages().length | num) : '' }} mensagens</span>
+      <span class="spacer"></span>
+      <button mat-icon-button (click)="togglePause()" [matTooltip]="paused() ? 'Continuar' : 'Pausar a tela'" [attr.aria-pressed]="paused()"><mat-icon [svgIcon]="paused() ? 'play_arrow' : 'pause'" /></button>
+      <button mat-icon-button (click)="clear()" matTooltip="Limpar a tela"><mat-icon svgIcon="delete_sweep" /></button>
+    </div>
+
+    @if (paused() && waiting()) {
+      <button class="resume" mat-button (click)="togglePause()"><mat-icon svgIcon="play_arrow" /> Continuar · {{ waiting() | num }} mensagens novas</button>
+    }
+
+    @if (visible().length) {
+      <ul class="messages">
+        @for (message of visible(); track message.id) {
+          <li>
+            <button type="button" (click)="show(message)" [disabled]="message.body === null && message.response === null">
+              <span class="when mono">{{ clock(message.at) }}</span>
+              <span class="pill" [class]="'pill ' + state(message).tone" [matTooltip]="message.state === 'dead' ? reason(message) : ''">{{ state(message).label }}</span>
+              <span class="path">
+                <span class="who truncate" [class.unknown]="!message.publisher">{{ message.publisher ?? 'publicada antes' }}</span>
+                <mat-icon svgIcon="chevron_right" />
+                <span class="who truncate" [class.unknown]="!message.consumer">{{ message.consumer ?? (message.state === 'dead' ? reason(message) : message.state === 'published' ? 'ninguém ainda' : '—') }}</span>
+              </span>
+              <span class="body mono truncate">
+                @if (message.rpc) {
+                  <span class="tag">RPC</span>
+                }
+                {{ message.body === null ? 'conteúdo não visto: a mensagem foi publicada antes de a tela abrir' : preview(message) }}
+              </span>
+              <span class="took num muted">{{ took(message) }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+    } @else {
+      <div class="empty">
+        <mat-icon svgIcon="visibility" />
+        @if (search()) {
+          <strong>Nenhuma mensagem com esse texto</strong>
+        } @else {
+          <strong>Esperando alguma mensagem passar</strong>
+          <span>Só aparece o que passar pela fila a partir de agora. Para ver também o que passou antes, defina na fila quantas das últimas mensagens guardar.</span>
+        }
+      </div>
+    }
+  </section>
+</div>

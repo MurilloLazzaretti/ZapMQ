@@ -69,6 +69,8 @@ export class TracePage implements OnInit, OnDestroy {
   readonly pid = input<string>();
   /** The group: from the route when the whole group is followed, else only to say whose the process is. */
   readonly grupo = input<string>();
+  /** From the route, when what is followed is a Windows service: its process and the ones it started. */
+  readonly servico = input<string>();
 
   protected readonly whole = computed(() => !this.pid());
   protected readonly processes = signal<Process[]>([]);
@@ -220,7 +222,7 @@ export class TracePage implements OnInit, OnDestroy {
       .join('\n');
     const link = this.document.createElement('a');
     link.href = URL.createObjectURL(new Blob([text + '\n'], { type: 'text/plain;charset=utf-8' }));
-    link.download = `trace-${(whole ? this.grupo() : this.pid())?.replace(/[^\w.-]+/g, '_')}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.txt`;
+    link.download = `trace-${(whole ? (this.servico() ?? this.grupo()) : this.pid())?.replace(/[^\w.-]+/g, '_')}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.txt`;
     link.click();
     URL.revokeObjectURL(link.href);
   }
@@ -228,13 +230,24 @@ export class TracePage implements OnInit, OnDestroy {
   private findProcesses(): void {
     this.api.workerStatus().subscribe({
       next: (status) => {
-        const group = status.Groups.find((item) => item.Name === this.grupo());
-        if (!group) {
-          this.problem.set('O Worker Control não tem um grupo com esse nome.');
-          return;
+        let pids: number[];
+        if (this.servico()) {
+          const service = (status.Services ?? []).find((item) => item.Name === this.servico());
+          if (!service) {
+            this.problem.set('O Worker Control não acompanha um serviço com esse nome.');
+            return;
+          }
+          pids = [...(service.ProcessIds ?? (service.ProcessId ? [service.ProcessId] : []))].sort((a, b) => a - b);
+          this.problem.set(pids.length ? '' : 'O serviço não está rodando agora.');
+        } else {
+          const group = status.Groups.find((item) => item.Name === this.grupo());
+          if (!group) {
+            this.problem.set('O Worker Control não tem um grupo com esse nome.');
+            return;
+          }
+          this.problem.set(group.Workers.length ? '' : 'O grupo não tem nenhum processo rodando agora.');
+          pids = group.Workers.map((worker) => worker.ProcessId).sort((a, b) => a - b);
         }
-        this.problem.set(group.Workers.length ? '' : 'O grupo não tem nenhum processo rodando agora.');
-        const pids = group.Workers.map((worker) => worker.ProcessId).sort((a, b) => a - b);
         const current = this.processes().map((process) => process.pid);
         if (pids.length !== current.length || pids.some((pid, index) => pid !== current[index])) {
           this.watch(pids);

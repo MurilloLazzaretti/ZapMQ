@@ -25,8 +25,67 @@ public sealed class Broker
     {
         _options = options ?? new BrokerOptions();
         _time = time ?? TimeProvider.System;
-        _deadLetters = new DeadLetterStore(_time);
+        _deadLetters = new DeadLetterStore(_time)
+        {
+            Died = letter => Tell(letter.Queue, () => new MessageEvent("dead", letter.Queue, letter.Id, letter.DiedAt, Party: letter.Consumer, Reason: letter.Reason.ToString()))
+        };
         _queueOptions = new ConcurrentDictionary<string, QueueOptions>(_options.Queues, StringComparer.Ordinal);
+    }
+
+    // ── Watching ────────────────────────────────────────────────────────────
+
+    private readonly ConcurrentDictionary<string, int> _watched = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// What happens to the messages of the queues that are being watched. Called from wherever
+    /// the thing happened, sometimes under a lock: whoever listens must not wait for anything.
+    /// </summary>
+    public event Action<MessageEvent>? Observed;
+
+    /// <summary>
+    /// Starts telling what happens to the messages of a queue. Dispose the result to stop.
+    /// Watching changes nothing in the queue: no message is taken, held or delayed by it.
+    /// </summary>
+    public IDisposable Watch(string queue)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(queue);
+        _watched.AddOrUpdate(queue, 1, (_, watchers) => watchers + 1);
+        return new Watching(this, queue);
+    }
+
+    private sealed class Watching(Broker broker, string queue) : IDisposable
+    {
+        private int _stopped;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _stopped, 1) == 1)
+                return;
+            // Decrement, and let go of the entry when nobody is left.
+            while (broker._watched.TryGetValue(queue, out var watchers))
+            {
+                if (watchers <= 1 ? broker._watched.TryRemove(new KeyValuePair<string, int>(queue, watchers)) : broker._watched.TryUpdate(queue, watchers - 1, watchers))
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Says what happened, when somebody is watching the queue. What is said is only put
+    /// together then: a queue nobody watches pays nothing for this.
+    /// </summary>
+    private void Tell(string queue, Func<MessageEvent> what)
+    {
+        if (_watched.IsEmpty || Observed is not { } listeners || !_watched.ContainsKey(queue))
+            return;
+        try
+        {
+            listeners(what());
+        }
+        catch
+        {
+            // Watching must never get in the way of the message.
+        }
     }
 
     // ── Publishing ──────────────────────────────────────────────────────────
@@ -64,6 +123,7 @@ public sealed class Broker
         }
 
         Interlocked.Increment(ref _published);
+        Tell(queue, () => new MessageEvent("published", queue, id, _time.GetUtcNow(), body, rpc, publisher));
         Hand(deliveries);
         return id;
     }
@@ -79,9 +139,16 @@ public sealed class Broker
     /// </remarks>
     public BrokerMessage? Take(string queue, string? asker = null)
     {
-        var message = _queues.TryGetValue(queue, out var target) ? target.Take(asker) : null;
+        // Coming to ask is how a 1.x consumer listens: from then on the queue exists, with who
+        // asks written down, even while there is nothing in it. Without an asker to write
+        // down there is nothing to keep, and a queue that does not exist is left that way.
+        var target = asker is null ? _queues.GetValueOrDefault(queue) : GetOrAddQueue(queue);
+        var message = target?.Take(asker);
         if (message is not null)
+        {
             Interlocked.Increment(ref _delivered);
+            Tell(queue, () => new MessageEvent("delivered", queue, message.Id, _time.GetUtcNow(), Party: asker));
+        }
         return message;
     }
 
@@ -98,6 +165,8 @@ public sealed class Broker
 
         var deliveries = new List<Delivery>();
         var stored = target.Respond(id, response, includeUndelivered, deliveries);
+        if (stored)
+            Tell(queue, () => new MessageEvent("responded", queue, id, _time.GetUtcNow(), Response: response));
         Hand(deliveries);
         return stored;
     }
@@ -161,6 +230,7 @@ public sealed class Broker
             return false;
 
         Interlocked.Increment(ref _confirmed);
+        Tell(queue, () => new MessageEvent("confirmed", queue, id, _time.GetUtcNow(), Party: consumer.Description));
         Free(consumer);
         return true;
     }
@@ -179,6 +249,7 @@ public sealed class Broker
             return false;
 
         Interlocked.Increment(ref _confirmed);
+        Tell(queue, () => new MessageEvent("responded", queue, id, _time.GetUtcNow(), Party: consumer.Description, Response: response));
         Hand(deliveries);
         Free(consumer);
         return true;
@@ -412,6 +483,7 @@ public sealed class Broker
                 else
                 {
                     Interlocked.Increment(ref _delivered);
+                    Tell(delivery.Message.Queue, () => new MessageEvent("delivered", delivery.Message.Queue, delivery.Message.Id, _time.GetUtcNow(), Party: delivery.Consumer.Description));
                     delivery.Consumer.Deliver(delivery.Message);
                 }
             }

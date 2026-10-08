@@ -129,20 +129,124 @@ public static class PanelEndpoints
                 body = Body(message.Body)
             })));
 
-        api.MapPut("/queues/{queue}/settings", (string queue, QueueSettingsOptions settings, Broker broker, QueueDefinitionStore store, HttpContext context, ILoggerFactory loggers) =>
+        api.MapPut("/queues/{queue}/settings", (string queue, QueueSettingsOptions settings, Broker broker, QueueDefinitionStore store, MessageTap tap, HttpContext context, ILoggerFactory loggers) =>
         {
             // Pausing has its own action; a form that edits the definition must not undo it.
             settings.Paused = broker.GetQueueOptions(queue)?.Paused ?? false;
             store.Set(queue, QueueSettingsMapping.ToCore(settings));
+            tap.Refresh();
             Audit(loggers, context, "Queue {Queue} reconfigured: {Settings}", queue, JsonSerializer.Serialize(settings, Web));
             return Results.Json(QueueSettingsMapping.ToOptions(broker.GetQueueOptions(queue)));
         });
 
-        api.MapDelete("/queues/{queue}/settings", (string queue, QueueDefinitionStore store, HttpContext context, ILoggerFactory loggers) =>
+        api.MapDelete("/queues/{queue}/settings", (string queue, QueueDefinitionStore store, MessageTap tap, HttpContext context, ILoggerFactory loggers) =>
         {
             store.Set(queue, null);
+            tap.Refresh();
             Audit(loggers, context, "Queue {Queue} back to the default settings", queue);
             return Results.NoContent();
+        });
+
+        // ── Watching and publishing ─────────────────────────────────────────
+
+        // Server-sent events: each step of each message that goes through the queue, for as
+        // long as the request stays open. What the queue kept from before comes first.
+        api.MapGet("/queues/{queue}/watch", async (string queue, HttpContext context, MessageTap tap, IHostApplicationLifetime lifetime, ILoggerFactory loggers) =>
+        {
+            context.Response.Headers.ContentType = "text/event-stream";
+            context.Response.Headers.CacheControl = "no-cache";
+            context.Response.Headers["X-Accel-Buffering"] = "no";
+            Audit(loggers, context, "Queue {Queue} watched", queue);
+
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, lifetime.ApplicationStopping);
+            using var subscription = tap.Subscribe(queue);
+            try
+            {
+                await context.Response.WriteAsync(": watching\n\n", stop.Token);
+                await context.Response.Body.FlushAsync(stop.Token);
+                while (true)
+                {
+                    using var quiet = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+                    quiet.CancelAfter(TimeSpan.FromSeconds(15));
+                    bool more;
+                    try
+                    {
+                        more = await subscription.Events.WaitToReadAsync(quiet.Token);
+                    }
+                    catch (OperationCanceledException) when (!stop.IsCancellationRequested)
+                    {
+                        await context.Response.WriteAsync(": idle\n\n", stop.Token);
+                        await context.Response.Body.FlushAsync(stop.Token);
+                        continue;
+                    }
+                    if (!more)
+                        break;
+
+                    var batch = new List<TapEvent>();
+                    while (batch.Count < 200 && subscription.Events.TryRead(out var step))
+                        batch.Add(step);
+                    await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(batch, Tap)}\n\n", stop.Token);
+                    await context.Response.Body.FlushAsync(stop.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // The browser went away or the service is stopping.
+            }
+        });
+
+        api.MapGet("/queues/{queue}/recent", (string queue, MessageTap tap) => Results.Json(tap.Recent(queue), Tap));
+
+        // Publishes a message written by hand. With "rpc", waits for the answer and returns it.
+        api.MapPost("/queues/{queue}/publish", async (string queue, PublishRequest request, Broker broker, HttpContext context, ILoggerFactory loggers) =>
+        {
+            if (string.IsNullOrWhiteSpace(queue) || request.Body.ValueKind == JsonValueKind.Undefined)
+                return Results.Json(new { error = "A queue and a body are needed" }, statusCode: StatusCodes.Status400BadRequest);
+
+            var ttl = TimeSpan.FromMilliseconds(Math.Clamp(request.TtlMs ?? 0, 0, 24 * 3600 * 1000));
+            var publisher = "panel:" + (context.Items[PanelHost.UserItem] as string ?? "?");
+            var body = request.Body.GetRawText();
+
+            if (request.Rpc != true)
+            {
+                var id = broker.Publish(queue, body, rpc: false, ttl, publisher: publisher);
+                Audit(loggers, context, "Message {Id} published by hand in queue {Queue}", id, queue);
+                return Results.Json(new { id, rpc = false });
+            }
+
+            // Who asks waits for the answer for as long as the message lives, within reason.
+            var patience = ttl > TimeSpan.Zero && ttl < TimeSpan.FromSeconds(60) ? ttl : TimeSpan.FromSeconds(30);
+            var answer = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var asked = broker.Publish(queue, body, rpc: true, ttl > TimeSpan.Zero ? ttl : patience, replyTo: new Asker(answer), publisher: publisher);
+            Audit(loggers, context, "Message {Id} published by hand in queue {Queue}, waiting for its answer", asked, queue);
+            try
+            {
+                var response = await answer.Task.WaitAsync(patience, context.RequestAborted);
+                return Results.Content($"{{\"id\":{JsonSerializer.Serialize(asked)},\"rpc\":true,\"answered\":true,\"response\":{(string.IsNullOrWhiteSpace(response) ? "null" : response)}}}", "application/json; charset=utf-8");
+            }
+            catch (TimeoutException)
+            {
+                return Results.Json(new { id = asked, rpc = true, answered = false });
+            }
+        });
+
+        api.MapGet("/queues/{queue}/models", (string queue, MessageModelStore models) => Results.Json(models.Of(queue), Web));
+
+        api.MapPut("/queues/{queue}/models/{name}", (string queue, string name, PublishRequest request, MessageModelStore models, HttpContext context, ILoggerFactory loggers) =>
+        {
+            if (string.IsNullOrWhiteSpace(name) || request.Body.ValueKind == JsonValueKind.Undefined)
+                return Results.Json(new { error = "A name and a body are needed" }, statusCode: StatusCodes.Status400BadRequest);
+            models.Save(queue, new MessageModel(name.Trim(), request.Body.Clone(), Math.Max(0, request.TtlMs ?? 0), request.Rpc == true));
+            Audit(loggers, context, "Message model {Name} of queue {Queue} saved", name, queue);
+            return Results.Json(models.Of(queue), Web);
+        });
+
+        api.MapDelete("/queues/{queue}/models/{name}", (string queue, string name, MessageModelStore models, HttpContext context, ILoggerFactory loggers) =>
+        {
+            if (!models.Remove(queue, name))
+                return Results.NotFound();
+            Audit(loggers, context, "Message model {Name} of queue {Queue} removed", name, queue);
+            return Results.Json(models.Of(queue), Web);
         });
 
         api.MapPost("/queues/{queue}/pause", (string queue, Broker broker, QueueDefinitionStore store, HttpContext context, ILoggerFactory loggers) =>
@@ -461,6 +565,27 @@ public static class PanelEndpoints
 
     public sealed record LoginRequest(string? User, string? Password);
 
+    public sealed record PublishRequest(JsonElement Body, int? TtlMs, bool? Rpc);
+
+    /// <summary>
+    /// What is left out of a step is left out of what is sent too.
+    /// </summary>
+    private static readonly JsonSerializerOptions Tap = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
+
+    /// <summary>
+    /// Where the broker pushes the answer of a message published by hand.
+    /// </summary>
+    private sealed class Asker(TaskCompletionSource<string?> answer) : Consumer
+    {
+        public override string Description => "ZapMQ panel";
+
+        protected override void Deliver(BrokerMessage message)
+        {
+        }
+
+        protected override void DeliverResponse(BrokerMessage message) => answer.TrySetResult(message.Response);
+    }
+
     public sealed record ConfigRequest(System.Text.Json.Nodes.JsonNode? Config);
 
     public sealed record EnabledRequest(bool Enabled);
@@ -606,6 +731,7 @@ public static class PanelEndpoints
             {
                 if (!party.Name.StartsWith("v1:", StringComparison.Ordinal))
                     continue;
+                // One entry for each process when it is known; otherwise, for each address.
                 var address = party.Name[3..];
                 if (!clients.TryGetValue(address, out var client))
                     client = (party.LastSeen, new SortedSet<string>(StringComparer.Ordinal), new SortedSet<string>(StringComparer.Ordinal));
@@ -615,7 +741,9 @@ public static class PanelEndpoints
         }
         return clients.Select(pair => (object)new
         {
-            address = pair.Key,
+            address = V1.V1Callers.Read(pair.Key).Address,
+            application = V1.V1Callers.Read(pair.Key).Name,
+            pid = V1.V1Callers.Read(pair.Key).ProcessId,
             lastSeen = pair.Value.Last,
             consumes = pair.Value.Asks,
             publishes = pair.Value.Publishes
@@ -629,7 +757,11 @@ public static class PanelEndpoints
     {
         if (party.Name.StartsWith("v2:", StringComparison.Ordinal) && party.Name[3..].Split('|') is [var id, var application, var host, var pid])
             return new { protocol = "v2", connection = id, application, host, pid, lastSeen = party.LastSeen, count = party.Count };
-        return new { protocol = "v1", connection = (string?)null, application = party.Name[(party.Name.IndexOf(':') + 1)..], host = (string?)null, pid = (string?)null, lastSeen = party.LastSeen, count = party.Count };
+        // Published from the panel itself: by hand, or on behalf of somebody watching.
+        if (!party.Name.StartsWith("v1:", StringComparison.Ordinal))
+            return new { protocol = "panel", connection = (string?)null, application = party.Name, host = (string?)null, pid = (string?)null, lastSeen = party.LastSeen, count = party.Count };
+        var (address, name, processId) = V1.V1Callers.Read(party.Name);
+        return new { protocol = "v1", connection = (string?)null, application = name ?? address, host = name is null ? null : address, pid = processId?.ToString(), lastSeen = party.LastSeen, count = party.Count };
     }
 
     private static object DeadLetter(DeadLetter letter) => new

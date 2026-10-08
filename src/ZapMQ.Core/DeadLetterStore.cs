@@ -17,8 +17,15 @@ internal sealed class DeadLetterStore(TimeProvider time)
     /// </summary>
     public long Total => Interlocked.Read(ref _total);
 
+    /// <summary>
+    /// Told of every message that dies, kept or not. Called under the lock of its queue: it
+    /// must not wait for anything.
+    /// </summary>
+    public Action<DeadLetter>? Died { get; set; }
+
     public void Add(DeadLetter letter, int limit, TimeSpan maxAge)
     {
+        Died?.Invoke(letter);
         if (limit <= 0 || maxAge <= TimeSpan.Zero)
             return;
 

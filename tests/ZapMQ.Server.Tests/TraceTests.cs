@@ -309,11 +309,28 @@ public class TraceTests(ServerFixture server) : IClassFixture<ServerFixture>
         var pid = Pid();
         var (control, asked) = await WorkerControl(_ => new JObject { ["Ok"] = true });
         await using var _ = control;
+        // A worker of 1.x listens by coming to ask for what is in its queue.
+        await server.Http.GetStringAsync($"GetMessage/{pid}TR");
         using var watcher = await Watch(pid);
 
         Assert.Equal("on", await watcher.StateAsync("starting"));
         lock (asked)
             Assert.Equal("StartTrace", (string)Assert.Single(asked)["Command"]!);
+    }
+
+    [Fact]
+    public async Task A_process_that_does_not_listen_for_trace_at_all_is_not_asked_anything()
+    {
+        var pid = Pid();
+        var (control, asked) = await WorkerControl(_ => new JObject { ["Ok"] = true });
+        await using var _ = control;
+        using var watcher = await Watch(pid);
+
+        Assert.Equal("unreachable", await watcher.StateAsync("starting"));
+        lock (asked)
+            Assert.Empty(asked);
+        // Nothing was left waiting for somebody who is never going to take it.
+        Assert.False((bool)JObject.Parse(await server.Admin.GetStringAsync($"api/queues/{pid}TR"))["exists"]!);
     }
 
     [Fact]
@@ -352,6 +369,7 @@ public class TraceTests(ServerFixture server) : IClassFixture<ServerFixture>
                 ? new JObject { ["Ok"] = true }
                 : new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "not-found", ["Message"] = "There is no worker with that process id" } });
             await using var __ = control;
+            await server.Http.GetStringAsync($"GetMessage/{pid}TR");
             using var watcher = await Watch(pid);
 
             Assert.Equal("on", await watcher.StateAsync("starting"));

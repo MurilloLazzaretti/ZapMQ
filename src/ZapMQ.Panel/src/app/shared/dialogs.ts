@@ -51,6 +51,10 @@ export interface Shown {
   title: string;
   subtitle?: string;
   json: unknown;
+  /** With a queue, the content can be taken to the editor and published there again. */
+  queue?: string;
+  /** Something else to show under the content: the answer of a question, for one. */
+  more?: { title: string; json: unknown };
 }
 
 @Component({
@@ -63,17 +67,28 @@ export interface Shown {
         <p class="muted mono">{{ data.subtitle }}</p>
       }
       <pre class="json">{{ text }}</pre>
+      @if (data.more; as more) {
+        <h3>{{ more.title }}</h3>
+        <pre class="json">{{ moreText }}</pre>
+      }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
+      @if (data.queue) {
+        <button mat-button [mat-dialog-close]="'publish'">Editar e publicar</button>
+      }
       <button mat-button (click)="copy()">{{ copied ? 'Copiado' : 'Copiar' }}</button>
       <button mat-flat-button mat-dialog-close>Fechar</button>
     </mat-dialog-actions>
   `,
-  styles: `p { margin: 0 0 12px; word-break: break-all; }`,
+  styles: `
+    p { margin: 0 0 12px; word-break: break-all; }
+    h3 { margin: 14px 0 8px; color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-label-medium); letter-spacing: 0.04em; text-transform: uppercase; }
+  `,
 })
 export class JsonDialog {
   protected readonly data = inject<Shown>(MAT_DIALOG_DATA);
   protected readonly text = JSON.stringify(this.data.json, null, 2);
+  protected readonly moreText = JSON.stringify(this.data.more?.json ?? null, null, 2);
   protected copied = false;
 
   protected copy(): void {
@@ -86,5 +101,13 @@ export function confirm(dialog: MatDialog, data: Confirmation): Promise<boolean>
 }
 
 export function showJson(dialog: MatDialog, data: Shown): void {
-  dialog.open(JsonDialog, { data, maxWidth: '760px', width: 'calc(100vw - 32px)' });
+  dialog
+    .open(JsonDialog, { data, maxWidth: '760px', width: 'calc(100vw - 32px)' })
+    .afterClosed()
+    .subscribe((choice) => {
+      if (choice === 'publish' && data.queue) {
+        // Loaded only when asked for: the editor is not part of every screen that shows a message.
+        void import('./publish').then((module) => module.openPublish(dialog, { queue: data.queue!, body: data.json }));
+      }
+    });
 }

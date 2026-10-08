@@ -61,4 +61,10 @@ public sealed record QueueOptions
     /// A paused queue keeps receiving and hands nothing to anybody.
     /// </summary>
     public bool Paused { get; init; }
+
+    /// <summary>
+    /// How many of the last messages that went through the queue are kept to be looked at.
+    /// Zero keeps none: a message is only seen while somebody is watching the queue.
+    /// </summary>
+    public int KeepRecent { get; init; }
 }

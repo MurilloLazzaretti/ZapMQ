@@ -209,7 +209,7 @@ export class DeadLettersPage implements OnInit, OnDestroy {
   }
 
   protected show(letter: DeadLetter): void {
-    showJson(this.dialog, { title: 'Mensagem morta', subtitle: letter.id, json: letter.body });
+    showJson(this.dialog, { title: 'Mensagem morta', subtitle: letter.id, json: letter.body, queue: letter.queue });
   }
 
   protected async requeue(letter: DeadLetter): Promise<void> {

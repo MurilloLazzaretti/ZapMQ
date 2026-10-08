@@ -116,4 +116,41 @@ public class MapTests(ServerFixture server) : IClassFixture<ServerFixture>
         Assert.NotNull(Link(map, "v2:" + gone, queue, "publish"));
         Assert.Empty(map["applications"]!.Single(item => (string)item["id"]! == "v2:" + gone)["instances"]!);
     }
+
+    [Fact]
+    public async Task A_client_of_the_first_protocol_on_this_machine_is_drawn_by_its_process()
+    {
+        var (queue, definition) = (Name("legacy"), Name("declared"));
+        server.Peer = (4321, "Legacy.Service");
+        try
+        {
+            // A connection of its own: who is behind a connection is asked once and remembered.
+            using var client = new HttpClient { BaseAddress = server.Http.BaseAddress };
+            await client.GetStringAsync($"UpdateMessage/{queue}/{Uri.EscapeDataString("{\"Id\":\"\",\"Body\":{\"n\":1},\"RPC\":false,\"TTL\":0}")}");
+            await client.GetStringAsync($"GetMessage/{queue}");
+        }
+        finally
+        {
+            server.Peer = null;
+        }
+        (await server.Admin.PutAsync($"api/queues/{definition}/settings", System.Net.Http.Json.JsonContent.Create(new { retentionSeconds = 60 }))).EnsureSuccessStatusCode();
+
+        var map = await Map();
+
+        var application = map["applications"]!.Single(item => (string)item["id"]! == "v1:Legacy.Service");
+        Assert.Equal("v1", (string)application["protocol"]!);
+        Assert.Equal(4321, (int)Assert.Single(application["instances"]!)["pid"]!);
+        Assert.NotNull(Link(map, "v1:Legacy.Service", queue, "publish"));
+        Assert.NotNull(Link(map, "v1:Legacy.Service", queue, "consume"));
+        // A queue somebody defined is drawn even with nothing going through it.
+        Assert.False((bool)map["queues"]!.Single(item => (string)item["name"]! == definition)["exists"]!);
+
+        var clients = JObject.Parse(await server.Admin.GetStringAsync("api/connections"))["v1"]!;
+        var known = clients.Single(item => (string?)item["application"] == "Legacy.Service");
+        Assert.Equal(4321, (int)known["pid"]!);
+        Assert.Contains(queue, known["publishes"]!.Select(item => (string)item!));
+
+        var detail = JObject.Parse(await server.Admin.GetStringAsync($"api/queues/{queue}"));
+        Assert.Equal(("v1", "Legacy.Service", "4321"), ((string)detail["publishers"]![0]!["protocol"]!, (string)detail["publishers"]![0]!["application"]!, (string)detail["publishers"]![0]!["pid"]!));
+    }
 }

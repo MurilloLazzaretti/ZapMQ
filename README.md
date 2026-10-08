@@ -106,6 +106,7 @@ Only `Port` is commonly changed. Everything else may be left out.
 | `DeadLetters.MaxMessagesPerQueue` | 1000 | Dead letters kept per queue; the oldest leave first. `0` keeps none |
 | `DeadLetters.MaxAgeHours` | 168 | Longest a dead letter is kept. `0` keeps none |
 | `QueueDefinitionsFile` | `queues.json` | Where the queue settings made through the panel are kept. Relative to the executable unless it is a full path |
+| `MessageModelsFile` | `models.json` | Where the message models saved through the panel are kept. Relative to the executable unless it is a full path |
 | `Panel.Enabled` | true | `false` turns the panel and its port off |
 | `Panel.Port` | 5680 | Port of the panel |
 | `Panel.BasePath` | `/zapmq` | Path the panel is published under by a reverse proxy. It also answers at the root of its port |
@@ -123,6 +124,7 @@ Only `Port` is commonly changed. Everything else may be left out.
 | ------------------- | ------- | ----------- |
 | `RetentionSeconds` | the general one | Retention of this queue |
 | `RedeliverUnconfirmed` | `false` | Puts a message that was delivered and not confirmed back in the queue instead of dead-lettering it. Only for queues where handling the same message twice does no harm |
+| `KeepRecent` | none | How many of the last messages that went through the queue are kept, in memory, to be looked at in the panel with their content. Without it a message is only seen while somebody is watching the queue |
 | `DeadLetters.MaxMessagesPerQueue` | the general one | Dead letters kept for this queue |
 | `DeadLetters.MaxAgeHours` | the general one | Age limit of the dead letters of this queue |
 | `Paused` | `false` | A paused queue keeps receiving and hands nothing to anybody |
@@ -140,6 +142,7 @@ A web application served by the service itself, on a port of its own (5680), beh
 | Queues | Every queue with its counters, live. For each one: its definition (retention, redelivery, dead-letter limits), editable and kept across restarts; the pending messages, to read; who publishes and who consumes; pause, resume and empty |
 | Dead letters | What was not delivered or not confirmed, by queue and by reason: inspect, send back to the queue, discard |
 | Applications | Who is connected over v2, by application and process, and the addresses still talking 1.x |
+| Messages | Watch a queue: every message that goes through it, live, with who published it, who got it, what became of it and its content, without taking anything from the queue. Publish a message by hand, with a JSON editor, files and models saved by queue; a question (RPC) shows its answer |
 | Trace | What one supervised process writes with `Trace()`, or all the processes of a group together when there is no telling which of them will take a message, live and from any machine: filter, pause, save to a file. The process only sends its trace while somebody is watching, and none of it is kept by the broker |
 | Traffic | What goes through the reverse proxy, read from its access log by the Worker Control: requests, errors and answer times (median, 95th and 99th percentiles) in all and by application, endpoint and instance, compared with the day before, and the last server errors |
 | Web application | The modules of a web application published as micro frontends: the version of each one, whether it answers, when it was published and what changed, with a timeline of publications |

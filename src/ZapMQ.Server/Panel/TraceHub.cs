@@ -266,6 +266,14 @@ public sealed class TraceHub(Broker broker, WorkerControlClient workerControl, T
                     }
                 }
 
+                // A process that neither listens nor comes asking on its trace queue has no wrapper
+                // to answer; asking anyway would only leave a message nobody is ever going to take.
+                if (!Listening() && !Polled())
+                {
+                    Change(new TraceState("unreachable", "O processo não atende pedidos de trace: ele não usa o wrapper de worker, ou não está conectado ao ZapMQ."), stop);
+                    return;
+                }
+
                 // The way of 1.x, which only somebody on the machine of the process can do.
                 var relay = await AskWorkerControlAsync(stop);
                 if (!relay.Ok)
@@ -345,6 +353,13 @@ public sealed class TraceHub(Broker broker, WorkerControlClient workerControl, T
         };
 
         private bool Listening() => hub.Broker.GetQueue(_requests) is { Consumers: > 0 };
+
+        /// <summary>
+        /// Whether somebody came asking for messages of the trace queue lately, which is how a
+        /// worker of the 1.x protocol listens.
+        /// </summary>
+        private bool Polled() =>
+            hub.Broker.GetActivity(TimeSpan.FromSeconds(60)).FirstOrDefault(activity => activity.Queue == _requests) is { Askers.Count: > 0 };
 
         private static bool Accepted(string? response)
         {

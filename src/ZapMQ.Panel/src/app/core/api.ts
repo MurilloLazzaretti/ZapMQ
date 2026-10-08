@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  MessageModel, PublishResult, TapEvent,
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
@@ -55,6 +56,26 @@ export class Api {
 
   messages(queue: string, limit = 50): Observable<PendingMessage[]> {
     return this.http.get<PendingMessage[]>(`api/queues/${encodeURIComponent(queue)}/messages`, { params: { limit } });
+  }
+
+  recentMessages(queue: string): Observable<TapEvent[]> {
+    return this.http.get<TapEvent[]>(`api/queues/${encodeURIComponent(queue)}/recent`);
+  }
+
+  publishMessage(queue: string, message: { body: unknown; ttlMs: number; rpc: boolean }): Observable<PublishResult> {
+    return this.http.post<PublishResult>(`api/queues/${encodeURIComponent(queue)}/publish`, message);
+  }
+
+  messageModels(queue: string): Observable<MessageModel[]> {
+    return this.http.get<MessageModel[]>(`api/queues/${encodeURIComponent(queue)}/models`);
+  }
+
+  saveMessageModel(queue: string, name: string, model: { body: unknown; ttlMs: number; rpc: boolean }): Observable<MessageModel[]> {
+    return this.http.put<MessageModel[]>(`api/queues/${encodeURIComponent(queue)}/models/${encodeURIComponent(name)}`, model);
+  }
+
+  removeMessageModel(queue: string, name: string): Observable<MessageModel[]> {
+    return this.http.delete<MessageModel[]>(`api/queues/${encodeURIComponent(queue)}/models/${encodeURIComponent(name)}`);
   }
 
   saveSettings(queue: string, settings: QueueSettings): Observable<QueueSettings> {

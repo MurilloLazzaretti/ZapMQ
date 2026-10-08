@@ -17,6 +17,8 @@
     </div>
     <span class="spacer"></span>
     <div class="actions">
+      <a mat-stroked-button [routerLink]="['/filas', name(), 'observar']" matTooltip="As mensagens que passam pela fila, ao vivo, com o conteúdo de cada uma"><mat-icon svgIcon="visibility" /> Observar</a>
+      <button mat-stroked-button (click)="publish()"><mat-icon svgIcon="send" /> Publicar</button>
       <button mat-stroked-button (click)="togglePause()" [disabled]="!detail()">
         <mat-icon [svgIcon]="snapshot()?.paused || detail()?.settings?.paused ? 'play_arrow' : 'pause'" />
         {{ snapshot()?.paused || detail()?.settings?.paused ? 'Retomar' : 'Pausar' }}
@@ -77,6 +79,17 @@
                 <dd class="help">O que acontece quando o consumidor cai antes de confirmar a mensagem que recebeu.</dd>
               </div>
               <div>
+                <dt>Últimas mensagens</dt>
+                <dd>
+                  @if (now.keepRecent) {
+                    guarda as últimas {{ now.keepRecent | num }}
+                  } @else {
+                    <span class="pill">não guarda</span>
+                  }
+                </dd>
+                <dd class="help">Sem guardar, o conteúdo de uma mensagem só é visto enquanto alguém está observando a fila.</dd>
+              </div>
+              <div>
                 <dt>Mensagens mortas guardadas</dt>
                 <dd>
                   até {{ now.deadLimit | num }} <span class="origin">{{ now.deadLimitOwn ? 'desta fila' : 'padrão' }}</span>
@@ -101,6 +114,12 @@
                 <strong>pode ser processada duas vezes</strong>.
               </p>
             </div>
+
+            <mat-form-field>
+              <mat-label>Guardar as últimas mensagens</mat-label>
+              <input matInput type="number" min="0" max="500" name="keepRecent" [(ngModel)]="form.keepRecent" placeholder="não guarda" />
+              <mat-hint>Quantas das últimas mensagens que passaram ficam disponíveis em "Observar", com o conteúdo. Em branco não guarda nenhuma.</mat-hint>
+            </mat-form-field>
 
             <div class="pair">
               <mat-form-field>

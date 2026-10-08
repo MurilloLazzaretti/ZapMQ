@@ -20,6 +20,7 @@ import { Stat } from '../shared/stat';
 interface Form {
   retentionSeconds: number | null;
   redeliverUnconfirmed: boolean;
+  keepRecent: number | null;
   deadLimit: number | null;
   deadAgeHours: number | null;
 }
@@ -50,7 +51,7 @@ export class QueueDetailPage implements OnInit, OnDestroy {
   protected readonly failed = signal(false);
   protected readonly editing = signal(false);
   protected readonly saving = signal(false);
-  protected form: Form = { retentionSeconds: null, redeliverUnconfirmed: false, deadLimit: null, deadAgeHours: null };
+  protected form: Form = { retentionSeconds: null, redeliverUnconfirmed: false, keepRecent: null, deadLimit: null, deadAgeHours: null };
 
   protected readonly snapshot = computed(() => this.detail()?.snapshot ?? null);
   protected readonly dead = computed(() => {
@@ -69,6 +70,7 @@ export class QueueDetailPage implements OnInit, OnDestroy {
       retention: seconds(own?.retentionSeconds ?? detail.defaults.retentionSeconds),
       retentionOwn: own?.retentionSeconds != null,
       redeliver: own?.redeliverUnconfirmed ?? false,
+      keepRecent: own?.keepRecent ?? 0,
       deadLimit: own?.deadLetters?.maxMessagesPerQueue ?? detail.defaults.deadLetters.maxMessagesPerQueue,
       deadLimitOwn: own?.deadLetters?.maxMessagesPerQueue != null,
       deadAge: own?.deadLetters?.maxAgeHours ?? detail.defaults.deadLetters.maxAgeHours,
@@ -121,6 +123,7 @@ export class QueueDetailPage implements OnInit, OnDestroy {
     this.form = {
       retentionSeconds: own?.retentionSeconds ?? null,
       redeliverUnconfirmed: own?.redeliverUnconfirmed ?? false,
+      keepRecent: own?.keepRecent ?? null,
       deadLimit: own?.deadLetters?.maxMessagesPerQueue ?? null,
       deadAgeHours: own?.deadLetters?.maxAgeHours ?? null,
     };
@@ -132,6 +135,7 @@ export class QueueDetailPage implements OnInit, OnDestroy {
     const settings: QueueSettings = {
       retentionSeconds: blank(this.form.retentionSeconds),
       redeliverUnconfirmed: this.form.redeliverUnconfirmed,
+      keepRecent: blank(this.form.keepRecent) || null,
       deadLetters:
         blank(this.form.deadLimit) === null && blank(this.form.deadAgeHours) === null
           ? null
@@ -214,8 +218,12 @@ export class QueueDetailPage implements OnInit, OnDestroy {
     this.refresh();
   }
 
+  protected publish(): void {
+    void import('../shared/publish').then((module) => module.openPublish(this.dialog, { queue: this.name() }));
+  }
+
   protected show(message: PendingMessage): void {
-    showJson(this.dialog, { title: 'Mensagem pendente', subtitle: message.id, json: message.body });
+    showJson(this.dialog, { title: 'Mensagem pendente', subtitle: message.id, json: message.body, queue: this.name() });
   }
 
   protected preview(body: unknown): string {

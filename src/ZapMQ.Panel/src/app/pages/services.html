@@ -46,6 +46,7 @@
               <button mat-icon-button [matMenuTriggerFor]="menu" [attr.aria-label]="'Mais sobre ' + service.Name"><mat-icon svgIcon="more_vert" /></button>
               <mat-menu #menu="matMenu" xPosition="before">
                 <button mat-menu-item (click)="health(service)" [disabled]="!service.ProcessId"><mat-icon svgIcon="monitor_heart" /> <span>Saúde</span></button>
+                <a mat-menu-item [routerLink]="['/workers/trace-servico', service.Name]" [class.disabled]="!service.ProcessId"><mat-icon svgIcon="terminal" /> <span>Trace</span></a>
                 <a mat-menu-item routerLink="/workers/eventos" [queryParams]="{ grupo: 'service:' + service.Name }"><mat-icon svgIcon="history" /> <span>Histórico</span></a>
                 <button mat-menu-item (click)="settings(service)"><mat-icon svgIcon="tune" /> <span>Configurar</span></button>
                 <button mat-menu-item (click)="remove(service)"><mat-icon svgIcon="delete" /> <span>Deixar de acompanhar</span></button>

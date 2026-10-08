@@ -134,7 +134,12 @@ export function assemble(
 
     const reasons: string[] = [];
     let tone: Tone = application.protocol === 'v1' ? 'neutral' : 'ok';
-    let detail = application.protocol === 'v1' ? 'protocolo 1.x' : plural(application.instances.length, 'instância', 'instâncias');
+    let detail =
+      application.protocol === 'v1'
+        ? application.instances.length
+          ? `protocolo 1.x · ${plural(application.instances.length, 'processo', 'processos')}`
+          : 'protocolo 1.x'
+        : plural(application.instances.length, 'instância', 'instâncias');
 
     if (application.protocol === 'v2' && application.instances.length === 0) {
       tone = 'off';
@@ -159,7 +164,8 @@ export function assemble(
       id: application.id,
       kind: 'application',
       column: consumes.has(application.id) ? 2 : publishes.has(application.id) ? 0 : groups.length ? 2 : 0,
-      label: application.protocol === 'v1' ? `Cliente 1.x · ${application.name}` : application.name,
+      // A 1.x client is known by its process when it is on the machine of the broker; else it is only an address.
+      label: application.protocol === 'v1' && !application.instances.length ? `Cliente 1.x · ${application.name}` : application.name,
       detail,
       tone,
       reasons,

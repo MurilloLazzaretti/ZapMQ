@@ -80,7 +80,14 @@ public static partial class ParkMap
                 if (party.Name.StartsWith("v2:", StringComparison.Ordinal) && party.Name[3..].Split('|') is [_, var name, _, _])
                     application = Of("v2", name);
                 else if (party.Name.StartsWith("v1:", StringComparison.Ordinal))
-                    application = Of("v1", party.Name[3..]);
+                {
+                    // A 1.x client of this machine is known by its process; one from elsewhere, by its address.
+                    var (address, process, processId) = V1.V1Callers.Read(party.Name);
+                    application = Of("v1", process ?? address);
+                    // Only a process heard from just now counts as running: there is no connection to tell when it leaves.
+                    if (processId is { } id && DateTimeOffset.UtcNow - party.LastSeen < TimeSpan.FromSeconds(90))
+                        application.Instance(Environment.MachineName, id);
+                }
                 else
                     continue;
 
@@ -89,6 +96,10 @@ public static partial class ParkMap
                 Join(application, activity.Queue, kind, party.Count, party.LastSeen, bound: false);
             }
         }
+
+        // A queue somebody defined is part of the drawing even while nothing goes through it.
+        foreach (var defined in broker.GetAllQueueOptions().Keys.Where(name => !IsInternal(name)))
+            drawn.Add(defined);
 
         var dead = broker.GetDeadLetterSummary().ToDictionary(item => item.Queue, StringComparer.Ordinal);
         var queues = broker.GetQueues()

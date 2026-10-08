@@ -25,13 +25,13 @@ public static class DataSnapEndpoints
     public static void MapDataSnap(this IEndpointRouteBuilder routes) =>
         routes.Map(Prefix + "{**call}", Handle);
 
-    private static async Task Handle(HttpContext context, Broker broker, ILoggerFactory loggers)
+    private static async Task Handle(HttpContext context, Broker broker, V1Callers callers, ILoggerFactory loggers)
     {
         byte[] payload;
         try
         {
             // The handlers run right here, on this thread, before anything is awaited.
-            _caller = "v1:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+            _caller = callers.Party(context);
             payload = V1Message.Envelope(Invoke(broker, context.Request.Method, ReadCall(context)));
         }
         catch (Exception error) when (error is V1Exception or ArgumentException)
@@ -60,7 +60,7 @@ public static class DataSnapEndpoints
     /// decoded path cannot be used: a message containing an escaped slash would be split in two.
     /// </summary>
     /// <summary>
-    /// A 1.x client says nothing about itself; its address is all there is to tell who uses a queue.
+    /// A 1.x client says nothing about itself; who uses a queue is told by <see cref="V1Callers"/>.
     /// </summary>
     [ThreadStatic]
     private static string? _caller;

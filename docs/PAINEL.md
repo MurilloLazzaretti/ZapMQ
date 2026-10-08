@@ -123,6 +123,21 @@ Declarar um exchange e as filas que recebem cópia do que é publicado nele. Ent
 - **Histórico de eventos**, com filtro por grupo e tipo, dos mais recentes para os mais antigos.
 - **Serviço:** parar deixando os workers rodando. Iniciar o serviço do Windows pelo painel não foi implementado: é feito na máquina do Worker Control.
 
+### 4.9 Mensagens: observar e publicar
+
+- **Observar** (na tela da fila): as mensagens que passam por ela, ao vivo, com quem publicou, quem recebeu, o estado (esperando, entregue, confirmada, respondida, morta), o tempo até a confirmação e o conteúdo; em RPC, a resposta também. Olhar não tira, não segura e não atrasa nenhuma mensagem. A fila só conta o que passa por ela enquanto alguém observa; o conteúdo não fica guardado em lugar nenhum.
+- **Guardar as últimas mensagens** é uma opção da definição da fila (`KeepRecent`, até 500), desligada por padrão. Ligada, quem abre o Observar vê também o que passou antes de chegar. Fica em memória: não sobrevive ao reinício do serviço.
+- Conteúdo ou resposta com mais de 256 KB é cortado na captura, e a tela diz.
+- **Publicar** (na tela da fila e no Observar): uma mensagem escrita à mão, com editor de JSON (validação, formatação), abrir e salvar arquivo, validade e RPC. Em RPC a tela espera a resposta e a mostra. Antes de publicar, a tela lembra que a mensagem será processada de verdade. Quem publicou fica no log do serviço e aparece como "painel (usuário)" entre os publicadores da fila.
+- **Modelos:** corpos salvos com nome, por fila, para publicar de novo sem redigitar. Ficam em `models.json`, ao lado do executável, e valem para todos que usam o painel.
+- **Editar e publicar:** em qualquer mensagem aberta (pendente, morta ou observada), leva o conteúdo para o editor.
+
+### 4.10 Clientes do protocolo 1.x
+
+O protocolo 1.x não diz quem é o cliente. O servidor passa a reconhecê-lo de outra forma quando ele está na mesma máquina: pergunta ao sistema qual processo é dono da conexão, e com isso o cliente ganha nome e número de processo. Aparece assim nas conexões, entre os publicadores e consumidores de cada fila, no Observar e no mapa, onde passa a ser uma aplicação como as outras — ligada às filas em que publica e de que consome, e reconhecida como grupo do Worker Control ou como serviço Windows pelo número do processo. De outra máquina, o cliente continua sendo só o endereço.
+
+Um consumidor 1.x escuta vindo perguntar. A partir de agora a fila passa a existir quando alguém pergunta por ela, com quem perguntou anotado, mesmo vazia: é o que faz as filas consumidas por clientes 1.x aparecerem nas telas e no mapa sem esperar uma mensagem passar. Uma fila definida no painel também é desenhada no mapa mesmo parada.
+
 ### 4.8 Trace
 
 Acompanhar ao vivo o `Trace()` de um worker, a partir do menu do processo na tela do Worker Control. O contrato com os workers está na [especificação do Worker Control](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md), seção 11.3.
@@ -132,6 +147,7 @@ Acompanhar ao vivo o `Trace()` de um worker, a partir do menu do processo na tel
 - **Descartável.** As linhas trafegam em filas `zapmq.trace.<pid>`, que o broker trata como descartáveis: não geram mensagens mortas, e o que ninguém consome some em 15 segundos. Um navegador que não acompanha o volume perde as linhas mais antigas que ainda não leu.
 - **Histórico curto.** O serviço guarda as últimas 2.000 linhas de cada processo, por até 5 minutos depois de o último sair; quem chega depois as vê.
 - **Na tela:** filtro por texto, pausa (as linhas continuam chegando e são contadas), quebra de linha, limpar e salvar em arquivo. Quando o processo descarta linhas por excesso de volume, a tela diz quantas.
+- **Serviços Windows:** o cartão de um serviço acompanhado tem o item Trace, que segue o processo do serviço e os que ele iniciou. Só há o que ver quando o serviço usa o wrapper de worker; sem ele, a tela diz que o processo não atende pedidos de trace, e nada é enviado a ele.
 - **Processos com o trace antigo** (Delphi, ou wrapper .NET anterior ao 2.0): o serviço pede ao Worker Control, que abre o socket na máquina do processo e publica o que chega. A tela avisa que o trace está sendo repassado. Sem o Worker Control 2.1 no ar, a tela explica por que não há trace.
 
 ## 5. O que o servidor ganha

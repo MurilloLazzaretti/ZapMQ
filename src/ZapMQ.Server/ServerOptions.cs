@@ -38,6 +38,12 @@ public sealed class ServerOptions
     /// File that keeps the queue settings made through the panel, relative to the executable
     /// unless it is a full path.
     /// </summary>
+    /// <summary>
+    /// Where the message models saved through the panel are kept. Relative to the executable
+    /// unless it is a full path.
+    /// </summary>
+    public string MessageModelsFile { get; set; } = "models.json";
+
     public string QueueDefinitionsFile { get; set; } = "queues.json";
 
     public V2Options V2 { get; set; } = new();
@@ -113,6 +119,12 @@ public sealed class QueueSettingsOptions
     /// A paused queue keeps receiving and hands nothing to anybody.
     /// </summary>
     public bool Paused { get; set; }
+
+    /// <summary>
+    /// How many of the last messages that went through the queue are kept to be looked at
+    /// in the panel. Zero or absent keeps none.
+    /// </summary>
+    public int? KeepRecent { get; set; }
 
     public QueueDeadLetterOptions? DeadLetters { get; set; }
 }

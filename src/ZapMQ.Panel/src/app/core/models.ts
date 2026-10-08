@@ -59,8 +59,43 @@ export interface QueueRow {
 export interface QueueSettings {
   retentionSeconds: number | null;
   redeliverUnconfirmed: boolean;
+  /** How many of the last messages are kept to be looked at; null keeps none. */
+  keepRecent?: number | null;
   paused?: boolean;
   deadLetters: { maxMessagesPerQueue: number | null; maxAgeHours: number | null } | null;
+}
+
+/** One step in the life of a message of a queue that is being watched. */
+export interface TapEvent {
+  kind: 'published' | 'delivered' | 'confirmed' | 'responded' | 'dead';
+  queue: string;
+  id: string;
+  at: string;
+  /** JSON text. Comes with the publication. */
+  body?: string;
+  /** The body or the answer was too long and was cut. */
+  truncated?: boolean;
+  rpc?: boolean;
+  /** Who published, or who the message was delivered to. */
+  who?: string;
+  /** JSON text. Comes with the response. */
+  response?: string;
+  reason?: string;
+}
+
+/** A message body saved under a name, to publish again. */
+export interface MessageModel {
+  name: string;
+  body: unknown;
+  ttlMs: number;
+  rpc: boolean;
+}
+
+export interface PublishResult {
+  id: string;
+  rpc: boolean;
+  answered?: boolean;
+  response?: unknown;
 }
 
 export interface QueueSnapshot {
@@ -106,6 +141,9 @@ export interface Connection {
 
 export interface V1Client {
   address: string;
+  /** The name of the process, when the client is on the machine of the broker. */
+  application: string | null;
+  pid: number | null;
   lastSeen: string;
   consumes: string[];
   publishes: string[];

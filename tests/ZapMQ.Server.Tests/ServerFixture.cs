@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using ZapMQ.Server;
@@ -38,15 +39,31 @@ public sealed class ServerFixture : IAsyncLifetime
 
     public IServiceProvider Services => _app!.Services;
 
+    /// <summary>
+    /// The process a new 1.x connection of this machine is said to come from. Null, as it
+    /// starts, is the system not being able to tell.
+    /// </summary>
+    public (int ProcessId, string Name)? Peer { get; set; }
+
+    private sealed class Peers(ServerFixture fixture) : global::ZapMQ.Server.V1.IPeerResolver
+    {
+        public (int ProcessId, string Name)? Resolve(System.Net.Sockets.AddressFamily family, int clientPort, int serverPort) => fixture.Peer;
+    }
+
     public async Task InitializeAsync()
     {
         _definitions = Path.Combine(Path.GetTempPath(), "zapmq-test-" + Guid.NewGuid().ToString("N") + ".json");
-        _app = ServerHost.Build([], builder => builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        _app = ServerHost.Build([], builder =>
         {
-            ["ZapMQ:Port"] = "0",
-            ["ZapMQ:Panel:Port"] = "0",
-            ["ZapMQ:QueueDefinitionsFile"] = _definitions
-        }));
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ZapMQ:Port"] = "0",
+                ["ZapMQ:Panel:Port"] = "0",
+                ["ZapMQ:QueueDefinitionsFile"] = _definitions,
+                ["ZapMQ:MessageModelsFile"] = _definitions + ".models"
+            });
+            builder.Services.AddSingleton<global::ZapMQ.Server.V1.IPeerResolver>(new Peers(this));
+        });
         await _app.StartAsync();
 
         // In the order they were opened: messaging first, panel second.
