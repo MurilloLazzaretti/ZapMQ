@@ -44,4 +44,9 @@ public sealed record QueueOptions
     /// of dead-lettering it. Only for queues where handling the same message twice does no harm.
     /// </summary>
     public bool RedeliverUnconfirmed { get; init; }
+
+    /// <summary>
+    /// A paused queue keeps receiving and hands nothing to anybody.
+    /// </summary>
+    public bool Paused { get; init; }
 }

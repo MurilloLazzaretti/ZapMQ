@@ -31,6 +31,11 @@ internal sealed class V2Connection(WebSocket socket, Broker broker, V2Options op
 
     public override string Description => $"{ClientName} (pid {ProcessId} @ {Host}) {Id}";
 
+    /// <summary>
+    /// How this connection is named in the record of who uses a queue.
+    /// </summary>
+    public string Party => $"v2:{Id}|{ClientName}|{Host}|{ProcessId}";
+
     protected override void Deliver(BrokerMessage message) => Send(V2Frames.Deliver(message));
 
     protected override void DeliverResponse(BrokerMessage message) => Send(V2Frames.Response(message));
@@ -196,7 +201,7 @@ internal sealed class V2Connection(WebSocket socket, Broker broker, V2Options op
                     ? TimeSpan.FromMilliseconds(milliseconds)
                     : TimeSpan.Zero;
 
-                var messageId = broker.Publish(queue, body, rpc, ttl, replyTo: rpc ? this : null);
+                var messageId = broker.Publish(queue, body, rpc, ttl, replyTo: rpc ? this : null, publisher: Party);
                 return V2Frames.Ok(id, writer => writer.WriteString("messageId", messageId));
             }
 

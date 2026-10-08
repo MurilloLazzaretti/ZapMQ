@@ -10,6 +10,13 @@ internal sealed class DeadLetterStore(TimeProvider time)
     // Oldest first.
     private readonly Dictionary<string, LinkedList<DeadLetter>> _byQueue = new(StringComparer.Ordinal);
 
+    private long _total;
+
+    /// <summary>
+    /// How many letters were ever kept, including the ones no longer here.
+    /// </summary>
+    public long Total => Interlocked.Read(ref _total);
+
     public void Add(DeadLetter letter, int limit, TimeSpan maxAge)
     {
         if (limit <= 0 || maxAge <= TimeSpan.Zero)
@@ -21,6 +28,7 @@ internal sealed class DeadLetterStore(TimeProvider time)
                 _byQueue[letter.Queue] = letters = new LinkedList<DeadLetter>();
 
             letters.AddLast(letter);
+            Interlocked.Increment(ref _total);
             while (letters.Count > limit)
                 letters.RemoveFirst();
         }

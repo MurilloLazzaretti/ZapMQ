@@ -27,7 +27,38 @@ public sealed record QueueSnapshot(
     long Expired,
     long NotConsumed,
     long Unconfirmed,
-    long Dropped);
+    long Dropped)
+{
+    /// <summary>
+    /// The queue receives and hands nothing out.
+    /// </summary>
+    public bool Paused { get; init; }
+
+    /// <summary>
+    /// Messages thrown away by somebody emptying the queue.
+    /// </summary>
+    public long Purged { get; init; }
+}
+
+/// <summary>
+/// A message still waiting in a queue, as shown to whoever inspects it.
+/// </summary>
+public sealed record PendingMessage(string Id, string Body, bool Rpc, DateTimeOffset PublishedAt, TimeSpan? Ttl, string? RequeuedFrom);
+
+/// <summary>
+/// Somebody who has been publishing to a queue, or asking it for messages.
+/// </summary>
+public sealed record QueueParty(string Name, DateTimeOffset LastSeen, long Count);
+
+/// <summary>
+/// Who has been using a queue recently.
+/// </summary>
+public sealed record QueueActivity(string Queue, IReadOnlyList<QueueParty> Publishers, IReadOnlyList<QueueParty> Askers, IReadOnlyList<string> Consumers);
+
+/// <summary>
+/// Counters of the whole broker since it started. They keep counting after a queue is let go.
+/// </summary>
+public sealed record BrokerTotals(long Published, long Delivered, long Confirmed, long DeadLettered);
 
 public enum DeadLetterReason
 {

@@ -19,6 +19,7 @@ public sealed class Broker
     // Queue names are case-sensitive, as they have always been.
     private readonly ConcurrentDictionary<string, MessageQueue> _queues = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, QueueOptions> _queueOptions;
+    private long _published, _delivered, _confirmed;
 
     public Broker(BrokerOptions? options = null, TimeProvider? time = null)
     {
@@ -36,10 +37,14 @@ public sealed class Broker
     /// retention. <paramref name="replyTo"/> is the consumer that gets the answer pushed when the
     /// message is an RPC one.
     /// </summary>
-    public string Publish(string queue, string body, bool rpc = false, TimeSpan ttl = default, Consumer? replyTo = null) =>
-        Publish(queue, body, rpc, ttl, replyTo, requeuedFrom: null);
+    /// <remarks>
+    /// <paramref name="publisher"/> names whoever is publishing, for the record of who uses the
+    /// queue; it changes nothing in the delivery.
+    /// </remarks>
+    public string Publish(string queue, string body, bool rpc = false, TimeSpan ttl = default, Consumer? replyTo = null, string? publisher = null) =>
+        Publish(queue, body, rpc, ttl, replyTo, requeuedFrom: null, publisher);
 
-    private string Publish(string queue, string body, bool rpc, TimeSpan ttl, Consumer? replyTo, string? requeuedFrom)
+    private string Publish(string queue, string body, bool rpc, TimeSpan ttl, Consumer? replyTo, string? requeuedFrom, string? publisher)
     {
         ArgumentException.ThrowIfNullOrEmpty(queue);
         ArgumentNullException.ThrowIfNull(body);
@@ -51,13 +56,14 @@ public sealed class Broker
         while (true)
         {
             var target = GetOrAddQueue(queue);
-            if (target.TryPublish(id, body, rpc, ttl, replyTo, requeuedFrom, deliveries))
+            if (target.TryPublish(id, body, rpc, ttl, replyTo, requeuedFrom, publisher, deliveries))
                 break;
 
             // The sweeper retired this instance between the lookup and the publish.
             _queues.TryRemove(new KeyValuePair<string, MessageQueue>(queue, target));
         }
 
+        Interlocked.Increment(ref _published);
         Hand(deliveries);
         return id;
     }
@@ -68,8 +74,16 @@ public sealed class Broker
     /// Delivers the oldest pending message of the queue to this caller only, or null when there
     /// is none. Delivery ends a plain message; an RPC one then waits for its response.
     /// </summary>
-    public BrokerMessage? Take(string queue) =>
-        _queues.TryGetValue(queue, out var target) ? target.Take() : null;
+    /// <remarks>
+    /// <paramref name="asker"/> names whoever is asking, for the record of who uses the queue.
+    /// </remarks>
+    public BrokerMessage? Take(string queue, string? asker = null)
+    {
+        var message = _queues.TryGetValue(queue, out var target) ? target.Take(asker) : null;
+        if (message is not null)
+            Interlocked.Increment(ref _delivered);
+        return message;
+    }
 
     /// <summary>
     /// Stores the response of an RPC message that was taken. With
@@ -146,6 +160,7 @@ public sealed class Broker
         if (!_queues.TryGetValue(queue, out var target) || !target.Confirm(consumer, id))
             return false;
 
+        Interlocked.Increment(ref _confirmed);
         Free(consumer);
         return true;
     }
@@ -163,6 +178,7 @@ public sealed class Broker
         if (!target.Respond(consumer, id, response, deliveries))
             return false;
 
+        Interlocked.Increment(ref _confirmed);
         Hand(deliveries);
         Free(consumer);
         return true;
@@ -229,7 +245,7 @@ public sealed class Broker
     public string? RequeueDeadLetter(string queue, string id)
     {
         var letter = _deadLetters.Remove(queue, id);
-        return letter is null ? null : Publish(queue, letter.Body, letter.Rpc, default, replyTo: null, requeuedFrom: letter.Id);
+        return letter is null ? null : Publish(queue, letter.Body, letter.Rpc, default, replyTo: null, requeuedFrom: letter.Id, publisher: null);
     }
 
     public bool DiscardDeadLetter(string queue, string id) => _deadLetters.Remove(queue, id) is not null;
@@ -255,8 +271,56 @@ public sealed class Broker
             _queueOptions[queue] = options;
 
         if (_queues.TryGetValue(queue, out var target))
+        {
             target.Settings = Resolve(queue);
+            // A queue that was paused and no longer is has messages to hand out.
+            var deliveries = new List<Delivery>();
+            target.Dispatch(deliveries);
+            Hand(deliveries);
+        }
     }
+
+    /// <summary>
+    /// Every queue with settings of its own.
+    /// </summary>
+    public IReadOnlyDictionary<string, QueueOptions> GetAllQueueOptions() =>
+        new Dictionary<string, QueueOptions>(_queueOptions, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Pauses or resumes a queue, keeping its other settings.
+    /// </summary>
+    public void SetPaused(string queue, bool paused) =>
+        ConfigureQueue(queue, (GetQueueOptions(queue) ?? new QueueOptions()) with { Paused = paused });
+
+    // ── Inspection ──────────────────────────────────────────────────────────
+
+    public QueueSnapshot? GetQueue(string queue) =>
+        _queues.TryGetValue(queue, out var target) ? target.GetSnapshot() : null;
+
+    /// <summary>
+    /// The pending messages of a queue, oldest first, without consuming them.
+    /// </summary>
+    public IReadOnlyList<PendingMessage> Peek(string queue, int limit = 100) =>
+        _queues.TryGetValue(queue, out var target) ? target.Peek(limit) : [];
+
+    /// <summary>
+    /// Throws away the pending messages of a queue and returns how many there were. Messages
+    /// being processed are not touched.
+    /// </summary>
+    public int Purge(string queue) =>
+        _queues.TryGetValue(queue, out var target) ? target.Purge() : 0;
+
+    /// <summary>
+    /// Who has published to each queue, asked it for messages or is bound to it, lately.
+    /// </summary>
+    public IReadOnlyList<QueueActivity> GetActivity(TimeSpan window)
+    {
+        var since = _time.GetUtcNow() - window;
+        return _queues.Values.Select(queue => queue.GetActivity(since)).OrderBy(activity => activity.Queue, StringComparer.Ordinal).ToList();
+    }
+
+    public BrokerTotals GetTotals() =>
+        new(Interlocked.Read(ref _published), Interlocked.Read(ref _delivered), Interlocked.Read(ref _confirmed), _deadLetters.Total);
 
     // ── Housekeeping ────────────────────────────────────────────────────────
 
@@ -293,7 +357,8 @@ public sealed class Broker
             _options.EmptyQueueLifetime,
             own?.DeadLetterLimit ?? _options.DeadLetterLimit,
             own?.DeadLetterMaxAge ?? _options.DeadLetterMaxAge,
-            own?.RedeliverUnconfirmed ?? false);
+            own?.RedeliverUnconfirmed ?? false,
+            own?.Paused ?? false);
     }
 
     /// <summary>
@@ -326,16 +391,21 @@ public sealed class Broker
     /// Hands deliveries over outside every lock. A consumer that fails here is on its way out:
     /// whoever owns it reports the disconnection, which settles the message it was given.
     /// </summary>
-    private static void Hand(List<Delivery> deliveries)
+    private void Hand(List<Delivery> deliveries)
     {
         foreach (var delivery in deliveries)
         {
             try
             {
                 if (delivery.IsResponse)
+                {
                     delivery.Consumer.DeliverResponse(delivery.Message);
+                }
                 else
+                {
+                    Interlocked.Increment(ref _delivered);
                     delivery.Consumer.Deliver(delivery.Message);
+                }
             }
             catch
             {

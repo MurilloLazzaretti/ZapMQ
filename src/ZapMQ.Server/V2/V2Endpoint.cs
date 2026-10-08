@@ -14,6 +14,13 @@ public sealed class V2Connections
 
     internal void Remove(V2Connection connection) => _open.TryRemove(connection.Id, out _);
 
+    public int Count => _open.Count;
+
+    /// <summary>
+    /// The connections as they are, for whoever needs more than the summary below.
+    /// </summary>
+    internal IReadOnlyList<V2Connection> All() => [.. _open.Values];
+
     public IReadOnlyList<object> Describe() =>
         _open.Values
             .OrderBy(connection => connection.Id, StringComparer.Ordinal)

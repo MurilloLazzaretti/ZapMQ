@@ -20,19 +20,45 @@ public sealed class ServerFixture : IAsyncLifetime
     public HttpClient Http { get; private set; } = null!;
 
     /// <summary>
-    /// Rooted at the server itself: administration, metrics, health.
+    /// Rooted at the panel port and logged in: administration, metrics, health.
     /// </summary>
     public HttpClient Admin { get; private set; } = null!;
 
+    /// <summary>
+    /// The port of the panel.
+    /// </summary>
+    public int PanelPort { get; private set; }
+
+    private string _definitions = "";
+
+    /// <summary>
+    /// Where this server keeps the queue settings made through the panel.
+    /// </summary>
+    public string DefinitionsFile => _definitions;
+
+    public IServiceProvider Services => _app!.Services;
+
     public async Task InitializeAsync()
     {
-        _app = ServerHost.Build([], builder => builder.Configuration.AddInMemoryCollection(
-            new Dictionary<string, string?> { ["ZapMQ:Port"] = "0" }));
+        _definitions = Path.Combine(Path.GetTempPath(), "zapmq-test-" + Guid.NewGuid().ToString("N") + ".json");
+        _app = ServerHost.Build([], builder => builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ZapMQ:Port"] = "0",
+            ["ZapMQ:Panel:Port"] = "0",
+            ["ZapMQ:QueueDefinitionsFile"] = _definitions
+        }));
         await _app.StartAsync();
 
-        Port = new Uri(_app.Urls.First().Replace("[::]", "localhost").Replace("0.0.0.0", "localhost")).Port;
+        // In the order they were opened: messaging first, panel second.
+        var ports = _app.Urls.Select(url => new Uri(url.Replace("[::]", "localhost").Replace("0.0.0.0", "localhost")).Port).ToList();
+        Port = ports[0];
+        PanelPort = ports[1];
         Http = new HttpClient { BaseAddress = new Uri($"http://localhost:{Port}/datasnap/rest/TZapMethods/") };
-        Admin = new HttpClient { BaseAddress = new Uri($"http://localhost:{Port}/") };
+
+        // The administration is on the panel port, behind its login.
+        Admin = new HttpClient(new HttpClientHandler { CookieContainer = new System.Net.CookieContainer() }) { BaseAddress = new Uri($"http://localhost:{PanelPort}/") };
+        var login = await Admin.PostAsync("api/login", System.Net.Http.Json.JsonContent.Create(new { user = "admin", password = "admin" }));
+        login.EnsureSuccessStatusCode();
     }
 
     public async Task DisposeAsync()
@@ -44,5 +70,6 @@ public sealed class ServerFixture : IAsyncLifetime
             await _app.StopAsync();
             await _app.DisposeAsync();
         }
+        File.Delete(_definitions);
     }
 }

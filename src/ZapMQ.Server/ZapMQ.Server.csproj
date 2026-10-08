@@ -20,11 +20,22 @@
     <DebugType>embedded</DebugType>
   </PropertyGroup>
 
+  <!-- The panel interface, compiled by the Angular project in src/ZapMQ.Panel, goes inside the
+       executable. Without it the service still builds and runs; the panel port then answers
+       its API only. -->
+  <PropertyGroup>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="wwwroot\**\*" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\ZapMQ.Core\ZapMQ.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.12" />
     <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />

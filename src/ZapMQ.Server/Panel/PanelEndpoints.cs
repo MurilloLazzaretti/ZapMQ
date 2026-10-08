@@ -1,0 +1,371 @@
+using System.Text.Json;
+using ZapMQ.Core;
+using ZapMQ.Server.Admin;
+using ZapMQ.Server.V2;
+
+namespace ZapMQ.Server.Panel;
+
+/// <summary>
+/// What the panel reads and commands, under <c>/api</c>. All of it sits behind the login.
+/// </summary>
+public static class PanelEndpoints
+{
+    private static readonly TimeSpan ActivityWindow = TimeSpan.FromMinutes(10);
+    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+
+    public static void MapPanelApi(this IEndpointRouteBuilder routes, ServerOptions options, DateTimeOffset startedAt)
+    {
+        var api = routes.MapGroup("/api");
+
+        // ── Session ─────────────────────────────────────────────────────────
+
+        api.MapPost("/login", (LoginRequest request, PanelAuth auth, HttpContext context, ILoggerFactory loggers) =>
+        {
+            var log = loggers.CreateLogger("ZapMQ.Panel");
+            if (!auth.Accepts(request.User, request.Password))
+            {
+                log.LogWarning("Refused panel login for {User} from {Address}", request.User, context.Connection.RemoteIpAddress);
+                return Results.Json(new { error = "Usuário ou senha inválidos" }, statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            context.Response.Cookies.Append(PanelAuth.Cookie, auth.Issue(request.User!), new CookieOptions
+            {
+                HttpOnly = true,
+                SameSite = SameSiteMode.Strict,
+                Path = context.Request.PathBase.HasValue ? context.Request.PathBase.Value : "/",
+                MaxAge = auth.SessionLength
+            });
+            log.LogInformation("Panel login of {User} from {Address}", request.User, context.Connection.RemoteIpAddress);
+            return Results.Json(new { user = request.User, defaultPassword = auth.HasDefaultPassword });
+        });
+
+        api.MapPost("/logout", (HttpContext context) =>
+        {
+            context.Response.Cookies.Delete(PanelAuth.Cookie, new CookieOptions
+            {
+                Path = context.Request.PathBase.HasValue ? context.Request.PathBase.Value : "/"
+            });
+            return Results.NoContent();
+        });
+
+        api.MapGet("/session", (HttpContext context, PanelAuth auth) =>
+            auth.Validate(context.Request.Cookies[PanelAuth.Cookie]) is { } user
+                ? Results.Json(new { user, defaultPassword = auth.HasDefaultPassword, version = ServerHost.Version })
+                : Results.Json(new { user = (string?)null, version = ServerHost.Version }, statusCode: StatusCodes.Status401Unauthorized));
+
+        // ── Overview and charts ─────────────────────────────────────────────
+
+        api.MapGet("/overview", (Broker broker, V2Connections connections, MetricsSampler sampler) =>
+            Results.Json(Overview(broker, connections, sampler, startedAt)));
+
+        api.MapGet("/series", (string? range, MetricsSampler sampler) =>
+            Results.Json(new { range = range == "day" ? "day" : "hour", points = range == "day" ? sampler.Day() : sampler.Recent() }));
+
+        // Server-sent events: the same overview and list of queues, again every two seconds.
+        api.MapGet("/live", async (HttpContext context, Broker broker, V2Connections connections, MetricsSampler sampler, IHostApplicationLifetime lifetime) =>
+        {
+            context.Response.Headers.ContentType = "text/event-stream";
+            context.Response.Headers.CacheControl = "no-cache";
+            // Tells a reverse proxy not to hold the events back.
+            context.Response.Headers["X-Accel-Buffering"] = "no";
+
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, lifetime.ApplicationStopping);
+            try
+            {
+                while (!stop.IsCancellationRequested)
+                {
+                    var payload = JsonSerializer.Serialize(new
+                    {
+                        overview = Overview(broker, connections, sampler, startedAt),
+                        queues = Queues(broker)
+                    }, Web);
+                    await context.Response.WriteAsync($"data: {payload}\n\n", stop.Token);
+                    await context.Response.Body.FlushAsync(stop.Token);
+                    await Task.Delay(TimeSpan.FromSeconds(2), stop.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // The browser went away or the service is stopping.
+            }
+        });
+
+        // ── Queues ──────────────────────────────────────────────────────────
+
+        api.MapGet("/queues", (Broker broker) => Results.Json(Queues(broker)));
+
+        api.MapGet("/queues/{queue}", (string queue, Broker broker, V2Connections connections) =>
+        {
+            var activity = broker.GetActivity(ActivityWindow).FirstOrDefault(item => item.Queue == queue);
+            var dead = broker.GetDeadLetterSummary().FirstOrDefault(item => item.Queue == queue);
+            return Results.Json(new
+            {
+                name = queue,
+                exists = broker.GetQueue(queue) is not null,
+                snapshot = broker.GetQueue(queue),
+                settings = broker.GetQueueOptions(queue) is { } own ? QueueSettingsMapping.ToOptions(own) : null,
+                defaults = new
+                {
+                    retentionSeconds = options.RetentionSeconds,
+                    deadLetters = new { maxMessagesPerQueue = options.DeadLetters.MaxMessagesPerQueue, maxAgeHours = options.DeadLetters.MaxAgeHours }
+                },
+                deadLetters = new { expired = dead?.Expired ?? 0, notConsumed = dead?.NotConsumed ?? 0, unconfirmed = dead?.Unconfirmed ?? 0 },
+                publishers = (activity?.Publishers ?? []).Select(Party),
+                askers = (activity?.Askers ?? []).Select(Party),
+                consumers = connections.All()
+                    .Where(connection => connection.GetBoundQueues().Contains(queue))
+                    .Select(Describe)
+            });
+        });
+
+        api.MapGet("/queues/{queue}/messages", (string queue, int? limit, Broker broker) =>
+            Results.Json(broker.Peek(queue, Math.Clamp(limit ?? 50, 1, 500)).Select(message => new
+            {
+                id = message.Id,
+                rpc = message.Rpc,
+                publishedAt = message.PublishedAt,
+                ttlMs = message.Ttl?.TotalMilliseconds,
+                requeuedFrom = message.RequeuedFrom,
+                body = Body(message.Body)
+            })));
+
+        api.MapPut("/queues/{queue}/settings", (string queue, QueueSettingsOptions settings, Broker broker, QueueDefinitionStore store, HttpContext context, ILoggerFactory loggers) =>
+        {
+            // Pausing has its own action; a form that edits the definition must not undo it.
+            settings.Paused = broker.GetQueueOptions(queue)?.Paused ?? false;
+            store.Set(queue, QueueSettingsMapping.ToCore(settings));
+            Audit(loggers, context, "Queue {Queue} reconfigured: {Settings}", queue, JsonSerializer.Serialize(settings, Web));
+            return Results.Json(QueueSettingsMapping.ToOptions(broker.GetQueueOptions(queue)));
+        });
+
+        api.MapDelete("/queues/{queue}/settings", (string queue, QueueDefinitionStore store, HttpContext context, ILoggerFactory loggers) =>
+        {
+            store.Set(queue, null);
+            Audit(loggers, context, "Queue {Queue} back to the default settings", queue);
+            return Results.NoContent();
+        });
+
+        api.MapPost("/queues/{queue}/pause", (string queue, Broker broker, QueueDefinitionStore store, HttpContext context, ILoggerFactory loggers) =>
+        {
+            store.Set(queue, (broker.GetQueueOptions(queue) ?? new QueueOptions()) with { Paused = true });
+            Audit(loggers, context, "Queue {Queue} paused", queue);
+            return Results.NoContent();
+        });
+
+        api.MapPost("/queues/{queue}/resume", (string queue, Broker broker, QueueDefinitionStore store, HttpContext context, ILoggerFactory loggers) =>
+        {
+            var resumed = (broker.GetQueueOptions(queue) ?? new QueueOptions()) with { Paused = false };
+            // A definition that says nothing else is no definition at all.
+            store.Set(queue, resumed == new QueueOptions() ? null : resumed);
+            Audit(loggers, context, "Queue {Queue} resumed", queue);
+            return Results.NoContent();
+        });
+
+        api.MapPost("/queues/{queue}/purge", (string queue, Broker broker, HttpContext context, ILoggerFactory loggers) =>
+        {
+            var purged = broker.Purge(queue);
+            Audit(loggers, context, "Queue {Queue} emptied: {Count} messages thrown away", queue, purged);
+            return Results.Json(new { purged });
+        });
+
+        // ── Dead letters ────────────────────────────────────────────────────
+
+        api.MapGet("/dead-letters", (Broker broker) => Results.Json(broker.GetDeadLetterSummary()));
+
+        api.MapGet("/dead-letters/{queue}", (string queue, Broker broker) =>
+            Results.Json(broker.GetDeadLetters(queue).Select(DeadLetter)));
+
+        api.MapPost("/dead-letters/{queue}/{id}/requeue", (string queue, string id, Broker broker, HttpContext context, ILoggerFactory loggers) =>
+        {
+            if (broker.RequeueDeadLetter(queue, id) is not { } messageId)
+                return Results.NotFound();
+            Audit(loggers, context, "Dead letter {Id} of queue {Queue} was requeued as {MessageId}", id, queue, messageId);
+            return Results.Json(new { messageId });
+        });
+
+        api.MapDelete("/dead-letters/{queue}/{id}", (string queue, string id, Broker broker, HttpContext context, ILoggerFactory loggers) =>
+        {
+            if (!broker.DiscardDeadLetter(queue, id))
+                return Results.NotFound();
+            Audit(loggers, context, "Dead letter {Id} of queue {Queue} was discarded", id, queue);
+            return Results.NoContent();
+        });
+
+        api.MapDelete("/dead-letters/{queue}", (string queue, Broker broker, HttpContext context, ILoggerFactory loggers) =>
+        {
+            var discarded = broker.DiscardDeadLetters(queue);
+            Audit(loggers, context, "The {Count} dead letters of queue {Queue} were discarded", discarded, queue);
+            return Results.Json(new { discarded });
+        });
+
+        // ── Who is connected ────────────────────────────────────────────────
+
+        api.MapGet("/connections", (Broker broker, V2Connections connections) => Results.Json(new
+        {
+            v2 = connections.All().OrderBy(connection => connection.ClientName, StringComparer.OrdinalIgnoreCase).ThenBy(connection => connection.Id, StringComparer.Ordinal).Select(Describe),
+            v1 = V1Clients(broker)
+        }));
+    }
+
+    public sealed record LoginRequest(string? User, string? Password);
+
+    private static object Overview(Broker broker, V2Connections connections, MetricsSampler sampler, DateTimeOffset startedAt)
+    {
+        var queues = broker.GetQueues();
+        var dead = broker.GetDeadLetterSummary();
+        var latest = sampler.Latest;
+        return new
+        {
+            version = ServerHost.Version,
+            startedAt,
+            totals = broker.GetTotals(),
+            rates = new
+            {
+                published = latest?.PublishedPerSecond ?? 0,
+                delivered = latest?.DeliveredPerSecond ?? 0,
+                confirmed = latest?.ConfirmedPerSecond ?? 0
+            },
+            queues = queues.Count,
+            pending = queues.Sum(queue => queue.Pending),
+            processing = queues.Sum(queue => queue.Processing),
+            paused = queues.Count(queue => queue.Paused),
+            withoutConsumer = queues.Count(queue => queue.Pending > 0 && queue.Consumers == 0),
+            deadLetters = new
+            {
+                expired = dead.Sum(item => item.Expired),
+                notConsumed = dead.Sum(item => item.NotConsumed),
+                unconfirmed = dead.Sum(item => item.Unconfirmed)
+            },
+            connections = connections.Count,
+            applications = connections.All().Select(connection => connection.ClientName).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+            v1Clients = V1Clients(broker).Count
+        };
+    }
+
+    private static List<object> Queues(Broker broker)
+    {
+        var dead = broker.GetDeadLetterSummary().ToDictionary(item => item.Queue, StringComparer.Ordinal);
+        var definitions = broker.GetAllQueueOptions();
+        var listed = new List<object>();
+        var live = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var queue in broker.GetQueues())
+        {
+            live.Add(queue.Name);
+            dead.TryGetValue(queue.Name, out var letters);
+            listed.Add(new
+            {
+                name = queue.Name,
+                exists = true,
+                defined = definitions.ContainsKey(queue.Name),
+                queue.Paused,
+                queue.Pending,
+                queue.Processing,
+                queue.AwaitingResponse,
+                queue.Consumers,
+                queue.Published,
+                queue.Delivered,
+                queue.Confirmed,
+                deadLetters = (letters?.Expired ?? 0) + (letters?.NotConsumed ?? 0) + (letters?.Unconfirmed ?? 0)
+            });
+        }
+
+        // A queue somebody defined shows up even while it has no messages and no consumers.
+        foreach (var (name, definition) in definitions.Where(pair => !live.Contains(pair.Key)).OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            dead.TryGetValue(name, out var letters);
+            listed.Add(new
+            {
+                name,
+                exists = false,
+                defined = true,
+                definition.Paused,
+                Pending = 0,
+                Processing = 0,
+                AwaitingResponse = 0,
+                Consumers = 0,
+                Published = 0L,
+                Delivered = 0L,
+                Confirmed = 0L,
+                deadLetters = (letters?.Expired ?? 0) + (letters?.NotConsumed ?? 0) + (letters?.Unconfirmed ?? 0)
+            });
+        }
+        return listed;
+    }
+
+    private static object Describe(V2Connection connection) => new
+    {
+        id = connection.Id,
+        application = connection.ClientName,
+        pid = connection.ProcessId,
+        host = connection.Host,
+        wrapper = connection.Wrapper,
+        connectedAt = connection.ConnectedAt,
+        busy = connection.IsBusy,
+        queues = connection.GetBoundQueues()
+    };
+
+    /// <summary>
+    /// A 1.x client says nothing about itself: they are told apart by address only.
+    /// </summary>
+    private static List<object> V1Clients(Broker broker)
+    {
+        var clients = new SortedDictionary<string, (DateTimeOffset Last, SortedSet<string> Asks, SortedSet<string> Publishes)>(StringComparer.Ordinal);
+        foreach (var activity in broker.GetActivity(ActivityWindow))
+        {
+            foreach (var (party, asks) in activity.Askers.Select(party => (party, true)).Concat(activity.Publishers.Select(party => (party, false))))
+            {
+                if (!party.Name.StartsWith("v1:", StringComparison.Ordinal))
+                    continue;
+                var address = party.Name[3..];
+                if (!clients.TryGetValue(address, out var client))
+                    client = (party.LastSeen, new SortedSet<string>(StringComparer.Ordinal), new SortedSet<string>(StringComparer.Ordinal));
+                (asks ? client.Asks : client.Publishes).Add(activity.Queue);
+                clients[address] = (party.LastSeen > client.Last ? party.LastSeen : client.Last, client.Asks, client.Publishes);
+            }
+        }
+        return clients.Select(pair => (object)new
+        {
+            address = pair.Key,
+            lastSeen = pair.Value.Last,
+            consumes = pair.Value.Asks,
+            publishes = pair.Value.Publishes
+        }).ToList();
+    }
+
+    /// <summary>
+    /// "v1:address" or "v2:connection|application|host|pid", as the protocol layers record them.
+    /// </summary>
+    private static object Party(QueueParty party)
+    {
+        if (party.Name.StartsWith("v2:", StringComparison.Ordinal) && party.Name[3..].Split('|') is [var id, var application, var host, var pid])
+            return new { protocol = "v2", connection = id, application, host, pid, lastSeen = party.LastSeen, count = party.Count };
+        return new { protocol = "v1", connection = (string?)null, application = party.Name[(party.Name.IndexOf(':') + 1)..], host = (string?)null, pid = (string?)null, lastSeen = party.LastSeen, count = party.Count };
+    }
+
+    private static object DeadLetter(DeadLetter letter) => new
+    {
+        id = letter.Id,
+        queue = letter.Queue,
+        reason = letter.Reason switch
+        {
+            DeadLetterReason.Expired => "expired",
+            DeadLetterReason.NotConsumed => "not-consumed",
+            _ => "unconfirmed"
+        },
+        rpc = letter.Rpc,
+        publishedAt = letter.PublishedAt,
+        diedAt = letter.DiedAt,
+        consumer = letter.Consumer,
+        body = Body(letter.Body)
+    };
+
+    private static JsonElement Body(string body)
+    {
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.Clone();
+    }
+
+    private static void Audit(ILoggerFactory loggers, HttpContext context, string message, params object?[] arguments) =>
+        loggers.CreateLogger("ZapMQ.Panel").LogInformation(message + " (by {User})", [.. arguments, context.Items[PanelHost.UserItem]]);
+}

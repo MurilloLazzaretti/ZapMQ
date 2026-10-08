@@ -30,6 +30,8 @@ public static class DataSnapEndpoints
         byte[] payload;
         try
         {
+            // The handlers run right here, on this thread, before anything is awaited.
+            _caller = "v1:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown");
             payload = V1Message.Envelope(Invoke(broker, context.Request.Method, ReadCall(context)));
         }
         catch (Exception error) when (error is V1Exception or ArgumentException)
@@ -57,6 +59,12 @@ public static class DataSnapEndpoints
     /// Splits the call into method and parameters from the request line as it was sent. The
     /// decoded path cannot be used: a message containing an escaped slash would be split in two.
     /// </summary>
+    /// <summary>
+    /// A 1.x client says nothing about itself; its address is all there is to tell who uses a queue.
+    /// </summary>
+    [ThreadStatic]
+    private static string? _caller;
+
     private static string[] ReadCall(HttpContext context)
     {
         var target = context.Features.GetRequiredFeature<IHttpRequestFeature>().RawTarget;
@@ -107,12 +115,12 @@ public static class DataSnapEndpoints
     }
 
     private static string GetMessage(Broker broker, string[] parameters) =>
-        broker.Take(parameters[0]) is { } message ? V1Message.Serialize(message) : string.Empty;
+        broker.Take(parameters[0], _caller) is { } message ? V1Message.Serialize(message) : string.Empty;
 
     private static string UpdateMessage(Broker broker, string[] parameters)
     {
         var publication = V1Message.ParsePublication(parameters[1]);
-        return broker.Publish(parameters[0], publication.Body, publication.Rpc, publication.Ttl);
+        return broker.Publish(parameters[0], publication.Body, publication.Rpc, publication.Ttl, publisher: _caller);
     }
 
     private static string GetRpcResponse(Broker broker, string[] parameters) =>

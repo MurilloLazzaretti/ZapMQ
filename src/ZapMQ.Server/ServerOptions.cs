@@ -34,9 +34,17 @@ public sealed class ServerOptions
     /// </summary>
     public int MaxRequestLineBytes { get; set; } = 4 * 1024 * 1024;
 
+    /// <summary>
+    /// File that keeps the queue settings made through the panel, relative to the executable
+    /// unless it is a full path.
+    /// </summary>
+    public string QueueDefinitionsFile { get; set; } = "queues.json";
+
     public V2Options V2 { get; set; } = new();
 
     public DeadLetterOptions DeadLetters { get; set; } = new();
+
+    public PanelOptions Panel { get; set; } = new();
 
     /// <summary>
     /// Settings of individual queues, by name.
@@ -58,6 +66,33 @@ public sealed class V2Options
     public int PingTimeoutSeconds { get; set; } = 30;
 }
 
+/// <summary>
+/// The administration panel, served on a port of its own.
+/// </summary>
+public sealed class PanelOptions
+{
+    public const string DefaultUser = "admin";
+    public const string DefaultPassword = "admin";
+
+    public bool Enabled { get; set; } = true;
+
+    public int Port { get; set; } = 5680;
+
+    /// <summary>
+    /// The path the panel is published under by a reverse proxy. The panel answers there and
+    /// at the root of its port.
+    /// </summary>
+    public string BasePath { get; set; } = "/zapmq";
+
+    public string User { get; set; } = DefaultUser;
+
+    public string Password { get; set; } = DefaultPassword;
+
+    public int SessionHours { get; set; } = 8;
+
+    public bool HasDefaultPassword => User == DefaultUser && Password == DefaultPassword;
+}
+
 public sealed class DeadLetterOptions
 {
     public int MaxMessagesPerQueue { get; set; } = 1000;
@@ -73,6 +108,11 @@ public sealed class QueueSettingsOptions
     public int? RetentionSeconds { get; set; }
 
     public bool RedeliverUnconfirmed { get; set; }
+
+    /// <summary>
+    /// A paused queue keeps receiving and hands nothing to anybody.
+    /// </summary>
+    public bool Paused { get; set; }
 
     public QueueDeadLetterOptions? DeadLetters { get; set; }
 }

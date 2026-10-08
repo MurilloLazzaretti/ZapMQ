@@ -3,6 +3,7 @@ using Serilog;
 using Serilog.Events;
 using ZapMQ.Core;
 using ZapMQ.Server.Admin;
+using ZapMQ.Server.Panel;
 using ZapMQ.Server.V1;
 using ZapMQ.Server.V2;
 
@@ -11,6 +12,14 @@ namespace ZapMQ.Server;
 public static class ServerHost
 {
     public static string Version { get; } = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "";
+
+    public static object Metrics(Broker broker, V2Connections connections) => new
+    {
+        version = Version,
+        queues = broker.GetQueues(),
+        deadLetters = broker.GetDeadLetterSummary(),
+        connections = connections.Describe()
+    };
 
     public static WebApplication Build(string[] args, Action<WebApplicationBuilder>? configure = null)
     {
@@ -57,11 +66,20 @@ public static class ServerHost
         });
         builder.Services.AddSingleton<V2Connections>();
         builder.Services.AddHostedService<SweeperService>();
+        builder.Services.AddSingleton(services => new PanelAuth(options.Panel, services.GetRequiredService<TimeProvider>()));
+        builder.Services.AddSingleton(services => new QueueDefinitionStore(services.GetRequiredService<Broker>(), services.GetRequiredService<ILogger<QueueDefinitionStore>>())
+        {
+            Path = Path.GetFullPath(options.QueueDefinitionsFile, AppContext.BaseDirectory)
+        });
+        builder.Services.AddSingleton<MetricsSampler>();
+        builder.Services.AddHostedService(services => services.GetRequiredService<MetricsSampler>());
 
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
             kestrel.AddServerHeader = false;
             kestrel.ListenAnyIP(options.Port);
+            if (options.Panel.Enabled)
+                kestrel.ListenPanel(options.Panel);
             kestrel.Limits.MaxRequestLineSize = options.MaxRequestLineBytes;
             kestrel.Limits.MaxRequestBufferSize = Math.Max(
                 kestrel.Limits.MaxRequestBufferSize ?? 0, options.MaxRequestLineBytes + 64 * 1024L);
@@ -80,18 +98,23 @@ public static class ServerHost
             app.Services.GetRequiredService<V2Connections>().DrainAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
         });
 
+        // What the panel changed in the queues goes on top of what the settings file says.
+        app.Services.GetRequiredService<QueueDefinitionStore>().Load();
+
+        var startedAt = DateTimeOffset.UtcNow;
+        if (options.Panel.Enabled)
+        {
+            if (options.Panel.HasDefaultPassword)
+                app.Lifetime.ApplicationStarted.Register(() => lifetimeLog.LogWarning(
+                    "The panel is using the initial user and password; change ZapMQ:Panel:User and ZapMQ:Panel:Password in appsettings.json"));
+            app.UsePanel(options, startedAt);
+        }
+
         if (options.V2.Enabled)
             app.MapV2(options.V2);
         app.MapDataSnap();
-        app.MapAdmin();
         app.MapGet("/health", () => Results.Json(new { status = "ok" }));
-        app.MapGet("/metrics", (Broker broker, V2Connections connections) => Results.Json(new
-        {
-            version = Version,
-            queues = broker.GetQueues(),
-            deadLetters = broker.GetDeadLetterSummary(),
-            connections = connections.Describe()
-        }));
+        app.MapGet("/metrics", (Broker broker, V2Connections connections) => Results.Json(Metrics(broker, connections)));
 
         return app;
     }

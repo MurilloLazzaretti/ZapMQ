@@ -8,7 +8,8 @@ internal sealed record QueueSettings(
     TimeSpan EmptyLifetime,
     int DeadLetterLimit,
     TimeSpan DeadLetterMaxAge,
-    bool RedeliverUnconfirmed);
+    bool RedeliverUnconfirmed,
+    bool Paused);
 
 /// <summary>
 /// Something to hand to a consumer once the queue lock is released.
@@ -43,7 +44,11 @@ internal sealed class MessageQueue(string name, TimeProvider time, QueueSettings
     private readonly List<Consumer> _consumers = [];
     private int _nextConsumer;
     private long? _emptySince;
-    private long _published, _delivered, _confirmed, _responded, _redelivered, _expired, _notConsumed, _unconfirmed, _dropped;
+    private long _published, _delivered, _confirmed, _responded, _redelivered, _expired, _notConsumed, _unconfirmed, _dropped, _purged;
+    // Who has been publishing here and who has been asking for messages (the 1.x way), with the
+    // last time and how often. Consumers that get messages pushed are in _consumers already.
+    private readonly Dictionary<string, (DateTimeOffset Last, long Count)> _publishers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (DateTimeOffset Last, long Count)> _askers = new(StringComparer.Ordinal);
 
     public string Name { get; } = name;
 
@@ -58,12 +63,14 @@ internal sealed class MessageQueue(string name, TimeProvider time, QueueSettings
     /// </summary>
     public bool Removed { get; private set; }
 
-    public bool TryPublish(string id, string body, bool rpc, TimeSpan ttl, Consumer? replyTo, string? requeuedFrom, List<Delivery> deliveries)
+    public bool TryPublish(string id, string body, bool rpc, TimeSpan ttl, Consumer? replyTo, string? requeuedFrom, string? publisher, List<Delivery> deliveries)
     {
         lock (_gate)
         {
             if (Removed)
                 return false;
+
+            Note(_publishers, publisher);
 
             _pending.AddLast(new Entry
             {
@@ -88,11 +95,13 @@ internal sealed class MessageQueue(string name, TimeProvider time, QueueSettings
     /// the message and taking it out of the pending list happen under the same lock, so two
     /// concurrent callers can never receive the same message.
     /// </summary>
-    public BrokerMessage? Take()
+    public BrokerMessage? Take(string? asker = null)
     {
         lock (_gate)
         {
-            var node = FirstDeliverable();
+            Note(_askers, asker);
+            // A paused queue keeps receiving and hands nothing to anybody.
+            var node = Settings.Paused ? null : FirstDeliverable();
             if (node is null)
             {
                 TrackEmptiness();
@@ -140,7 +149,7 @@ internal sealed class MessageQueue(string name, TimeProvider time, QueueSettings
     {
         lock (_gate)
         {
-            while (_consumers.Count > 0 && FirstDeliverable() is { } node)
+            while (!Settings.Paused && _consumers.Count > 0 && FirstDeliverable() is { } node)
             {
                 var consumer = NextFreeConsumer();
                 if (consumer is null)
@@ -308,6 +317,51 @@ internal sealed class MessageQueue(string name, TimeProvider time, QueueSettings
         }
     }
 
+    /// <summary>
+    /// The pending messages, oldest first, without touching them.
+    /// </summary>
+    public IReadOnlyList<PendingMessage> Peek(int limit)
+    {
+        lock (_gate)
+        {
+            var found = new List<PendingMessage>(Math.Min(limit, _pending.Count));
+            for (var node = _pending.First; node is not null && found.Count < limit; node = node.Next)
+            {
+                var entry = node.Value;
+                found.Add(new PendingMessage(entry.Id, entry.Body, entry.Rpc, entry.PublishedAt, entry.Ttl > TimeSpan.Zero ? entry.Ttl : null, entry.RequeuedFrom));
+            }
+            return found;
+        }
+    }
+
+    /// <summary>
+    /// Throws away every pending message. They do not become dead letters: this is somebody's
+    /// decision, not something that went wrong.
+    /// </summary>
+    public int Purge()
+    {
+        lock (_gate)
+        {
+            var count = _pending.Count;
+            _pending.Clear();
+            _purged += count;
+            TrackEmptiness();
+            return count;
+        }
+    }
+
+    public QueueActivity GetActivity(DateTimeOffset since)
+    {
+        lock (_gate)
+        {
+            return new QueueActivity(
+                Name,
+                Recent(_publishers, since),
+                Recent(_askers, since),
+                _consumers.Select(consumer => consumer.Description).ToList());
+        }
+    }
+
     public bool Contains(string id)
     {
         lock (_gate)
@@ -362,7 +416,11 @@ internal sealed class MessageQueue(string name, TimeProvider time, QueueSettings
             var answered = _inFlight.Values.Count(e => e.Owner is null && e.Response is not null);
             return new QueueSnapshot(Name, _pending.Count, processing, _inFlight.Count - processing - answered, answered,
                 _consumers.Count, _published, _delivered, _confirmed, _responded, _redelivered,
-                _expired, _notConsumed, _unconfirmed, _dropped);
+                _expired, _notConsumed, _unconfirmed, _dropped)
+            {
+                Paused = Settings.Paused,
+                Purged = _purged
+            };
         }
     }
 
@@ -377,6 +435,20 @@ internal sealed class MessageQueue(string name, TimeProvider time, QueueSettings
                 return node;
         }
         return null;
+    }
+
+    private void Note(Dictionary<string, (DateTimeOffset Last, long Count)> who, string? name)
+    {
+        if (name is null)
+            return;
+        who[name] = (time.GetUtcNow(), who.GetValueOrDefault(name).Count + 1);
+    }
+
+    private static List<QueueParty> Recent(Dictionary<string, (DateTimeOffset Last, long Count)> who, DateTimeOffset since)
+    {
+        foreach (var old in who.Where(pair => pair.Value.Last < since).Select(pair => pair.Key).ToList())
+            who.Remove(old);
+        return who.Select(pair => new QueueParty(pair.Key, pair.Value.Last, pair.Value.Count)).OrderBy(party => party.Name, StringComparer.Ordinal).ToList();
     }
 
     private bool BuryIfDead(LinkedListNode<Entry> node)

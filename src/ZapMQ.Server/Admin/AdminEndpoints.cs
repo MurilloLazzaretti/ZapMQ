@@ -85,6 +85,7 @@ public static class QueueSettingsMapping
     {
         Retention = settings.RetentionSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : null,
         RedeliverUnconfirmed = settings.RedeliverUnconfirmed,
+        Paused = settings.Paused,
         DeadLetterLimit = settings.DeadLetters?.MaxMessagesPerQueue,
         DeadLetterMaxAge = settings.DeadLetters?.MaxAgeHours is { } hours ? TimeSpan.FromHours(hours) : null
     };
@@ -93,6 +94,7 @@ public static class QueueSettingsMapping
     {
         RetentionSeconds = options?.Retention is { } retention ? (int)retention.TotalSeconds : null,
         RedeliverUnconfirmed = options?.RedeliverUnconfirmed ?? false,
+        Paused = options?.Paused ?? false,
         DeadLetters = options?.DeadLetterLimit is null && options?.DeadLetterMaxAge is null
             ? null
             : new QueueDeadLetterOptions
