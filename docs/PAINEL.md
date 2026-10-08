@@ -1,0 +1,199 @@
+# ZapMQ — Painel de administração
+
+Situação: proposta, aguardando aprovação das decisões da seção 9.
+Última revisão: 2026-10-07.
+
+Este documento especifica o painel web do ZapMQ (versão 2.2), que inclui a seção do Worker Control. Corresponde à fase 6 do [plano](PLANO-2.0.md) e à etapa 4 da [especificação do Worker Control 2.0](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md).
+
+---
+
+## 1. O que o painel é
+
+Uma aplicação web, servida pelo próprio serviço do ZapMQ, para acompanhar e administrar o broker e tudo o que conversa por ele: filas, mensagens, aplicações conectadas e os processos mantidos pelo Worker Control.
+
+Decisões já tomadas:
+
+| Assunto | Decisão |
+|---|---|
+| Interface | Angular |
+| Porta | 5680, própria, separada da mensageria (5679) |
+| Publicação | Atrás do proxy reverso existente, no caminho `/zapmq` |
+| Acesso | Login no próprio painel, com um usuário e senha configuráveis; valor inicial `admin` / `admin` |
+| Vínculo com outros sistemas | Nenhum: o painel é parte do ZapMQ e não depende de nenhuma aplicação que use o broker |
+
+## 2. Arquitetura
+
+```
+navegador ──► proxy reverso (/zapmq) ──► serviço ZapMQ, porta 5680
+                                          ├─ arquivos da interface (Angular, dentro do executável)
+                                          ├─ /api/...      consulta e administração
+                                          └─ /api/live     atualizações ao vivo
+                                                 │
+                              núcleo do broker ──┴── fila WorkerControlAdmin ──► Worker Control
+```
+
+- **Um executável.** A interface é compilada no momento do publish e embutida no `ZapMQ.exe`. O Node.js é necessário só na máquina que compila; o servidor continua sem nada instalado.
+- **Caminho base configurável.** O painel funciona em `/` (acesso direto à porta) e em `/zapmq` (atrás do proxy), sem recompilar.
+- **Atualizações ao vivo** por uma conexão permanente do navegador (Server-Sent Events). O proxy precisa repassá-la sem acumular a resposta; a configuração de exemplo vai no `README.md`.
+- **Worker Control.** O painel não fala com o serviço do Worker Control diretamente: usa a fila `WorkerControlAdmin`, pelo contrato de administração 2.0. O Worker Control pode estar em outra máquina. Sem ele no ar, a seção correspondente diz isso e o resto do painel funciona.
+- **As rotas `/admin` saem da porta da mensageria** e passam a existir só na porta do painel, atrás do login, como decidido na especificação do protocolo v2.
+
+Bibliotecas da interface: Angular (versão estável corrente), Angular Material para os componentes e ECharts para gráficos e para o mapa. Nenhuma delas é carregada da internet; tudo vai dentro do executável.
+
+## 3. Acesso
+
+- Tela de login. Usuário e senha ficam no `appsettings.json` (`Panel.User`, `Panel.Password`), com o valor inicial `admin` / `admin`.
+- Enquanto a senha for a inicial, o serviço registra um aviso no log a cada início e o painel mostra um aviso fixo.
+- A sessão é um cookie assinado pelo serviço, válido só para o caminho do painel, com duração configurável (padrão: 8 horas).
+- Toda rota de `/api` exige sessão. A verificação está em um ponto só, para que a forma de login possa ser trocada depois sem tocar no resto.
+- O usuário logado é enviado como `By` nos comandos ao Worker Control e fica no histórico dele.
+
+Autenticação do protocolo de mensageria continua fora do escopo.
+
+## 4. Telas
+
+### 4.1 Visão geral
+
+Indicadores do momento e gráficos do período recente.
+
+| Indicador | Origem |
+|---|---|
+| Mensagens publicadas, entregues e confirmadas por segundo | ZapMQ |
+| Mensagens pendentes e em processamento, no total | ZapMQ |
+| Mensagens mortas, por motivo | ZapMQ |
+| Aplicações conectadas (v2) e clientes v1 ativos | ZapMQ |
+| Workers no ar sobre o total desejado; grupos instáveis | Worker Control |
+| Filas mais carregadas e filas sem consumidor | ZapMQ |
+| Últimos eventos (quedas, travamentos, mensagens não confirmadas) | ZapMQ e Worker Control |
+
+Gráficos: vazão e pendentes na última hora e nas últimas 24 horas. Para isso o serviço passa a guardar em memória uma amostra a cada 5 segundos (última hora) e uma por minuto (24 horas). Com a persistência (2.3) esse histórico sobrevive ao reinício.
+
+### 4.2 Mapa
+
+O parque em um desenho: quem publica em qual fila, quem consome, e em que estado cada parte está.
+
+- **Nós:** aplicações (uma por nome de executável, com o número de instâncias), filas, exchanges e o próprio Worker Control.
+- **Ligações:** aplicação → fila (publica) e fila → aplicação (consome), com a vazão recente na espessura da linha.
+- **Estado nas cores:** aplicação com instâncias faltando ou grupo instável; fila acumulando; fila com mensagens mortas recentes; fila sem consumidor.
+- **Detalhe ao clicar:** abre a tela da fila, do grupo ou da aplicação.
+
+De onde vêm os dados:
+
+| Informação | Como o servidor sabe |
+|---|---|
+| Aplicação conectada, máquina, processo | Saudação do protocolo v2 |
+| Filas que ela consome | Vínculos da conexão v2 |
+| Filas em que ela publica | O servidor passa a registrar, por conexão v2, em quais filas ela publicou recentemente |
+| A que grupo do Worker Control ela pertence | Cruzamento do número do processo com o estado do Worker Control |
+| Clientes v1 (Delphi, DLL antiga) | Só o endereço de rede e as filas que consultam ou em que publicam. Aparecem como "cliente v1" por endereço; um worker Delphi conhecido do Worker Control aparece pelo grupo dele |
+
+Filas de uso interno (keep-alive, safe stop e trace de cada processo) são recolhidas dentro do nó da aplicação, para o desenho mostrar as filas de trabalho.
+
+### 4.3 Filas
+
+Lista com pendentes, em processamento, consumidores, vazão e mensagens mortas, com busca e ordenação. Na fila:
+
+- **Definição:** retenção, reentrega de mensagem não confirmada, limites das mensagens mortas. Editável com o serviço rodando e gravada em arquivo do serviço (seção 5.2). Criar a definição de uma fila que ainda não existe também é aqui.
+- **Mensagens pendentes:** lista e conteúdo, só para leitura.
+- **Consumidores e publicadores** recentes.
+- **Ações:** pausar e retomar a entrega; esvaziar a fila. As duas pedem confirmação.
+
+### 4.4 Mensagens mortas
+
+Por fila: lista com motivo, horários e quem tinha recebido; conteúdo; reenviar para a fila de origem; descartar uma ou todas.
+
+Reenviar pede confirmação e lembra a regra do ambiente: a mensagem pode já ter sido processada, total ou parcialmente.
+
+### 4.5 Aplicações conectadas
+
+As conexões v2: aplicação, processo, máquina, versão do wrapper, desde quando, filas vinculadas, se está processando algo. Os clientes v1 ativos, por endereço.
+
+### 4.6 Exchanges
+
+Declarar um exchange e as filas que recebem cópia do que é publicado nele. Entra junto com o recurso no servidor (seção 5.4).
+
+### 4.7 Worker Control
+
+- **Grupos e workers ao vivo:** estado, quantidade desejada e por quê (base, boost, escala pela fila), reciclagem em andamento, grupo instável.
+- **Por worker:** tempo no ar, processador, memória e tempo de resposta do keep-alive, com gráfico das últimas horas.
+- **Ações:** habilitar e desabilitar grupo, mudar a quantidade, reiniciar um worker ou um grupo.
+- **Configuração:** formulário por grupo (incluindo janelas de boost, escala pela fila e reciclagem) e edição do arquivo inteiro, validada antes de gravar.
+- **Histórico de eventos**, com filtro por grupo, tipo e período.
+- **Serviço:** parar deixando os workers rodando. Iniciar e parar o serviço do Windows pelo painel só é possível com o Worker Control na mesma máquina do ZapMQ; nesse caso o painel oferece.
+
+### 4.8 Trace
+
+Acompanhar ao vivo o `Trace()` de um worker. Especificado com a etapa do trace pelo ZapMQ.
+
+## 5. O que o servidor ganha
+
+### 5.1 API do painel
+
+Rotas em `/api`, todas atrás do login: visão geral e séries dos gráficos, mapa, filas (lista, detalhe, definição, mensagens pendentes, pausar, esvaziar), mensagens mortas, conexões, exchanges e as rotas que repassam comandos ao Worker Control.
+
+### 5.2 Definições de fila gravadas
+
+As definições feitas pelo painel vão para `queues.json`, ao lado do executável, gravado de forma atômica. Na subida valem as do `appsettings.json` e, por cima delas, as do `queues.json`.
+
+### 5.3 Recursos novos no núcleo
+
+| Recurso | Para quê |
+|---|---|
+| Ler as mensagens pendentes sem consumi-las | Tela da fila |
+| Esvaziar uma fila | Ação da tela da fila. As mensagens removidas não vão para as mensagens mortas; a ação fica no log |
+| Pausar e retomar a entrega de uma fila | Ação da tela da fila. Pausada, a fila continua recebendo e não entrega a ninguém, v1 ou v2 |
+| Registro de quem publicou em cada fila | Mapa |
+| Séries de vazão e pendentes | Gráficos |
+
+### 5.4 Exchange
+
+Como no plano: um nome declarado como exchange distribui uma cópia da mensagem para cada fila ligada a ele. Quem publica usa o envio comum com o nome do exchange; quem consome, as filas comuns. Vale para v1 e v2.
+
+## 6. Configuração
+
+Chaves novas no `appsettings.json`, todas opcionais:
+
+```json
+{
+  "ZapMQ": {
+    "Panel": {
+      "Enabled": true,
+      "Port": 5680,
+      "BasePath": "/zapmq",
+      "User": "admin",
+      "Password": "admin",
+      "SessionHours": 8
+    }
+  }
+}
+```
+
+`BasePath` vazio serve o painel na raiz da porta.
+
+## 7. Etapas
+
+O painel é grande; cada etapa abaixo é entregue utilizável no ambiente de desenvolvimento.
+
+| Etapa | Entrega |
+|---|---|
+| A | Estrutura (Angular embutido no serviço, porta, caminho base, login) e as telas do broker: visão geral, filas com definição editável e gravada, mensagens mortas, aplicações conectadas |
+| B | Seção do Worker Control completa |
+| C | Mapa |
+| D | Exchange, no servidor e no painel |
+
+O trace vem depois, com a etapa própria.
+
+## 8. Verificação
+
+- Testes das rotas da API e dos recursos novos do núcleo, como os atuais.
+- Testes da interface nos pontos com lógica (formulários de definição e de configuração, montagem do mapa).
+- Um roteiro automatizado em navegador contra o serviço real: login, cada tela, uma ação de cada tipo.
+- Uso no ambiente de desenvolvimento, atrás do proxy em `/zapmq`.
+
+## 9. Decisões a tomar
+
+1. **Bibliotecas da interface:** Angular Material e ECharts (seção 2).
+2. **Ordem das etapas** (seção 7): telas do broker, depois Worker Control, depois mapa, depois exchange.
+3. **Esvaziar fila não gera mensagens mortas** (seção 5.3): as mensagens somem, com registro no log.
+4. **Pausar fila vale para v1 e v2** (seção 5.3).
+5. **Senha no `appsettings.json` em texto**, por ora, com aviso enquanto for a inicial (seção 3).

@@ -321,7 +321,7 @@ Diferenças intencionais em relação à 1.x:
 
 ## 15. Em aberto
 
-1. Forma de login e de controle de acesso do painel.
-2. Tecnologia da interface do painel.
-3. Porta padrão do painel.
+1. Forma definitiva de login e de controle de acesso do painel. Por ora, um usuário e senha configuráveis.
+
+Decididos em 2026-10-07 e detalhados em [`PAINEL.md`](PAINEL.md): interface em Angular; porta 5680.
 5. Publicar uma Release no GitHub para a última versão Delphi.
