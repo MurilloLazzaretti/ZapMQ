@@ -21,6 +21,7 @@ export const routes: Routes = [
       { path: 'workers/trace-servico/:servico', title: 'Trace do serviço · ZapMQ', loadComponent: () => import('./pages/trace').then((m) => m.TracePage) },
       { path: 'workers/trace/:pid', title: 'Trace · Worker Control', loadComponent: () => import('./pages/trace').then((m) => m.TracePage) },
       { path: 'trafego', title: 'Tráfego · ZapMQ', loadComponent: () => import('./pages/traffic').then((m) => m.TrafficPage) },
+      { path: 'banco', title: 'Banco de dados · ZapMQ', loadComponent: () => import('./pages/database').then((m) => m.DatabasePage) },
       { path: 'web', title: 'Aplicação web · ZapMQ', loadComponent: () => import('./pages/web').then((m) => m.WebPage) },
       { path: 'workers/servicos', title: 'Serviços · ZapMQ', loadComponent: () => import('./pages/services').then((m) => m.ServicesPage) },
       { path: 'workers/conexoes', title: 'Conexões · ZapMQ', loadComponent: () => import('./pages/connections').then((m) => m.ConnectionsPage) },

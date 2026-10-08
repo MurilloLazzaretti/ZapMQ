@@ -183,4 +183,25 @@ public class WorkerControlBridgeTests(ServerFixture server) : IClassFixture<Serv
             Assert.Equal(5, (int)asked[2]["Limit"]!);
         }
     }
+
+    [Fact]
+    public async Task The_database_is_asked_of_the_worker_control()
+    {
+        var (worker, asked) = await Pretend(request => (string?)request["Command"] == "DatabaseQueries"
+            ? new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "database-failed", ["Message"] = "permission denied" } }
+            : new JObject { ["Ok"] = true });
+        await using var __ = worker;
+
+        await Api.GetStringAsync("api/workers/database");
+        await Api.GetStringAsync("api/workers/database/history?minutes=1440");
+        var refused = await Api.GetAsync("api/workers/database/queries");
+
+        Assert.Equal(HttpStatusCode.BadGateway, refused.StatusCode);
+        Assert.Contains("permission denied", await refused.Content.ReadAsStringAsync());
+        lock (asked)
+        {
+            Assert.Equal(["Database", "DatabaseHistory", "DatabaseQueries"], asked.Select(request => (string?)request["Command"]));
+            Assert.Equal(1440, (int)asked[1]["Minutes"]!);
+        }
+    }
 }

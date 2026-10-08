@@ -147,6 +147,13 @@ Um cliente que roda dentro do processo de trabalho do IIS (`w3wp`) é conhecido 
 
 Um consumidor 1.x escuta vindo perguntar. A partir de agora a fila passa a existir quando alguém pergunta por ela, com quem perguntou anotado, mesmo vazia: é o que faz as filas consumidas por clientes 1.x aparecerem nas telas e no mapa sem esperar uma mensagem passar. Uma fila definida no painel também é desenhada no mapa mesmo parada.
 
+### 4.11 Banco de dados
+
+A instância de banco de dados do ambiente, lida pelo Worker Control: no ar ou não, processador,
+memória, sessões por aplicação, o que está em execução, bloqueios, bancos, discos, backups, jobs e
+as consultas mais caras. Os problemas entram em "Atenção" na Visão geral. Nenhum dado de tabela
+chega ao painel. Especificação em [BANCO.md](BANCO.md).
+
 ### 4.8 Trace
 
 Acompanhar ao vivo o `Trace()` de um worker, a partir do menu do processo na tela do Worker Control. O contrato com os workers está na [especificação do Worker Control](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md), seção 11.3.

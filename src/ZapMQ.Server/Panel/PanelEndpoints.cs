@@ -386,6 +386,12 @@ public static class PanelEndpoints
                 request["Limit"] = Math.Clamp(limit ?? 100, 1, 1000);
             }));
 
+        // The database instance of the environment, as the Worker Control sees it.
+        workers.MapGet("/database", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Database"));
+        workers.MapGet("/database/history", (int? minutes, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "DatabaseHistory", request => request["Minutes"] = Math.Clamp(minutes ?? 60, 1, 60 * 24 * 366)));
+        workers.MapGet("/database/queries", (WorkerControlClient client, HttpContext context) => Forward(client, context, "DatabaseQueries"));
+
         // The micro frontends published on the machine of the Worker Control.
         workers.MapGet("/frontends", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Frontends"));
 
@@ -609,7 +615,7 @@ public static class PanelEndpoints
             var status = answer.ErrorCode switch
             {
                 "not-found" => StatusCodes.Status404NotFound,
-                "failed" or "history-unavailable" => StatusCodes.Status502BadGateway,
+                "failed" or "history-unavailable" or "database-failed" => StatusCodes.Status502BadGateway,
                 "invalid-state" => StatusCodes.Status409Conflict,
                 "unknown-command" => StatusCodes.Status501NotImplemented,
                 _ => StatusCodes.Status400BadRequest

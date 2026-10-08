@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult, TapEvent,
+  DatabasePoint, DatabaseQuery, DatabaseState,
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
@@ -169,6 +170,18 @@ export class Api {
 
   trafficErrors(filter: { host?: string; app?: string; limit?: number }): Observable<{ Errors: TrafficError[] }> {
     return this.http.get<{ Errors: TrafficError[] }>('api/workers/traffic/errors', { params: clean(filter) });
+  }
+
+  database(): Observable<DatabaseState> {
+    return this.http.get<DatabaseState>('api/workers/database');
+  }
+
+  databaseHistory(minutes: number): Observable<{ Points: DatabasePoint[] }> {
+    return this.http.get<{ Points: DatabasePoint[] }>('api/workers/database/history', { params: { minutes } });
+  }
+
+  databaseQueries(): Observable<{ Queries: DatabaseQuery[] }> {
+    return this.http.get<{ Queries: DatabaseQuery[] }>('api/workers/database/queries');
   }
 
   frontends(): Observable<{ Frontends: WebApplication[]; Publications: WebPublication[] }> {

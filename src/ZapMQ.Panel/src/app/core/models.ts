@@ -550,3 +550,110 @@ export interface TraceState {
   state: 'starting' | 'on' | 'unsupported' | 'unreachable' | 'ended';
   message: string | null;
 }
+
+/** The database instance of the environment, as the Worker Control sees it. */
+export interface DatabaseState {
+  Configured: boolean;
+  Name: string | null;
+  Server: string | null;
+  Databases: string[];
+  /** Null until the first look comes back. */
+  Online: boolean | null;
+  Error: string | null;
+  Since: string | null;
+  CheckedAt: string | null;
+  ResponseMs: number | null;
+  BatchesPerSecond: number | null;
+  Instance: { Server: string; Product: string; Version: string; Level: string; Edition: string } | null;
+  Machine: { UptimeSeconds: number; Processors: number; MemoryKb: number } | null;
+  Resources: { CpuPercent: number | null; OtherCpuPercent: number | null; MemoryKb: number | null; TargetMemoryKb: number | null; PageLifeSeconds: number | null; Connections: number | null } | null;
+  DatabaseList: DatabaseInfo[] | null;
+  Sessions: DatabaseSessions[] | null;
+  Activity: DatabaseActivity[] | null;
+  Volumes: { Mount: string; Label: string; TotalBytes: number; FreeBytes: number }[] | null;
+  Backups: { Database: string; FullMinutes: number | null; DifferentialMinutes: number | null; LogMinutes: number | null }[] | null;
+  Jobs: { Name: string; Enabled: boolean; Outcome: number | null; LastRunMinutes: number | null; DurationSeconds: number | null; Message: string }[] | null;
+  SlowAt: string | null;
+  Alerts: DatabaseAlert[];
+  /** The parts the user of the connection could not read, each with what the instance said. */
+  Problems: Record<string, string>;
+}
+
+export interface DatabaseInfo {
+  Name: string;
+  State: string;
+  Recovery: string;
+  Access: string;
+  ReadOnly: boolean;
+  Compatibility: number;
+  System: boolean;
+  DataKb: number;
+  LogKb: number;
+  LogUsedPercent: number | null;
+}
+
+export interface DatabaseSessions {
+  Program: string;
+  Host: string;
+  Login: string;
+  Database: string;
+  Sessions: number;
+  Running: number;
+  InTransaction: number;
+}
+
+export interface DatabaseActivity {
+  SessionId: number;
+  Status: string;
+  Command: string;
+  ElapsedMs: number;
+  CpuMs: number;
+  Reads: number;
+  WaitType: string;
+  WaitMs: number;
+  BlockedBy: number;
+  Database: string;
+  Program: string;
+  Host: string;
+  Login: string;
+  OpenTransactions: number;
+  Running: boolean;
+  /** The statement, without the values written in it. */
+  Text: string;
+}
+
+export interface DatabaseAlert {
+  Kind: 'State' | 'Blocking' | 'Disk' | 'Backup' | 'Job' | string;
+  Subject: string;
+  Severity: 'danger' | 'warn';
+  Value: number | null;
+  Since: string;
+}
+
+export interface DatabasePoint {
+  At: string;
+  Online: boolean;
+  ResponseMs: number | null;
+  CpuPercent: number | null;
+  OtherCpuPercent: number | null;
+  MemoryKb: number | null;
+  Sessions: number | null;
+  Running: number | null;
+  Blocked: number | null;
+  BatchesPerSecond: number | null;
+}
+
+export interface DatabaseQuery {
+  Database: string;
+  Object: string;
+  Executions: number;
+  CpuMs: number;
+  ElapsedMs: number;
+  Reads: number;
+  MaxElapsedMs: number;
+  LastMinutes: number;
+  TopCpu: boolean;
+  TopTime: boolean;
+  TopReads: boolean;
+  Text: string;
+}

@@ -6,7 +6,8 @@ import { Api } from '../core/api';
 import { catchError, forkJoin, of } from 'rxjs';
 import { AgoPipe, NumPipe, SincePipe } from '../core/format';
 import { Live } from '../core/live';
-import { MetricsPoint, TrafficSummary, WebApplication, WebPublication, WorkerControlStatus } from '../core/models';
+import { alertText } from '../core/database';
+import { DatabaseState, MetricsPoint, TrafficSummary, WebApplication, WebPublication, WorkerControlStatus } from '../core/models';
 import { Series, TimeChart } from '../shared/chart';
 import { Stat } from '../shared/stat';
 
@@ -97,6 +98,25 @@ const DECIMAL = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
             <span class="muted none">{{ workersProblem() ? 'Sem o Worker Control não há leitura.' : 'Consultando…' }}</span>
           }
         </a>
+
+        @if (database()?.Configured) {
+          <a class="panel block" routerLink="/banco">
+            <span class="name"><mat-icon svgIcon="database" /> Banco de dados <small class="muted">{{ database()!.Name }}</small> <mat-icon class="go" svgIcon="chevron_right" /></span>
+            @if (database(); as now) {
+              @if (now.Online === false) {
+                <span class="figures"><span><b class="bad">Fora do ar</b> há {{ now.Since | since }}</span></span>
+              } @else if (now.Online) {
+                <span class="figures">
+                  <span><b class="num">{{ now.Resources?.CpuPercent ?? '—' }}<small>%</small></b> de processador</span>
+                  <span><b class="num">{{ databaseSessions() }}</b> sessões</span>
+                  <span><b class="num" [class.bad]="databaseBlocked()">{{ databaseBlocked() }}</b> bloqueadas</span>
+                </span>
+              } @else {
+                <span class="muted none">Aguardando a primeira leitura.</span>
+              }
+            }
+          </a>
+        }
       </section>
 
       <h2 class="section">Mensageria</h2>
@@ -238,6 +258,9 @@ export class OverviewPage implements OnInit, OnDestroy {
   protected readonly workersProblem = signal('');
   protected readonly traffic = signal<TrafficSummary | null>(null);
   private readonly frontends = signal<{ Frontends: WebApplication[]; Publications: WebPublication[] } | null>(null);
+  protected readonly database = signal<DatabaseState | null>(null);
+  protected readonly databaseSessions = computed(() => (this.database()?.Sessions ?? []).reduce((total, group) => total + group.Sessions, 0));
+  protected readonly databaseBlocked = computed(() => (this.database()?.Activity ?? []).filter((item) => item.BlockedBy > 0).length);
   private environmentTimer: ReturnType<typeof setInterval> | null = null;
 
   protected readonly processes = computed(() => {
@@ -324,6 +347,15 @@ export class OverviewPage implements OnInit, OnDestroy {
       }
       if (application.Orphans.length) {
         concerns.push({ tone: 'warn', text: `${application.Orphans.length === 1 ? 'Uma pasta de módulo' : application.Orphans.length + ' pastas de módulo'} fora do manifesto`, link: '/web' });
+      }
+    }
+    const database = this.database();
+    if (database?.Configured) {
+      if (database.Online === false) {
+        concerns.push({ tone: 'danger', text: `Banco de dados ${database.Name} não responde`, link: '/banco' });
+      }
+      for (const alert of database.Alerts) {
+        concerns.push({ tone: alert.Severity === 'danger' ? 'danger' : 'warn', text: alertText(alert), link: '/banco' });
       }
     }
     return concerns.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === 'danger' ? -1 : 1));
@@ -414,7 +446,9 @@ export class OverviewPage implements OnInit, OnDestroy {
     forkJoin({
       traffic: this.api.traffic({ minutes: 60, kind: 'api' }).pipe(catchError(() => of(null))),
       frontends: this.api.frontends().pipe(catchError(() => of(null))),
-    }).subscribe(({ traffic, frontends }) => {
+      database: this.api.database().pipe(catchError(() => of(null))),
+    }).subscribe(({ traffic, frontends, database }) => {
+      this.database.set(database);
       this.traffic.set(traffic);
       this.frontends.set(frontends);
     });

@@ -1,0 +1,311 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Banco de dados</h1>
+      <p class="muted">
+        @if (state(); as now) {
+          @if (now.Configured) {
+            <strong>{{ now.Name }}</strong> · <span class="mono">{{ now.Server }}</span>
+            @if (now.Instance; as instance) {
+              · {{ instance.Product }} {{ instance.Edition }} · {{ instance.Version }}
+            }
+          } @else {
+            A instância que as aplicações deste ambiente usam.
+          }
+        } @else {
+          A instância que as aplicações deste ambiente usam.
+        }
+      </p>
+    </div>
+    <span class="spacer"></span>
+    @if (state()?.Configured) {
+      <mat-button-toggle-group [value]="minutes()" (change)="period($event.value)" hideSingleSelectionIndicator aria-label="Período dos gráficos">
+        @for (item of periods; track item.minutes) {
+          <mat-button-toggle [value]="item.minutes">{{ item.label }}</mat-button-toggle>
+        }
+      </mat-button-toggle-group>
+    }
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Sem resposta do Worker Control</strong>
+      <span>{{ problem() }}</span>
+      <span>Esta tela tenta de novo sozinha.</span>
+    </section>
+  } @else if (outdated()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="info" />
+      <strong>O Worker Control instalado é anterior a este recurso</strong>
+      <span>O monitoramento do banco de dados existe a partir da versão 2.7 dele.</span>
+    </section>
+  } @else if (state() && !state()!.Configured) {
+    <section class="panel empty">
+      <mat-icon svgIcon="database" />
+      <strong>Nenhum banco de dados configurado</strong>
+      <span>Informe a instância na seção <code>Database</code> do <code>ConfigWorkers.json</code>: <code>Server</code>, <code>User</code> e <code>Password</code>.</span>
+      <span>A senha é trocada no arquivo por uma versão cifrada assim que o Worker Control a lê.</span>
+    </section>
+  } @else if (state(); as now) {
+    @if (now.Online === false) {
+      <div class="notice danger" role="alert">
+        <mat-icon svgIcon="error" />
+        <div><strong>A instância não responde há {{ now.Since | since }}.</strong> {{ now.Error }}</div>
+      </div>
+    } @else if (now.Online === null) {
+      <div class="notice" role="status">
+        <mat-icon svgIcon="hourglass_empty" />
+        <div>Aguardando a primeira leitura da instância.</div>
+      </div>
+    }
+
+    @if (now.Alerts.length) {
+      <section class="panel attention" [class.mild]="!grave()">
+        <ul>
+          @for (alert of now.Alerts; track alert.Kind + alert.Subject) {
+            <li><span class="dot" [class]="'dot ' + tone(alert)"></span><span>{{ alertText(alert) }} <span class="muted sub">· {{ alert.Since | ago }}</span></span></li>
+          }
+        </ul>
+      </section>
+    }
+
+    @if (unread().length) {
+      <div class="notice" role="status">
+        <mat-icon svgIcon="lock" />
+        <div>
+          <strong>O usuário da conexão não conseguiu ler {{ unread().length === 1 ? 'uma parte' : unread().length + ' partes' }}:</strong>
+          <ul class="unread">
+            @for (item of unread(); track item.part) {
+              <li>{{ item.part }} <span class="detail">— {{ item.message }}</span></li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    @if (now.Online !== null) {
+      <section class="grid stats" [class.alone]="!now.Online">
+        <zap-stat label="Instância" icon="database" [tone]="now.Online ? 'ok' : 'danger'" [value]="now.Online ? 'No ar' : 'Fora do ar'"
+          [hint]="now.Online ? (now.Machine ? 'há ' + uptime(now.Machine.UptimeSeconds) + ' · ' : '') + 'respondeu em ' + ms(now.ResponseMs) : 'última tentativa ' + (now.CheckedAt | ago)" />
+        @if (now.Online) {
+        <zap-stat label="Processador" icon="memory" [tone]="(now.Resources?.CpuPercent ?? 0) >= 80 ? 'danger' : 'info'" [value]="percent(now.Resources?.CpuPercent)"
+          [hint]="now.Resources?.OtherCpuPercent !== null && now.Resources ? 'outros processos: ' + now.Resources.OtherCpuPercent + '%' + (now.Machine ? ' · ' + now.Machine.Processors + ' núcleos' : '') : 'do SQL Server'" />
+        <zap-stat label="Memória" icon="speed" tone="neutral" [value]="size(now.Resources?.MemoryKb)"
+          [hint]="now.Resources?.TargetMemoryKb ? 'alvo de ' + size(now.Resources!.TargetMemoryKb) + (now.Machine ? ' · máquina com ' + size(now.Machine.MemoryKb) : '') : 'em uso pelo SQL Server'" />
+        <zap-stat label="Sessões" icon="lan" tone="neutral" [value]="now.Sessions ? (sessions().all | num) : '—'" [hint]="sessions().running + ' em execução agora'" />
+        <zap-stat label="Bloqueios" icon="lock" [tone]="blocked() ? 'danger' : 'ok'" [value]="now.Activity ? (blocked() | num) : '—'" [hint]="blocked() ? 'sessões esperando por outra' : 'nenhuma sessão esperando por outra'" />
+        <zap-stat label="Comandos" icon="bolt" tone="info" [value]="now.BatchesPerSecond === null ? '—' : (now.BatchesPerSecond | num: 'decimal')" unit="/s" hint="lotes recebidos pela instância" />
+        }
+      </section>
+
+      <section class="grid two">
+        <div class="panel">
+          <div class="panel-head"><h2>Processador</h2><span class="hint">percentual da máquina</span></div>
+          <div class="panel-body"><zap-time-chart [series]="processor()" unit="%" [marks]="outages()" /></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Sessões</h2><span class="hint">conectadas, em execução e bloqueadas</span></div>
+          <div class="panel-body"><zap-time-chart [series]="load()" [marks]="outages()" /></div>
+        </div>
+      </section>
+
+      @if (now.Online) {
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Em execução agora</h2>
+          <span class="hint">os comandos aparecem sem os valores escritos neles</span>
+        </div>
+        @if (activity().length) {
+          <div class="table-wrap">
+            <table class="data stack">
+              <thead>
+                <tr><th>Sessão</th><th>Quem</th><th>Banco</th><th>Comando</th><th class="right">Há</th><th class="right">Processador</th><th>Esperando</th></tr>
+              </thead>
+              <tbody>
+                @for (item of activity(); track item.SessionId) {
+                  <tr class="clickable" [class.blocked]="item.BlockedBy > 0" (click)="toggle('a' + item.SessionId)" tabindex="0" (keydown.enter)="toggle('a' + item.SessionId)">
+                    <td class="num" data-label="Sessão">
+                      {{ item.SessionId }}
+                      @if (item.blocks) {
+                        <span class="pill danger">bloqueia</span>
+                      }
+                    </td>
+                    <td data-label="Quem">{{ who(item) || '—' }}</td>
+                    <td data-label="Banco">{{ item.Database || '—' }}</td>
+                    <td class="wide" data-label="Comando">
+                      <span class="statement mono" [class.whole]="open() === 'a' + item.SessionId">{{ item.Text || item.Command || '—' }}</span>
+                    </td>
+                    <td class="right num" data-label="Há">{{ item.Running ? lasted(item.ElapsedMs) : 'parada' }}</td>
+                    <td class="right num" data-label="Processador">{{ item.Running ? ms(item.CpuMs) : '—' }}</td>
+                    <td data-label="Esperando">
+                      @if (item.BlockedBy > 0) {
+                        <span class="bad">sessão {{ item.BlockedBy }} há {{ lasted(item.WaitMs) }}</span>
+                      } @else if (!item.Running && item.OpenTransactions > 0) {
+                        <span class="muted">transação aberta</span>
+                      } @else {
+                        <span class="muted">{{ item.WaitType || '—' }}</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="empty">
+            <mat-icon svgIcon="check_circle" />
+            <strong>{{ now.Activity ? 'Nada em execução neste instante' : 'Sem leitura' }}</strong>
+            <span>A leitura é refeita a cada poucos segundos.</span>
+          </div>
+        }
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Bancos</h2>
+          <span class="spacer"></span>
+          <button mat-button (click)="systemToo.set(!systemToo())">{{ systemToo() ? 'Ocultar os de sistema' : 'Mostrar os de sistema' }}</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data stack">
+            <thead>
+              <tr><th>Banco</th><th>Estado</th><th class="right">Dados</th><th class="right">Log</th>@if (hasBackups()) {<th class="right">Backup completo</th><th class="right">Backup de log</th>}</tr>
+            </thead>
+            <tbody>
+              @for (database of databases(); track database.Name) {
+                <tr>
+                  <td data-label="Banco"><strong>{{ database.Name }}</strong> <span class="muted sub">· {{ database.Recovery.toLowerCase() }}</span></td>
+                  <td data-label="Estado"><span class="pill" [class.ok]="database.State === 'ONLINE'" [class.danger]="database.State !== 'ONLINE'">{{ database.State.toLowerCase() }}</span>@if (database.ReadOnly) { <span class="pill">somente leitura</span> }</td>
+                  <td class="right num" data-label="Dados">{{ size(database.DataKb) }}</td>
+                  <td class="right num" data-label="Log">{{ size(database.LogKb) }}@if (database.LogUsedPercent !== null) { <span class="muted sub">· {{ database.LogUsedPercent | num }}% em uso</span> }</td>
+                  @if (hasBackups()) {
+                    <td class="right" data-label="Backup completo">{{ database.Name === 'tempdb' ? '—' : database.backup?.FullMinutes === null || !database.backup ? 'nunca' : minutesAgo(database.backup.FullMinutes) }}</td>
+                    <td class="right" data-label="Backup de log">{{ database.Recovery === 'SIMPLE' ? '—' : database.backup?.LogMinutes === null || !database.backup ? 'nunca' : minutesAgo(database.backup.LogMinutes) }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        </section>
+
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Consultas mais caras</h2>
+          <span class="hint">desde que a instância iniciou</span>
+          <span class="spacer"></span>
+          <mat-button-toggle-group [value]="cost()" (change)="cost.set($event.value)" hideSingleSelectionIndicator aria-label="Custo">
+            <mat-button-toggle value="cpu">Processador</mat-button-toggle>
+            <mat-button-toggle value="time">Tempo</mat-button-toggle>
+            <mat-button-toggle value="reads">Leituras</mat-button-toggle>
+          </mat-button-toggle-group>
+          <button mat-icon-button (click)="loadQueries()" [disabled]="queriesLoading()" matTooltip="Ler de novo" aria-label="Ler de novo"><mat-icon svgIcon="refresh" /></button>
+        </div>
+        @if (queriesProblem()) {
+          <div class="empty"><mat-icon svgIcon="lock" /><strong>A instância não deixou ler as consultas</strong><span>{{ queriesProblem() }}</span></div>
+        } @else if (costly().length) {
+          <div class="table-wrap">
+            <table class="data stack">
+              <thead>
+                <tr><th>Consulta</th><th class="bar-column"></th><th class="right">Execuções</th><th class="right">Processador</th><th class="right">Tempo</th><th class="right">Média</th><th class="right">Leituras</th><th class="right">Última</th></tr>
+              </thead>
+              <tbody>
+                @for (query of costly(); track $index) {
+                  <tr class="clickable" (click)="toggle('q' + $index)" tabindex="0" (keydown.enter)="toggle('q' + $index)">
+                    <td class="wide" data-label="Consulta">
+                      @if (query.Object) {
+                        <strong>{{ query.Object }}</strong> <span class="muted sub">· {{ query.Database }}</span><br />
+                      } @else if (query.Database) {
+                        <span class="muted">{{ query.Database }}</span><br />
+                      }
+                      <span class="statement mono" [class.whole]="open() === 'q' + $index">{{ query.Text }}</span>
+                    </td>
+                    <td class="bar-column"><span class="bar"><i [style.width.%]="query.share"></i></span></td>
+                    <td class="right num" data-label="Execuções">{{ query.Executions | num: 'compact' }}</td>
+                    <td class="right num" data-label="Processador">{{ lasted(query.CpuMs) }}</td>
+                    <td class="right num" data-label="Tempo">{{ lasted(query.ElapsedMs) }}</td>
+                    <td class="right num" data-label="Média">{{ ms(query.Executions ? query.ElapsedMs / query.Executions : null) }}</td>
+                    <td class="right num" data-label="Leituras">{{ query.Reads | num: 'compact' }}</td>
+                    <td class="right" data-label="Última">{{ minutesAgo(query.LastMinutes) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="empty"><span>{{ queriesLoading() ? 'Lendo…' : 'Nada a mostrar.' }}</span></div>
+        }
+      </section>
+
+      <section class="grid two bottom">
+        <div class="panel">
+          <div class="panel-head"><h2>Sessões por aplicação</h2></div>
+          @if (sessions().list.length) {
+            <div class="table-wrap">
+              <table class="data stack">
+                <thead>
+                  <tr><th>Aplicação</th><th>Máquina</th><th>Banco</th><th class="right">Sessões</th><th class="right">Em execução</th></tr>
+                </thead>
+                <tbody>
+                  @for (group of sessions().list; track group.Program + group.Host + group.Login + group.Database) {
+                    <tr>
+                      <td data-label="Aplicação"><strong>{{ group.Program || '(sem nome)' }}</strong> <span class="muted sub">· {{ group.Login }}</span></td>
+                      <td data-label="Máquina">{{ group.Host || '—' }}</td>
+                      <td data-label="Banco">{{ group.Database || '—' }}</td>
+                      <td class="right num" data-label="Sessões">{{ group.Sessions | num }}</td>
+                      <td class="right num" data-label="Em execução">{{ group.Running | num }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="empty"><span>{{ now.Sessions ? 'Nenhuma sessão de aplicação conectada.' : 'Sem leitura.' }}</span></div>
+          }
+        </div>
+
+        @if (volumes().length) {
+          <div class="panel">
+            <div class="panel-head"><h2>Discos</h2><span class="hint">onde ficam os arquivos dos bancos</span></div>
+            <ul class="volumes">
+              @for (volume of volumes(); track volume.Mount) {
+                <li>
+                  <mat-icon svgIcon="hard_drive" />
+                  <span><strong class="mono">{{ volume.Mount }}</strong> <span class="muted">{{ volume.Label }}</span></span>
+                  <span class="bar" [class.low]="volume.low"><i [style.width.%]="volume.used"></i></span>
+                  <span class="num" [class.bad]="volume.low">{{ size(volume.FreeBytes / 1024) }} livres de {{ size(volume.TotalBytes / 1024) }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        @if (jobs().length) {
+          <div class="panel">
+            <div class="panel-head"><h2>Jobs</h2><span class="hint">do SQL Server Agent</span></div>
+            <div class="table-wrap">
+              <table class="data stack">
+                <thead>
+                  <tr><th>Job</th><th>Última execução</th><th class="right">Quando</th><th class="right">Duração</th></tr>
+                </thead>
+                <tbody>
+                  @for (job of jobs(); track job.Name) {
+                    <tr [matTooltip]="job.Outcome === 0 ? job.Message : ''">
+                      <td data-label="Job"><strong>{{ job.Name }}</strong></td>
+                      <td data-label="Última execução"><span class="pill" [class]="'pill ' + outcome(job).tone">{{ outcome(job).text }}</span></td>
+                      <td class="right" data-label="Quando">{{ minutesAgo(job.LastRunMinutes) }}</td>
+                      <td class="right num" data-label="Duração">{{ job.DurationSeconds === null ? '—' : lasted(job.DurationSeconds * 1000) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+      </section>
+      }
+    }
+  }
+</div>
