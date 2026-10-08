@@ -1,0 +1,105 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Banco de dados</h1>
+      <p class="muted">O que foi criado, alterado, renomeado ou apagado nos bancos acompanhados.</p>
+    </div>
+    <span class="spacer"></span>
+    <zap-database-tabs />
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Não foi possível ler as alterações</strong>
+      <span>{{ problem() }}</span>
+      <span>Esta tela tenta de novo sozinha.</span>
+    </section>
+  } @else if (outdated()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="info" />
+      <strong>O Worker Control instalado é anterior a este recurso</strong>
+      <span>O histórico de alterações dos objetos existe a partir da versão 2.9 dele.</span>
+    </section>
+  } @else {
+    @for (item of tracking(); track item.Database) {
+      @if (item.Problem) {
+        <div class="notice danger" role="alert">
+          <mat-icon svgIcon="error" />
+          <div><strong>{{ item.Database }}:</strong> os objetos não puderam ser lidos. {{ item.Problem }}</div>
+        </div>
+      } @else if (!item.BaselineAt) {
+        <div class="notice" role="status">
+          <mat-icon svgIcon="hourglass_empty" />
+          <div>
+            <strong>{{ item.Database }}:</strong> lendo o banco pela primeira vez, {{ item.Known | num }} de {{ item.Total | num }} objetos.
+            As alterações passam a ser registradas quando essa leitura terminar.
+          </div>
+        </div>
+      } @else {
+        <p class="since muted">
+          <mat-icon svgIcon="visibility" /> <strong>{{ item.Database }}</strong>: {{ item.Total | num }} objetos acompanhados desde {{ item.BaselineAt | when }}.
+          @if (item.ScannedAt) { Última conferência {{ item.ScannedAt | ago }}. }
+        </p>
+      }
+    }
+
+    <section class="panel">
+      <div class="tools">
+        <label class="search">
+          <mat-icon svgIcon="search" />
+          <input type="search" placeholder="Buscar por objeto ou por quem alterou" [ngModel]="search()" (ngModelChange)="typed($event)" aria-label="Buscar alteração" />
+        </label>
+        <select class="pick" [ngModel]="kind()" (ngModelChange)="choose(kind, $event)" aria-label="Tipo de objeto">
+          <option value="">Todos os tipos</option>
+          @for (item of kinds; track item) {
+            <option [value]="item">{{ kindName(item, true) }}</option>
+          }
+        </select>
+        <span class="spacer"></span>
+        <mat-button-toggle-group [value]="days()" (change)="choose(days, $event.value)" hideSingleSelectionIndicator aria-label="Período">
+          @for (item of periods; track item.days) {
+            <mat-button-toggle [value]="item.days">{{ item.label }}</mat-button-toggle>
+          }
+        </mat-button-toggle-group>
+      </div>
+
+      @if (changes(); as list) {
+        @if (list.length) {
+          <div class="table-wrap">
+            <table class="data stack">
+              <thead>
+                <tr><th>Quando</th><th>O que houve</th><th>Objeto</th><th>Quem</th></tr>
+              </thead>
+              <tbody>
+                @for (change of list; track change.Id) {
+                  <tr class="clickable" [routerLink]="['/banco/alteracoes', change.Id]" tabindex="0">
+                    <td data-label="Quando" [matTooltip]="'percebida ' + (change.At | when)">{{ change.ModifiedAt ?? change.At | when }}</td>
+                    <td data-label="O que houve"><span class="pill" [class]="'pill ' + actionTone(change.Action)">{{ actionName(change.Action) }}</span></td>
+                    <td class="wide" data-label="Objeto">
+                      <span class="object"><mat-icon [svgIcon]="kindIcon(change.Kind)" [matTooltip]="kindName(change.Kind)" /><span><span class="muted">{{ change.Schema }}.</span><strong>{{ change.Name }}</strong></span></span>
+                      @if (change.OldName) { <div class="muted was">antes {{ change.OldName }}</div> }
+                      @if (tracking().length > 1) { <span class="muted sub">· {{ change.Database }}</span> }
+                    </td>
+                    <td data-label="Quem">{{ who(change) || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (total() > list.length) {
+            <div class="foot muted">As {{ list.length | num }} mais recentes de {{ total() | num }}. Use a busca para achar as outras.</div>
+          }
+        } @else {
+          <div class="empty">
+            <mat-icon svgIcon="check_circle" />
+            <strong>Nenhuma alteração neste período</strong>
+            <span>Os objetos são conferidos de tempos em tempos; o que mudar aparece aqui.</span>
+          </div>
+        }
+      } @else {
+        <div class="empty"><span>Lendo…</span></div>
+      }
+    </section>
+  }
+</div>

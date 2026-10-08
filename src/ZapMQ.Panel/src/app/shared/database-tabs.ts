@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
-/** The screens about the database of the environment: how it is doing and what is defined in it. */
+/** The screens about the database of the environment: how it is doing, what is defined in it and what changed. */
 @Component({
   selector: 'zap-database-tabs',
   imports: [RouterLink, RouterLinkActive, MatIconModule],
@@ -11,6 +11,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
     <nav aria-label="Banco de dados">
       <a routerLink="/banco" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"><mat-icon svgIcon="monitor_heart" /> Saúde</a>
       <a routerLink="/banco/objetos" routerLinkActive="active"><mat-icon svgIcon="table" /> Objetos</a>
+      <a routerLink="/banco/alteracoes" routerLinkActive="active"><mat-icon svgIcon="history" /> Alterações</a>
     </nav>
   `,
   styles: `

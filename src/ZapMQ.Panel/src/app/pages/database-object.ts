@@ -6,9 +6,9 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { Api } from '../core/api';
-import { kindIcon, kindName, size, variety } from '../core/database';
+import { actionName, actionTone, kindIcon, kindName, size, variety } from '../core/database';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
-import { CatalogColumn, CatalogDetail, CatalogReference } from '../core/models';
+import { CatalogColumn, CatalogDetail, CatalogReference, ObjectChange } from '../core/models';
 import { colour } from '../core/sql';
 
 /** The parts of an object, as the screen calls them. */
@@ -48,6 +48,10 @@ export class DatabaseObjectPage implements OnInit, OnDestroy {
   protected readonly problem = signal('');
   protected readonly missing = signal(false);
   protected readonly copied = signal(false);
+  /** What happened to this object since it is being watched. */
+  protected readonly changes = signal<ObjectChange[]>([]);
+  protected readonly actionName = actionName;
+  protected readonly actionTone = actionTone;
 
   protected readonly kindName = kindName;
   protected readonly kindIcon = kindIcon;
@@ -93,6 +97,10 @@ export class DatabaseObjectPage implements OnInit, OnDestroy {
     return reference.Kind && reference.Schema && !reference.Database ? ['/banco/objetos', this.detail()!.Database, reference.Kind, reference.Schema, reference.Name] : null;
   }
 
+  protected who(change: ObjectChange): string {
+    return [change.Login, change.Host].filter(Boolean).join(' · ');
+  }
+
   protected action(value: string): string {
     return value === 'NO_ACTION' ? '' : value.replace('_', ' ').toLowerCase();
   }
@@ -125,6 +133,9 @@ export class DatabaseObjectPage implements OnInit, OnDestroy {
     this.detail.set(null);
     this.problem.set('');
     this.missing.set(false);
+    this.changes.set([]);
+    // The page stands without its history.
+    this.api.databaseChanges({ database, kind, schema, name, limit: 20 }).subscribe({ next: (answer) => this.changes.set(answer.Changes), error: () => undefined });
     this.api.databaseObject(database, kind, schema, name).subscribe({
       next: (detail) => this.detail.set(detail),
       error: (failure: HttpErrorResponse) => {

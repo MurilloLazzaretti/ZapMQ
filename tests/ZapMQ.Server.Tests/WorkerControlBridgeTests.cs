@@ -197,12 +197,16 @@ public class WorkerControlBridgeTests(ServerFixture server) : IClassFixture<Serv
         var refused = await Api.GetAsync("api/workers/database/queries");
         await Api.GetStringAsync("api/workers/database/objects?kind=Table&search=ped&limit=9999&sort=rows");
         await Api.GetStringAsync("api/workers/database/object?database=Sales&kind=View&schema=dbo&name=vw.Orders");
+        await Api.GetStringAsync("api/workers/database/changes?kind=Procedure&name=spX&days=30&limit=5");
+        await Api.GetStringAsync("api/workers/database/changes/42");
 
         Assert.Equal(HttpStatusCode.BadGateway, refused.StatusCode);
         Assert.Contains("permission denied", await refused.Content.ReadAsStringAsync());
         lock (asked)
         {
-            Assert.Equal(["Database", "DatabaseHistory", "DatabaseQueries", "DatabaseObjects", "DatabaseObject"], asked.Select(request => (string?)request["Command"]));
+            Assert.Equal(["Database", "DatabaseHistory", "DatabaseQueries", "DatabaseObjects", "DatabaseObject", "DatabaseChanges", "DatabaseChange"], asked.Select(request => (string?)request["Command"]));
+            Assert.Equal(("Procedure", "spX", 30, 5), ((string?)asked[5]["Kind"], (string?)asked[5]["Name"], (int)asked[5]["Days"]!, (int)asked[5]["Limit"]!));
+            Assert.Equal(42, (long)asked[6]["Id"]!);
             Assert.Equal(("Table", "ped", 500, "rows"), ((string?)asked[3]["Kind"], (string?)asked[3]["Search"], (int)asked[3]["Limit"]!, (string?)asked[3]["Sort"]));
             Assert.Null(asked[3]["Database"]);
             Assert.Equal(("Sales", "View", "dbo", "vw.Orders"), ((string?)asked[4]["Database"], (string?)asked[4]["Kind"], (string?)asked[4]["Schema"], (string?)asked[4]["Name"]));

@@ -413,6 +413,21 @@ public static class PanelEndpoints
                         request[field] = value;
             }));
 
+        // What changed in the objects of the databases, as the Worker Control noticed it.
+        workers.MapGet("/database/changes", (string? database, string? kind, string? schema, string? name, string? search, int? days, int? limit, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "DatabaseChanges", request =>
+            {
+                foreach (var (field, value) in new[] { ("Database", database), ("Kind", kind), ("Schema", schema), ("Name", name), ("Search", search) })
+                    if (!string.IsNullOrWhiteSpace(value))
+                        request[field] = value;
+                if (days is > 0)
+                    request["Days"] = Math.Min(days.Value, 3660);
+                request["Limit"] = Math.Clamp(limit ?? 100, 1, 500);
+            }));
+
+        workers.MapGet("/database/changes/{id:long}", (long id, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "DatabaseChange", request => request["Id"] = id));
+
         // The micro frontends published on the machine of the Worker Control.
         workers.MapGet("/frontends", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Frontends"));
 

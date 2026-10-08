@@ -202,6 +202,22 @@
       </section>
     }
 
+    @if (changes().length) {
+      <section class="panel">
+        <div class="panel-head"><h2>Alterações</h2><span class="hint">desde que o banco é acompanhado</span></div>
+        <ul class="references changes">
+          @for (change of changes(); track change.Id) {
+            <li>
+              <span class="pill" [class]="'pill ' + actionTone(change.Action)">{{ actionName(change.Action) }}</span>
+              <a [routerLink]="['/banco/alteracoes', change.Id]">{{ change.ModifiedAt ?? change.At | when }}</a>
+              @if (who(change)) { <span class="muted">por {{ who(change) }}</span> }
+              @if (change.OldName) { <span class="muted">antes {{ change.OldName }}</span> }
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
     <section class="panel">
       <div class="panel-head">
         <h2>Script</h2>

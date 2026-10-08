@@ -723,3 +723,36 @@ export interface CatalogDetail {
   Fingerprint: string | null;
   Problems: Record<string, string>;
 }
+
+/** Something that happened to an object of a database. */
+export interface ObjectChange {
+  Id: number;
+  /** When it was noticed. */
+  At: string;
+  Database: string;
+  Kind: CatalogKind;
+  Schema: string;
+  Name: string;
+  Action: 'Created' | 'Altered' | 'Renamed' | 'Dropped';
+  OldName: string | null;
+  /** When the instance says it happened. */
+  ModifiedAt: string | null;
+  OldFingerprint: string | null;
+  NewFingerprint: string | null;
+  Login: string | null;
+  Host: string | null;
+  Application: string | null;
+  OldScript: string | null;
+  NewScript: string | null;
+}
+
+/** How far the watching of the objects of one database has got. */
+export interface ObjectTracking {
+  Database: string;
+  Known: number;
+  Total: number;
+  /** Null while the database is being read for the first time. */
+  BaselineAt: string | null;
+  ScannedAt: string | null;
+  Problem: string | null;
+}

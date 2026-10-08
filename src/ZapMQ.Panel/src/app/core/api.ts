@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult, TapEvent,
-  CatalogDetail, CatalogPage, DatabasePoint, DatabaseQuery, DatabaseState,
+  CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, DatabasePoint, DatabaseQuery, DatabaseState,
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
@@ -190,6 +190,14 @@ export class Api {
 
   databaseObject(database: string, kind: string, schema: string, name: string): Observable<CatalogDetail> {
     return this.http.get<CatalogDetail>('api/workers/database/object', { params: { database, kind, schema, name } });
+  }
+
+  databaseChanges(filter: { database?: string; kind?: string; schema?: string; name?: string; search?: string; days?: number; limit?: number }): Observable<{ Total: number; Changes: ObjectChange[]; Tracking: ObjectTracking[] }> {
+    return this.http.get<{ Total: number; Changes: ObjectChange[]; Tracking: ObjectTracking[] }>('api/workers/database/changes', { params: clean(filter) });
+  }
+
+  databaseChange(id: number): Observable<{ Change: ObjectChange }> {
+    return this.http.get<{ Change: ObjectChange }>(`api/workers/database/changes/${id}`);
   }
 
   frontends(): Observable<{ Frontends: WebApplication[]; Publications: WebPublication[] }> {

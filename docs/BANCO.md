@@ -128,8 +128,44 @@ um banco fica um minuto em memória no agente. No painel: `GET api/workers/datab
 
 ## 5. Etapa 3: histórico de objetos
 
-O agente guarda a impressão digital (hash do script normalizado) de cada objeto e registra quando
-ela muda, com as duas versões. Responde "o que mudou no banco desde tal data".
+De tempos em tempos (`ObjectScanMinutes`, padrão 10; zero desliga) o agente confere os objetos de
+cada banco de `Databases` e registra o que mudou: **criado**, **alterado**, **renomeado** e
+**apagado**.
+
+**Como percebe.** Cada conferência lista os objetos, o que é barato, e só relê os que a instância
+diz terem sido tocados desde a última vez (a data de alteração do objeto; em uma tabela, também a
+dos seus triggers). Um objeto é o mesmo enquanto o script que o cria for o mesmo: reconstruir um
+índice ou recompilar uma procedure toca o objeto e não é alteração. Um objeto que reaparece com
+outro nome e o mesmo identificador foi renomeado.
+
+**Primeira leitura.** A primeira conferência de um banco só registra como ele está; nada do que
+ela encontra é alteração. Em um banco grande ela leva alguns minutos (uma pausa curta entre um
+objeto e outro, para não pesar), e a tela mostra o andamento. Se o serviço parar no meio, ela
+continua de onde estava.
+
+**O que fica guardado**, em `objects.db` ao lado do serviço: o script atual e a impressão digital
+de cada objeto, e, para cada alteração, quando foi percebida, quando a instância diz que
+aconteceu, as duas impressões digitais e os dois scripts. As alterações ficam por
+`ObjectHistoryDays` (padrão 365).
+
+**Quem alterou.** A instância guarda sozinha um rastro das criações, alterações e exclusões de
+objetos (o *default trace*). O agente procura nele o login, a máquina e a aplicação. É o que der:
+o usuário da conexão pode não ter permissão de ler o rastro, a instância pode tê-lo desligado, e
+o que já saiu do arquivo em uso não é mais encontrado. Nesses casos a alteração fica sem autor.
+
+**Limites.** O que acontece entre duas conferências vira uma alteração só: um objeto alterado
+três vezes em dez minutos aparece uma vez, do primeiro estado ao último; um criado e apagado
+nesse intervalo não aparece. Com o serviço parado, o que mudou é registrado na volta, com a hora
+que a instância informa.
+
+**Telas.** Aba **Alterações** em `/banco/alteracoes`: lista com busca (por objeto ou por quem
+alterou), tipo e período. Cada alteração abre a comparação linha a linha entre antes e depois. A
+tela de cada objeto mostra as alterações dele. Cada alteração também entra no histórico de
+eventos do Worker Control (`DatabaseObjectChanged`).
+
+**Contrato de administração:** `DatabaseChanges` (`Database`, `Kind`, `Schema`, `Name`, `Search`,
+`Days` ou `From`/`To`, `Limit`), sem os scripts, e `DatabaseChange` (`Id`), com eles. `Database`
+passa a trazer `Tracking`, o andamento da conferência de cada banco.
 
 ## 6. Transporte entre ambientes (futuro)
 

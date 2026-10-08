@@ -1,0 +1,67 @@
+<div class="page">
+  <header class="head">
+    <a mat-icon-button routerLink="/banco/alteracoes" matTooltip="Voltar às alterações" aria-label="Voltar às alterações"><mat-icon svgIcon="arrow_back" /></a>
+    @if (change(); as now) {
+      <div class="title">
+        <h1><span class="muted">{{ now.Schema }}.</span>{{ now.Name }} <span class="pill" [class]="'pill ' + actionTone(now.Action)">{{ actionName(now.Action) }}</span></h1>
+        <p class="muted">
+          <mat-icon [svgIcon]="kindIcon(now.Kind)" /> {{ kindName(now.Kind) }} · {{ now.Database }} · {{ now.ModifiedAt ?? now.At | when }}
+          @if (who()) { · por {{ who() }} }
+          @if (now.OldName) { · antes se chamava {{ now.OldName }} }
+        </p>
+      </div>
+      <span class="spacer"></span>
+      @if (now.Action !== 'Dropped') {
+        <a mat-button [routerLink]="['/banco/objetos', now.Database, now.Kind, now.Schema, now.Name]"><mat-icon svgIcon="open_in_new" /> Ver o objeto</a>
+      }
+    } @else {
+      <div class="title"><h1>Alteração</h1></div>
+    }
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível ler a alteração</strong><span>{{ problem() }}</span></section>
+  } @else if (missing()) {
+    <section class="panel empty"><mat-icon svgIcon="search" /><strong>Esta alteração não está mais guardada</strong></section>
+  } @else if (change(); as now) {
+    <section class="panel">
+      <div class="panel-head">
+        <h2>{{ compared() ? 'O que mudou' : now.Action === 'Dropped' ? 'Como era' : 'Como foi criado' }}</h2>
+        @if (compared()) {
+          <span class="hint"><span class="plus">+{{ counts().added | num }}</span><span class="minus">−{{ counts().removed | num }}</span> linhas</span>
+        }
+        <span class="spacer"></span>
+        @if (now.OldFingerprint || now.NewFingerprint) {
+          <span class="mono muted print" matTooltip="Impressão digital do script, antes e depois">{{ now.OldFingerprint?.slice(0, 8) ?? '—' }} → {{ now.NewFingerprint?.slice(0, 8) ?? '—' }}</span>
+        }
+        @if (compared()) {
+          <mat-button-toggle-group [value]="whole()" (change)="whole.set($event.value)" hideSingleSelectionIndicator aria-label="Quanto mostrar">
+            <mat-button-toggle [value]="false">Só o que mudou</mat-button-toggle>
+            <mat-button-toggle [value]="true">Tudo</mat-button-toggle>
+          </mat-button-toggle-group>
+        }
+      </div>
+      @if (!lines().length) {
+        <div class="empty"><mat-icon svgIcon="lock" /><strong>Não há texto para mostrar</strong><span>O banco guarda este objeto criptografado.</span></div>
+      } @else if (compared() && !counts().added && !counts().removed) {
+        <div class="empty"><span>Só mudaram espaços no fim das linhas ou as quebras de linha.</span></div>
+      } @else {
+        <div class="diff" role="table" aria-label="Comparação linha a linha">
+          @for (part of parts(); track $index) {
+            @if (isLines(part)) {
+              @for (line of $any(part).lines; track $index) {
+                <div class="line" [class.plus]="compared() && line.kind === '+'" [class.minus]="compared() && line.kind === '-'">
+                  <span class="number">{{ line.before ?? '' }}</span><span class="number">{{ line.after ?? '' }}</span><span class="sign">{{ compared() ? line.kind : '' }}</span><span class="text">{{ line.text }}</span>
+                </div>
+              }
+            } @else {
+              <div class="gap">{{ $any(part).skipped | num }} {{ $any(part).skipped === 1 ? 'linha igual' : 'linhas iguais' }}</div>
+            }
+          }
+        </div>
+      }
+    </section>
+  } @else {
+    <section class="panel empty"><span>Lendo…</span></section>
+  }
+</div>

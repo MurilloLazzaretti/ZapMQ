@@ -65,3 +65,18 @@ export function variety(item: Pick<CatalogObject, 'Variety'>): string {
       return '';
   }
 }
+
+const ACTIONS: Record<string, { text: string; tone: string }> = {
+  Created: { text: 'criado', tone: 'ok' },
+  Altered: { text: 'alterado', tone: 'info' },
+  Renamed: { text: 'renomeado', tone: 'warn' },
+  Dropped: { text: 'apagado', tone: 'danger' },
+};
+
+export function actionName(action: string): string {
+  return ACTIONS[action]?.text ?? action;
+}
+
+export function actionTone(action: string): string {
+  return ACTIONS[action]?.tone ?? '';
+}

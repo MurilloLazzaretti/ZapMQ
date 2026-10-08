@@ -71,3 +71,6 @@ td strong + .pill { margin-left: 8px; }
   .number { color: light-dark(#0e7490, #67e8f9); }
   .variable { color: light-dark(#b45309, #fcd34d); }
 }
+
+.changes { max-height: 220px; }
+.changes li { gap: 10px; flex-wrap: wrap; }
