@@ -19,6 +19,13 @@ mostra o que ele lê.
 - **A instância não é atrapalhada.** Cada conexão lê sem segurar bloqueio, espera no máximo 2 s por
   um e perde qualquer deadlock. As consultas têm limite de 10 s e rodam em uma linha de execução
   própria: uma instância lenta não atrasa a supervisão dos processos.
+- **Só os bancos da configuração.** Uma instância costuma ser dividida com outros ambientes. Com
+  `Databases` preenchido, a tela mostra só o que é desses bancos: sessões, o que está em execução
+  (mais quem bloqueia uma sessão deles, esteja em que banco estiver), discos (os deles e o do
+  `tempdb`), backups, alertas e consultas caras. Processador e memória são da instância inteira, e
+  os jobs também, porque não pertencem a um banco. Um nome que a instância não tem vira alerta.
+- **Consultas caras são as das aplicações.** O que roda no contexto dos bancos de sistema fica de
+  fora: é onde ferramentas de monitoramento, este agente incluído, fazem as suas perguntas.
 - **Só SQL Server**, atrás de uma interface (`IDatabaseSource`), sem nada específico de um cliente.
 
 ## 2. Configuração
@@ -46,7 +53,7 @@ Seção `Database` do `ConfigWorkers.json`:
 | `Server` | Endereço, como em uma connection string |
 | `User`, `Password` | Sem usuário, vale a conta do serviço (autenticação do Windows) |
 | `Encrypt`, `TrustServerCertificate` | Padrão: sem exigir criptografia e aceitando o certificado do servidor |
-| `Databases` | Os bancos cujos objetos são listados (etapa 2). A saúde é da instância inteira |
+| `Databases` | Os bancos acompanhados e cujos objetos são listados (etapa 2). Vazio acompanha todos |
 | `BlockingSeconds` | A partir de quanto tempo uma sessão esperando por outra vira alerta |
 | `BackupHours` | Idade máxima do último backup completo. Zero não olha backups |
 | `DiskFreePercent` | Espaço livre mínimo nos discos dos arquivos dos bancos |

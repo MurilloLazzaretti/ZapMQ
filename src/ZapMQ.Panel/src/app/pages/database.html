@@ -165,7 +165,9 @@
         <div class="panel-head">
           <h2>Bancos</h2>
           <span class="spacer"></span>
-          <button mat-button (click)="systemToo.set(!systemToo())">{{ systemToo() ? 'Ocultar os de sistema' : 'Mostrar os de sistema' }}</button>
+          @if (!now.Databases.length) {
+            <button mat-button (click)="systemToo.set(!systemToo())">{{ systemToo() ? 'Ocultar os de sistema' : 'Mostrar os de sistema' }}</button>
+          }
         </div>
         <div class="table-wrap">
           <table class="data stack">
@@ -194,7 +196,7 @@
       <section class="panel">
         <div class="panel-head">
           <h2>Consultas mais caras</h2>
-          <span class="hint">desde que a instância iniciou</span>
+          <span class="hint">das aplicações, desde que a instância iniciou</span>
           <span class="spacer"></span>
           <mat-button-toggle-group [value]="cost()" (change)="cost.set($event.value)" hideSingleSelectionIndicator aria-label="Custo">
             <mat-button-toggle value="cpu">Processador</mat-button-toggle>
@@ -241,7 +243,7 @@
 
       <section class="grid two bottom">
         <div class="panel">
-          <div class="panel-head"><h2>Sessões por aplicação</h2></div>
+          <div class="panel-head"><h2>Sessões por aplicação</h2>@if (now.Databases.length) {<span class="hint">nos bancos acompanhados</span>}</div>
           @if (sessions().list.length) {
             <div class="table-wrap">
               <table class="data stack">
@@ -284,7 +286,7 @@
 
         @if (jobs().length) {
           <div class="panel">
-            <div class="panel-head"><h2>Jobs</h2><span class="hint">do SQL Server Agent</span></div>
+            <div class="panel-head"><h2>Jobs</h2><span class="hint">do SQL Server Agent, da instância inteira</span></div>
             <div class="table-wrap">
               <table class="data stack">
                 <thead>

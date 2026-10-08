@@ -5,6 +5,8 @@ const DECIMAL = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 /** What an alert of the database says, in the words of the panel. */
 export function alertText(alert: DatabaseAlert): string {
   switch (alert.Kind) {
+    case 'Missing':
+      return `A instância não tem um banco chamado ${alert.Subject}`;
     case 'State':
       return `Banco ${alert.Subject} não está online`;
     case 'Blocking':
