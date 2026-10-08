@@ -3,18 +3,28 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { Api } from '../core/api';
-import { NumPipe, SincePipe } from '../core/format';
+import { catchError, forkJoin, of } from 'rxjs';
+import { AgoPipe, NumPipe, SincePipe } from '../core/format';
 import { Live } from '../core/live';
-import { MetricsPoint } from '../core/models';
+import { MetricsPoint, TrafficSummary, WebApplication, WebPublication, WorkerControlStatus } from '../core/models';
 import { Series, TimeChart } from '../shared/chart';
 import { Stat } from '../shared/stat';
 
 type Range = 'hour' | 'day';
 
+/** Something that is not as it should be, and where to go to see it. */
+interface Concern {
+  tone: 'danger' | 'warn';
+  text: string;
+  link: string;
+}
+
+const DECIMAL = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+
 /** Where things stand right now, and how the last hour or day went. */
 @Component({
   selector: 'zap-overview',
-  imports: [RouterLink, MatIconModule, MatButtonToggleModule, Stat, TimeChart, NumPipe, SincePipe],
+  imports: [RouterLink, MatIconModule, MatButtonToggleModule, Stat, TimeChart, NumPipe, SincePipe, AgoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page">
@@ -22,10 +32,74 @@ type Range = 'hour' | 'day';
         <div>
           <h1>Visão geral</h1>
           @if (overview(); as now) {
-            <p class="muted">Serviço no ar há {{ now.startedAt | since }} · versão {{ now.version }}</p>
+            <p class="muted">O ambiente inteiro em uma tela · ZapMQ {{ now.version }}, no ar há {{ now.startedAt | since }}</p>
           }
         </div>
       </header>
+
+      <section class="panel attention" [class.calm]="!concerns().length">
+        @if (concerns().length) {
+          <div class="title"><mat-icon svgIcon="warning" /> <strong>{{ concerns().length === 1 ? 'Um ponto pede atenção' : concerns().length + ' pontos pedem atenção' }}</strong></div>
+          <ul>
+            @for (concern of concerns(); track concern.text) {
+              <li><a [routerLink]="concern.link"><span class="dot" [class]="'dot ' + concern.tone"></span> {{ concern.text }} <mat-icon svgIcon="chevron_right" /></a></li>
+            }
+          </ul>
+        } @else {
+          <div class="title"><mat-icon svgIcon="verified" /> <strong>Tudo como esperado</strong> <span class="muted">mensageria, processos, serviços, tráfego e aplicação web</span></div>
+        }
+      </section>
+
+      <section class="blocks">
+        <a class="panel block" routerLink="/workers">
+          <span class="name"><mat-icon svgIcon="precision_manufacturing" /> Processos e serviços <mat-icon class="go" svgIcon="chevron_right" /></span>
+          @if (workers(); as now) {
+            <span class="figures">
+              <span><b class="num">{{ processes().up }}<small>de {{ processes().desired }}</small></b> processos no ar</span>
+              <span><b class="num">{{ services().running }}<small>de {{ services().all }}</small></b> serviços rodando</span>
+              <span><b class="num" [class.bad]="processes().unstable">{{ processes().unstable }}</b> grupos instáveis</span>
+            </span>
+          } @else {
+            <span class="muted none">{{ workersProblem() || 'Consultando o Worker Control…' }}</span>
+          }
+        </a>
+
+        <a class="panel block" routerLink="/trafego">
+          <span class="name"><mat-icon svgIcon="monitoring" /> Tráfego <small class="muted">última hora, APIs</small> <mat-icon class="go" svgIcon="chevron_right" /></span>
+          @if (traffic(); as now) {
+            @if (now.Configured) {
+              <span class="figures">
+                <span><b class="num">{{ perMinute() }}</b> requisições por minuto</span>
+                <span><b class="num" [class.bad]="now.Totals.S5">{{ share(now.Totals.S5, now.Totals.Count) }}</b> erros do servidor</span>
+                <span><b class="num">{{ ms(now.Totals.P95) }}</b> tempo de 95% das respostas</span>
+              </span>
+            } @else {
+              <span class="muted none">Nenhum log de acesso configurado.</span>
+            }
+          } @else {
+            <span class="muted none">{{ workersProblem() ? 'Sem o Worker Control não há medição.' : 'Consultando…' }}</span>
+          }
+        </a>
+
+        <a class="panel block" routerLink="/web">
+          <span class="name"><mat-icon svgIcon="web" /> Aplicação web <mat-icon class="go" svgIcon="chevron_right" /></span>
+          @if (web(); as now) {
+            @if (now.modules) {
+              <span class="figures">
+                <span><b class="num" [class.bad]="now.up < now.modules">{{ now.up }}<small>de {{ now.modules }}</small></b> módulos no ar</span>
+                <span><b>{{ now.latest ? (now.latest | ago) : '—' }}</b> última publicação</span>
+                <span><b class="num">{{ now.published }}</b> publicações em 7 dias</span>
+              </span>
+            } @else {
+              <span class="muted none">Nenhuma aplicação web configurada.</span>
+            }
+          } @else {
+            <span class="muted none">{{ workersProblem() ? 'Sem o Worker Control não há leitura.' : 'Consultando…' }}</span>
+          }
+        </a>
+      </section>
+
+      <h2 class="section">Mensageria</h2>
 
       @if (overview(); as now) {
         <section class="grid stats">
@@ -108,6 +182,31 @@ type Range = 'hour' | 'day';
   styles: `
     .head h1 { margin: 0; font: var(--mat-sys-headline-small); font-weight: 650; letter-spacing: -0.02em; }
     .head p { margin: 2px 0 0; }
+    .section { margin: 8px 0 -4px; color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-label-large); letter-spacing: 0.06em; text-transform: uppercase; }
+
+    .attention { padding: 14px 18px; border-color: color-mix(in srgb, var(--zap-danger) 45%, transparent); }
+    .attention.calm { border-color: var(--zap-border); }
+    .attention .title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--zap-danger); }
+    .attention.calm .title { color: var(--zap-ok); }
+    .attention .title .muted { font: var(--mat-sys-body-small); }
+    .attention ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 2px 16px; }
+    .attention li a { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; color: inherit; text-decoration: none; }
+    .attention li a:hover { background: var(--mat-sys-surface-container-high); }
+    .attention li mat-icon { width: 18px; height: 18px; margin-left: auto; flex: none; color: var(--mat-sys-on-surface-variant); }
+
+    .blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--zap-gap); }
+    .block { display: grid; align-content: start; gap: 14px; padding: 18px 20px; color: inherit; text-decoration: none !important; transition: transform 0.15s, border-color 0.15s; }
+    .block:hover { transform: translateY(-1px); border-color: var(--mat-sys-primary); }
+    .block .name { display: flex; align-items: center; gap: 10px; font: var(--mat-sys-title-medium); }
+    .block .name > mat-icon:first-child { color: var(--mat-sys-primary); }
+    .block .name small { font: var(--mat-sys-body-small); }
+    .block .go { margin-left: auto; color: var(--mat-sys-on-surface-variant); }
+    .block .figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .block .figures span { display: grid; gap: 2px; color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-body-small); }
+    .block .figures b { color: var(--mat-sys-on-surface); font: var(--mat-sys-title-large); font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; }
+    .block .figures b small { margin-left: 4px; color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-label-medium); letter-spacing: 0; }
+    .block .figures b.bad { color: var(--zap-danger); }
+    .block .none { font: var(--mat-sys-body-medium); }
     .skeleton { height: 82px; opacity: 0.5; }
     .ranking { list-style: none; margin: 0; padding: 8px 20px 16px; display: grid; gap: 4px; }
     .ranking li {
@@ -133,6 +232,110 @@ export class OverviewPage implements OnInit, OnDestroy {
 
   protected readonly overview = this.live.overview;
   protected readonly range = signal<Range>('hour');
+
+  // The rest of the environment, as the Worker Control tells it. Each part stands without the others.
+  protected readonly workers = signal<WorkerControlStatus | null>(null);
+  protected readonly workersProblem = signal('');
+  protected readonly traffic = signal<TrafficSummary | null>(null);
+  private readonly frontends = signal<{ Frontends: WebApplication[]; Publications: WebPublication[] } | null>(null);
+  private environmentTimer: ReturnType<typeof setInterval> | null = null;
+
+  protected readonly processes = computed(() => {
+    const groups = this.workers()?.Groups ?? [];
+    return {
+      desired: groups.reduce((total, group) => total + group.DesiredWorkers, 0),
+      up: groups.reduce((total, group) => total + group.Workers.filter((worker) => worker.State === 'Up').length, 0),
+      unstable: groups.filter((group) => group.Unstable).length,
+    };
+  });
+
+  protected readonly services = computed(() => {
+    const services = this.workers()?.Services ?? [];
+    return { all: services.length, running: services.filter((service) => service.State === 'Running').length };
+  });
+
+  protected readonly perMinute = computed(() => {
+    const totals = this.traffic()?.Totals;
+    return totals ? DECIMAL.format(totals.Count / 60) : '—';
+  });
+
+  protected readonly web = computed(() => {
+    const answer = this.frontends();
+    if (!answer) {
+      return null;
+    }
+    const modules = answer.Frontends.flatMap((application) => application.Modules);
+    const week = Date.now() - 7 * 86400000;
+    return {
+      modules: modules.length,
+      up: modules.filter((module) => module.State === 'Up').length,
+      latest: modules.map((module) => module.PublishedAt).filter((at): at is string => !!at).sort().pop() ?? null,
+      published: answer.Publications.filter((publication) => publication.Kind !== 'first-seen' && Date.parse(publication.At) >= week).length,
+    };
+  });
+
+  /** Everything, anywhere in the environment, that is not as it should be: the worst first. */
+  protected readonly concerns = computed<Concern[]>(() => {
+    const concerns: Concern[] = [];
+    const broker = this.overview();
+    if (broker?.withoutConsumer) {
+      concerns.push({ tone: 'danger', text: `${broker.withoutConsumer} ${broker.withoutConsumer === 1 ? 'fila com mensagens e sem consumidor' : 'filas com mensagens e sem consumidor'}`, link: '/filas' });
+    }
+    if (this.workersProblem()) {
+      concerns.push({ tone: 'danger', text: 'O Worker Control não está respondendo', link: '/workers' });
+    }
+    for (const group of this.workers()?.Groups ?? []) {
+      const up = group.Workers.filter((worker) => worker.State === 'Up').length;
+      if (group.Unstable) {
+        concerns.push({ tone: 'danger', text: `Grupo ${group.Name} instável: os processos caem logo depois de iniciar`, link: '/workers' });
+      } else if (group.Enabled && up < group.DesiredWorkers) {
+        concerns.push({ tone: 'warn', text: `Grupo ${group.Name} com ${up} de ${group.DesiredWorkers} processos no ar`, link: '/workers' });
+      }
+    }
+    for (const service of this.workers()?.Services ?? []) {
+      const name = service.DisplayName || service.Name;
+      if (service.State === 'Missing') {
+        concerns.push({ tone: 'danger', text: `Serviço ${name} não está instalado`, link: '/workers/servicos' });
+      } else if (service.Unstable) {
+        concerns.push({ tone: 'danger', text: `Serviço ${name} instável`, link: '/workers/servicos' });
+      } else if (service.State === 'Stopped' && (service.ExitCode ?? 0) !== 0) {
+        concerns.push({ tone: 'danger', text: `Serviço ${name} caiu (código ${service.ExitCode})`, link: '/workers/servicos' });
+      } else if (service.Check?.Ok === false) {
+        concerns.push({ tone: 'danger', text: `Serviço ${name} rodando, mas ${service.Check.Target} não responde`, link: '/workers/servicos' });
+      }
+    }
+    const traffic = this.traffic();
+    if (traffic?.Configured) {
+      if (!traffic.Source.Found || traffic.Source.Problem) {
+        concerns.push({ tone: 'warn', text: 'O log de acesso do proxy não está sendo lido', link: '/trafego' });
+      }
+      // A handful of requests says little; a share of many does.
+      if (traffic.Totals.Count >= 20 && traffic.Totals.S5 / traffic.Totals.Count >= 0.02) {
+        concerns.push({ tone: 'danger', text: `${this.share(traffic.Totals.S5, traffic.Totals.Count)} das chamadas às APIs com erro do servidor na última hora`, link: '/trafego' });
+      }
+    }
+    for (const application of this.frontends()?.Frontends ?? []) {
+      if (application.Problem) {
+        concerns.push({ tone: 'danger', text: `Aplicação web ${application.Name}: a pasta ou o manifesto não pôde ser lido`, link: '/web' });
+      }
+      const wrong = application.Modules.filter((module) => module.State !== 'Up');
+      if (wrong.length) {
+        concerns.push({ tone: 'danger', text: `${wrong.length === 1 ? 'Módulo ' + (wrong[0].Title || wrong[0].Name) + ' fora do ar ou incompleto' : wrong.length + ' módulos fora do ar ou incompletos'}`, link: '/web' });
+      }
+      if (application.Orphans.length) {
+        concerns.push({ tone: 'warn', text: `${application.Orphans.length === 1 ? 'Uma pasta de módulo' : application.Orphans.length + ' pastas de módulo'} fora do manifesto`, link: '/web' });
+      }
+    }
+    return concerns.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === 'danger' ? -1 : 1));
+  });
+
+  protected ms(value: number | null): string {
+    return value === null ? '—' : value >= 1000 ? `${DECIMAL.format(value / 1000)} s` : `${Math.round(value)} ms`;
+  }
+
+  protected share(part: number, whole: number): string {
+    return whole ? DECIMAL.format((part / whole) * 100) + '%' : '0%';
+  }
   private readonly points = signal<MetricsPoint[]>([]);
 
   protected readonly dead = computed(() => {
@@ -181,12 +384,40 @@ export class OverviewPage implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.load();
     this.timer = setInterval(() => this.load(), 10000);
+    this.loadEnvironment();
+    this.environmentTimer = setInterval(() => this.loadEnvironment(), 15000);
   }
 
   ngOnDestroy(): void {
     if (this.timer) {
       clearInterval(this.timer);
     }
+    if (this.environmentTimer) {
+      clearInterval(this.environmentTimer);
+    }
+  }
+
+  private loadEnvironment(): void {
+    this.api.workerStatus().subscribe({
+      next: (status) => {
+        this.workers.set(status);
+        this.workersProblem.set('');
+      },
+      error: (failure) => {
+        if (failure.status !== 401) {
+          this.workers.set(null);
+          this.workersProblem.set(failure.error?.error ?? 'Sem resposta do Worker Control.');
+        }
+      },
+    });
+    // An older Worker Control knows nothing of these two; the blocks say so by staying empty.
+    forkJoin({
+      traffic: this.api.traffic({ minutes: 60, kind: 'api' }).pipe(catchError(() => of(null))),
+      frontends: this.api.frontends().pipe(catchError(() => of(null))),
+    }).subscribe(({ traffic, frontends }) => {
+      this.traffic.set(traffic);
+      this.frontends.set(frontends);
+    });
   }
 
   protected pick(range: Range): void {

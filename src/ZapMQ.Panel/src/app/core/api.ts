@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
-  HealthSample, InstalledService, ParkMap, TrafficError, TrafficRoute, TrafficSummary, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
+  HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
 
 /**
@@ -136,6 +136,10 @@ export class Api {
 
   trafficRoutes(filter: TrafficQuery & { search?: string; sort?: string; limit?: number }): Observable<{ Routes: TrafficRoute[] }> {
     return this.http.get<{ Routes: TrafficRoute[] }>('api/workers/traffic/routes', { params: clean(filter) });
+  }
+
+  trafficPages(filter: { minutes: number; search?: string; limit?: number; names?: string[] }): Observable<TrafficScreens> {
+    return this.http.get<TrafficScreens>('api/workers/traffic/pages', { params: clean({ ...filter, names: filter.names?.join(',') }) });
   }
 
   trafficErrors(filter: { host?: string; app?: string; limit?: number }): Observable<{ Errors: TrafficError[] }> {

@@ -54,7 +54,11 @@
         [hint]="totals().unchecked ? 'sem endereço para conferir' : 'módulos respondendo'" />
       <zap-stat label="Pedem atenção" icon="warning" [tone]="totals().attention ? 'danger' : 'ok'" [value]="totals().attention | num" [hint]="totals().attention ? 'fora do ar, incompleto ou sobrando' : 'nenhum'" />
       <zap-stat label="Publicações" icon="publish" tone="info" [value]="totals().published | num" hint="nos últimos 7 dias" />
-      <zap-stat label="Casca da aplicação" icon="web" tone="neutral" [value]="app.ShellPublishedAt ? (app.ShellPublishedAt | ago) : '—'" hint="última publicação" />
+      @if (totals().mostUsed; as most) {
+        <zap-stat label="Mais usado" icon="group" tone="neutral" [value]="most.module.Title || most.module.Name" [hint]="most.use!.Users + (most.use!.Users === 1 ? ' pessoa' : ' pessoas') + ' em 24 horas'" />
+      } @else {
+        <zap-stat label="Casca da aplicação" icon="web" tone="neutral" [value]="app.ShellPublishedAt ? (app.ShellPublishedAt | ago) : '—'" hint="última publicação" />
+      }
     </section>
 
     @if (app.Orphans.length) {
@@ -76,6 +80,9 @@
       <mat-button-toggle-group [value]="order()" (change)="order.set($event.value)" hideSingleSelectionIndicator aria-label="Ordem">
         <mat-button-toggle value="name">Nome</mat-button-toggle>
         <mat-button-toggle value="published">Publicação</mat-button-toggle>
+        @if (usage().size) {
+          <mat-button-toggle value="use">Uso</mat-button-toggle>
+        }
       </mat-button-toggle-group>
     </div>
 
@@ -108,6 +115,17 @@
               não está no disco
             }
           </span>
+
+          @if (usage().get(module.Name); as use) {
+            <span class="published muted" matTooltip="Pessoas que estiveram em telas deste módulo nas últimas 24 horas, pelos pedidos que partiram delas">
+              <mat-icon svgIcon="group" />
+              @if (use.Users) {
+                {{ use.Users | num }} {{ use.Users === 1 ? 'pessoa' : 'pessoas' }} em 24 h
+              } @else {
+                ninguém em 24 h
+              }
+            </span>
+          }
 
           @if (module.Versions[0]?.Descriptions?.length) {
             <span class="changes">

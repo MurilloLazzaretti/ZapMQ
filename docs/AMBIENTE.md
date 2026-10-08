@@ -1,6 +1,6 @@
 # ZapMQ — Monitoramento do ambiente
 
-Situação: aprovada em 2026-10-08. Etapas 1, 3 e 4 implementadas; a 2 foi adiada.
+Situação: aprovada em 2026-10-08. Etapas 1, 3 e 4 implementadas, e a 5 sem o proxy no mapa; a 2 foi adiada.
 Última revisão: 2026-10-08.
 
 Este documento especifica três recursos novos do painel, que vão além da mensageria: serviços Windows, tráfego HTTP medido pelo proxy reverso e micro frontends. Continua o [painel](PAINEL.md) e a [especificação do Worker Control](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md).
@@ -109,6 +109,16 @@ Nada do corpo, de cabeçalhos ou de parâmetros.
 - **Instância.** Quando o proxy tenta mais de uma, vale a que respondeu. `localhost`, `127.0.0.1` e `[::1]` são a mesma máquina e contam como uma instância só.
 - **Erros recentes.** As últimas `Traffic.KeepErrors` requisições com 5xx (padrão 500), com horário, rota original sem query string, status, instância e tempo, para ver o que falhou sem abrir o arquivo.
 
+### 5.4 Telas
+
+Contar os arquivos servidos não diz quanto cada parte da aplicação web é usada: a aplicação carrega o ponto de entrada de todos os módulos para todo mundo, e o resto fica no cache do navegador. O que diz é a **tela de onde cada pedido partiu**, que o navegador informa (o `Referer`) e o log já grava.
+
+- De cada requisição que diz de qual tela partiu, o agente guarda o site e o caminho da tela, sem a query string e com os identificadores trocados por `{id}`, como nas rotas. Por hora: quantos pedidos partiram de cada tela e de quantos endereços diferentes.
+- O navegador só diz a tela ao próprio site dela. A outro site — uma API publicada sob outro nome — ele diz só o site, o que não informa nada e é descartado. Por isso a contagem vem dos pedidos feitos ao site da aplicação (arquivos, consultas de versão), e "pedidos" mede mais o tempo que a tela ficou aberta do que cliques.
+- **Uso por módulo:** as telas que têm o nome do módulo como um dos trechos do caminho. Aparece no cartão do módulo, na tela Aplicação web, em pessoas nas últimas 24 horas.
+- A tela de tráfego lista as telas mais usadas do período.
+- As publicações da aplicação web aparecem nos gráficos de tráfego como linhas verticais, no instante em que aconteceram.
+
 ### 5.3 O que a tela mostra
 
 - **Agora:** requisições por segundo, taxa de erro (4xx e 5xx separados), mediana e p95, no total.
@@ -143,7 +153,7 @@ Por módulo:
 | Publicado em | Data do ponto de entrada no disco |
 | No ar | O agente pede o ponto de entrada pelo proxy (`Frontends[].BaseUrl`) e espera 200. Verificado a cada minuto |
 | Íntegro | O manifesto lista o módulo e a pasta dele existe, com o ponto de entrada (senão o módulo aparece como incompleto); pasta sem entrada no manifesto também é apontada |
-| Uso | Requisições e endereços distintos do módulo, do tráfego (seção 5) |
+| Uso | Pessoas que estiveram em telas do módulo nas últimas 24 horas (seção 5.4) |
 | Arquivos pedidos que não existem | 404 em arquivos do módulo: costuma ser navegador com versão antiga em cache |
 
 E, para o conjunto:
@@ -157,12 +167,12 @@ Saber qual versão cada usuário tem aberta exige que o frontend informe, o que 
 
 | Hoje | Passa a ser |
 |---|---|
-| Visão geral (só o broker) | **Visão geral** do ambiente: um bloco para mensageria, um para processos e serviços, um para tráfego, um para frontends; cada um com dois ou três números, o que pede atenção, e o caminho para a tela própria |
+| Visão geral (só o broker) | **Visão geral** do ambiente: no topo, tudo o que pede atenção em qualquer parte dele, cada item levando à tela onde se resolve; depois um bloco para processos e serviços, um para tráfego e um para a aplicação web, com três números cada; e a mensageria, como era |
 | Mapa | **Mapa**, com uma coluna a mais, à esquerda: o proxy e as aplicações que ele alcança. Os serviços Windows que usam o broker entram como aplicações, com o estado do serviço |
-| Filas, Mensagens mortas | Sem mudança |
+| Filas, Mensagens mortas | Uma área só, **Filas**, com as mensagens mortas em uma aba |
 | Aplicações, Worker Control | **Processos e serviços**: grupos e workers, serviços Windows e conexões, em abas. Histórico e Configuração continuam nela, e passam a cobrir os serviços |
 | — | **Tráfego** |
-| — | **Frontend** |
+| — | **Aplicação web** |
 
 O painel "Atenção" do mapa passa a existir também na Visão geral, e inclui serviço parado, verificação falhando, instância de upstream sem resposta e módulo fora do ar.
 
@@ -238,7 +248,7 @@ Cada etapa é entregue utilizável no ambiente de desenvolvimento.
 | 2 | Log ao vivo dos serviços, na tela de trace. **Adiada em 2026-10-08**: nenhum serviço do ambiente grava log em arquivo hoje. Fica especificada (4.2) para quando houver um | — |
 | 3 | Frontend: módulos, versões, no ar, integridade, linha do tempo de publicações | — |
 | 4 | Tráfego: leitura e rotação do log, agregação, tela com endpoints, instâncias e erros | Formato de log no proxy (5.1) |
-| 5 | Uso por módulo e publicações marcadas no tráfego; Visão geral do ambiente; coluna do proxy no mapa | 3 e 4 |
+| 5 | Uso por módulo e publicações marcadas no tráfego; Visão geral do ambiente; coluna do proxy no mapa. Feito, menos o proxy no mapa, que depende de o agente descobrir qual processo atende em cada porta | 3 e 4 |
 
 ## 11. Verificação
 

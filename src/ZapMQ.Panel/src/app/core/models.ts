@@ -244,6 +244,20 @@ export interface TrafficRoute extends TrafficTally {
   PreviousP95: number | null;
 }
 
+/** A screen of the web application, by what was asked from it. */
+export interface TrafficScreen {
+  Host: string;
+  Page: string;
+  Count: number;
+  Users: number;
+}
+
+export interface TrafficScreens {
+  Pages: TrafficScreen[];
+  /** For each name asked about: the screens that have it as a part of their path. */
+  Named: { Name: string; Count: number; Users: number }[];
+}
+
 export interface TrafficError {
   At: string;
   Host: string;

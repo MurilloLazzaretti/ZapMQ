@@ -5,11 +5,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { forkJoin } from 'rxjs';
+import { catchError, forkJoin, of } from 'rxjs';
 import { Api } from '../core/api';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
-import { TrafficError, TrafficRoute, TrafficSummary, TrafficTally } from '../core/models';
-import { Series, TimeChart } from '../shared/chart';
+import { TrafficError, TrafficScreen, TrafficRoute, TrafficSummary, TrafficTally, WebPublication } from '../core/models';
+import { Mark, Series, TimeChart } from '../shared/chart';
 import { Stat } from '../shared/stat';
 
 type Kind = 'api' | 'static' | '';
@@ -53,6 +53,8 @@ export class TrafficPage implements OnInit, OnDestroy {
   protected readonly summary = signal<TrafficSummary | null>(null);
   protected readonly routes = signal<TrafficRoute[]>([]);
   protected readonly errors = signal<TrafficError[]>([]);
+  protected readonly pages = signal<TrafficScreen[]>([]);
+  private readonly publications = signal<WebPublication[]>([]);
   protected readonly problem = signal('');
   protected readonly outdated = signal(false);
   protected readonly loading = signal(true);
@@ -91,6 +93,18 @@ export class TrafficPage implements OnInit, OnDestroy {
       { name: 'Mediana', color: '#2fb380', data: point((item) => item.P50) },
       { name: 'P95', color: '#22c1dc', area: true, data: point((item) => item.P95) },
     ];
+  });
+
+  /** What was published in the period, to be seen beside what the traffic did then. */
+  protected readonly marks = computed<Mark[]>(() => {
+    const summary = this.summary();
+    if (!summary) {
+      return [];
+    }
+    const from = Date.parse(summary.From);
+    return this.publications()
+      .filter((publication) => publication.Kind !== 'first-seen' && Date.parse(publication.At) >= from)
+      .map((publication) => ({ at: Date.parse(publication.At), label: `Publicação: ${publication.Module === '(shell)' ? 'aplicação' : publication.Module}${publication.ToVersion ? ' ' + publication.ToVersion : ''}` }));
   });
 
   protected readonly apps = computed(() => {
@@ -172,8 +186,13 @@ export class TrafficPage implements OnInit, OnDestroy {
       summary: this.api.traffic(filter),
       routes: this.api.trafficRoutes({ ...filter, search: this.search(), sort: this.sort(), limit: 60 }),
       errors: this.api.trafficErrors({ app: this.app(), limit: 30 }),
+      // Extras: the screen stands without them.
+      pages: this.api.trafficPages({ minutes: this.minutes(), limit: 15 }).pipe(catchError(() => of(null))),
+      frontends: this.api.frontends().pipe(catchError(() => of(null))),
     }).subscribe({
-      next: ({ summary, routes, errors }) => {
+      next: ({ summary, routes, errors, pages, frontends }) => {
+        this.pages.set(pages?.Pages ?? []);
+        this.publications.set(frontends?.Publications ?? []);
         this.summary.set(summary);
         this.routes.set(routes.Routes);
         this.errors.set(errors.Errors);

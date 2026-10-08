@@ -257,6 +257,17 @@ public static class PanelEndpoints
                 request["Limit"] = Math.Clamp(limit ?? 100, 1, 500);
             }));
 
+        // The screens the requests came from; "names" asks how much the screens under each name were used.
+        workers.MapGet("/traffic/pages", (int? minutes, string? host, string? search, int? limit, string? names, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "TrafficPages", request =>
+            {
+                Period(request, minutes, null, host, null);
+                if (!string.IsNullOrWhiteSpace(search))
+                    request["Search"] = search;
+                request["Limit"] = Math.Clamp(limit ?? 50, 1, 500);
+                request["Names"] = new System.Text.Json.Nodes.JsonArray([.. (names ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(100).Select(name => (System.Text.Json.Nodes.JsonNode)name)]);
+            }));
+
         workers.MapGet("/traffic/errors", (string? host, string? app, int? limit, WorkerControlClient client, HttpContext context) =>
             Forward(client, context, "TrafficErrors", request =>
             {

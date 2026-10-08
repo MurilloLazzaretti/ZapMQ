@@ -1,15 +1,21 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
 import { BarChart, LineChart } from 'echarts/charts';
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
+import { GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { EChartsCoreOption } from 'echarts/core';
 import { Theme } from '../core/theme';
 
-echarts.use([LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
+echarts.use([LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, CanvasRenderer]);
 
 export const provideCharts = () => provideEchartsCore({ echarts });
+
+/** A moment worth pointing at on a chart: something that happened then. */
+export interface Mark {
+  at: number;
+  label: string;
+}
 
 export interface Series {
   name: string;
@@ -39,6 +45,8 @@ export class TimeChart {
 
   readonly series = input.required<Series[]>();
   readonly unit = input('');
+  /** Moments drawn as vertical lines across the chart. */
+  readonly marks = input<Mark[]>([]);
 
   protected readonly options = computed<EChartsCoreOption>(() => {
     const dark = this.theme.dark();
@@ -67,6 +75,8 @@ export class TimeChart {
       },
       xAxis: {
         type: 'time',
+        // A mark after the last point is still inside the chart.
+        max: this.marks().length ? (extent: { max: number }) => Math.max(extent.max, ...this.marks().map((mark) => mark.at)) : undefined,
         axisLine: { lineStyle: { color: line } },
         axisTick: { show: false },
         axisLabel: { color: text, hideOverlap: true, formatter: (at: number) => (brief ? timeFull : time).format(new Date(at)) },
@@ -78,7 +88,21 @@ export class TimeChart {
         axisLabel: { color: text, formatter: (amount: number) => value.format(amount) },
         splitLine: { lineStyle: { color: line } },
       },
-      series: this.series().map((item) => ({
+      series: this.series().map((item, index) => ({
+        // The marks hang on the first series; they belong to the chart, not to a line of it.
+        markLine:
+          index === 0 && this.marks().length
+            ? {
+                silent: false,
+                symbol: 'none',
+                animation: false,
+                lineStyle: { color: dark ? '#d5baff' : '#7d00fa', type: 'dashed', width: 1.5 },
+                label: { show: false },
+                tooltip: { formatter: (mark: { name: string }) => mark.name },
+                emphasis: { label: { show: true, formatter: (mark: { name: string }) => mark.name, color: text, position: 'insideEndTop' } },
+                data: this.marks().map((mark) => ({ name: mark.label, xAxis: mark.at })),
+              }
+            : undefined,
         name: item.name,
         type: 'line',
         data: item.data,

@@ -10,7 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Api } from '../core/api';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
-import { WebApplication, WebModule, WebPublication } from '../core/models';
+import { TrafficScreen, WebApplication, WebModule, WebPublication } from '../core/models';
 import { Stat } from '../shared/stat';
 
 const STATES: Record<WebModule['State'], { label: string; tone: string }> = {
@@ -54,6 +54,15 @@ const megabytes = (bytes: number) => Math.round((bytes / 1048576) * 10) / 10;
         <p class="muted">O módulo não informa versões.</p>
       }
 
+      @if (data.pages.length) {
+        <h3>Telas usadas nas últimas 24 horas</h3>
+        <ul class="seen">
+          @for (page of data.pages; track page.Page) {
+            <li><span class="mono">{{ page.Page }}</span> <span class="muted">{{ page.Users | num }} {{ page.Users === 1 ? 'pessoa' : 'pessoas' }}</span></li>
+          }
+        </ul>
+      }
+
       @if (data.publications.length) {
         <h3>Publicações vistas</h3>
         <ul class="seen">
@@ -82,7 +91,7 @@ const megabytes = (bytes: number) => Math.round((bytes / 1048576) * 10) / 10;
   `,
 })
 export class WebModuleDialog {
-  protected readonly data = inject<{ module: WebModule; publications: WebPublication[]; describe: (publication: WebPublication) => string }>(MAT_DIALOG_DATA);
+  protected readonly data = inject<{ module: WebModule; pages: TrafficScreen[]; publications: WebPublication[]; describe: (publication: WebPublication) => string }>(MAT_DIALOG_DATA);
   protected readonly size = megabytes(this.data.module.Bytes);
 }
 
@@ -108,7 +117,10 @@ export class WebPage implements OnInit, OnDestroy {
   protected readonly outdated = signal(false);
   protected readonly chosen = signal('');
   protected readonly filter = signal('');
-  protected readonly order = signal<'name' | 'published'>('name');
+  protected readonly order = signal<'name' | 'published' | 'use'>('name');
+  /** How much the screens of each module were used in the last day, by module. Empty while it is not known. */
+  protected readonly usage = signal<ReadonlyMap<string, { Count: number; Users: number }>>(new Map());
+  private readonly pages = signal<TrafficScreen[]>([]);
 
   protected readonly application = computed(() => {
     const all = this.applications() ?? [];
@@ -118,9 +130,12 @@ export class WebPage implements OnInit, OnDestroy {
   protected readonly modules = computed(() => {
     const wanted = this.filter().trim().toLowerCase();
     const modules = (this.application()?.Modules ?? []).filter((module) => !wanted || `${module.Name} ${module.Title ?? ''}`.toLowerCase().includes(wanted));
+    const usage = this.usage();
     return this.order() === 'published'
       ? [...modules].sort((a, b) => (b.PublishedAt ?? '').localeCompare(a.PublishedAt ?? ''))
-      : [...modules].sort((a, b) => (a.Title || a.Name).localeCompare(b.Title || b.Name, 'pt-BR'));
+      : this.order() === 'use'
+        ? [...modules].sort((a, b) => (usage.get(b.Name)?.Users ?? 0) - (usage.get(a.Name)?.Users ?? 0) || (usage.get(b.Name)?.Count ?? 0) - (usage.get(a.Name)?.Count ?? 0))
+        : [...modules].sort((a, b) => (a.Title || a.Name).localeCompare(b.Title || b.Name, 'pt-BR'));
   });
 
   /** The publications of the application on screen, the newest first. */
@@ -137,6 +152,8 @@ export class WebPage implements OnInit, OnDestroy {
       attention: modules.filter((module) => module.State !== 'Up').length + (application?.Orphans.length ?? 0),
       published: this.timeline().filter((publication) => publication.Kind !== 'first-seen' && Date.parse(publication.At) >= week).length,
       latest,
+      mostUsed: modules.map((module) => ({ module, use: this.usage().get(module.Name) })).filter((item) => (item.use?.Users ?? 0) > 0)
+        .sort((a, b) => b.use!.Users - a.use!.Users || b.use!.Count - a.use!.Count)[0] ?? null,
       unchecked: modules.length > 0 && modules.every((module) => module.Online === null),
     };
   });
@@ -207,9 +224,23 @@ export class WebPage implements OnInit, OnDestroy {
 
   protected open(module: WebModule): void {
     this.dialog.open(WebModuleDialog, {
-      data: { module: { ...module, Problem: this.why(module) || null }, publications: this.timeline().filter((publication) => publication.Module === module.Name), describe: this.describe },
+      data: { module: { ...module, Problem: this.why(module) || null }, pages: this.pages().filter((page) => (page.Page + '/').includes('/' + module.Name + '/')), publications: this.timeline().filter((publication) => publication.Module === module.Name), describe: this.describe },
       maxWidth: '620px',
       width: 'calc(100vw - 32px)',
+    });
+  }
+
+  /** Asks the traffic how much the screens of each module were used. Without traffic, the cards go without it. */
+  private measure(names: string[]): void {
+    if (!names.length) {
+      return;
+    }
+    this.api.trafficPages({ minutes: 1440, limit: 200, names: [...new Set(names)] }).subscribe({
+      next: (answer) => {
+        this.usage.set(new Map(answer.Named.map((item) => [item.Name, item])));
+        this.pages.set(answer.Pages);
+      },
+      error: () => undefined,
     });
   }
 
@@ -220,6 +251,7 @@ export class WebPage implements OnInit, OnDestroy {
         this.publications.set(answer.Publications);
         this.problem.set('');
         this.outdated.set(false);
+        this.measure(answer.Frontends.flatMap((application) => application.Modules.map((module) => module.Name)));
       },
       error: (failure: HttpErrorResponse) => {
         if (failure.status === 501) {

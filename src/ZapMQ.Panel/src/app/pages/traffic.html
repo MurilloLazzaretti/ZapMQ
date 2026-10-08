@@ -75,11 +75,11 @@
       <section class="grid two">
         <div class="panel">
           <div class="panel-head"><h2>Requisições</h2><span class="hint">por minuto</span></div>
-          <div class="panel-body"><zap-time-chart [series]="requests()" /></div>
+          <div class="panel-body"><zap-time-chart [series]="requests()" [marks]="marks()" /></div>
         </div>
         <div class="panel">
           <div class="panel-head"><h2>Tempo de resposta</h2><span class="hint">milissegundos</span></div>
-          <div class="panel-body"><zap-time-chart [series]="latency()" unit=" ms" /></div>
+          <div class="panel-body"><zap-time-chart [series]="latency()" unit=" ms" [marks]="marks()" /></div>
         </div>
       </section>
 
@@ -166,6 +166,29 @@
           <div class="empty"><span>{{ sort() === 'worse' ? 'Nenhum endpoint com chamadas suficientes hoje e ontem para comparar.' : 'Nenhuma requisição no período com esse filtro.' }}</span></div>
         }
       </section>
+
+      @if (!app() && pages().length) {
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Telas</h2>
+            <span class="hint">de onde os pedidos partiram: quantas pessoas estiveram em cada tela e quanto ela pediu</span>
+          </div>
+          <div class="table-wrap">
+            <table class="data">
+              <thead><tr><th>Tela</th><th class="right">Pessoas</th><th class="right">Pedidos</th></tr></thead>
+              <tbody>
+                @for (page of pages(); track page.Host + page.Page) {
+                  <tr>
+                    <td class="route"><span class="mono">{{ page.Page }}</span> @if (data.Hosts.length > 1) { <span class="muted host">{{ page.Host }}</span> }</td>
+                    <td class="right num">{{ page.Users | num }}</td>
+                    <td class="right num">{{ page.Count | num }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
 
       <section class="grid two bottom">
         <div class="panel">
