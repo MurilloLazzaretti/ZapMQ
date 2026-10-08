@@ -363,6 +363,8 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
 
     public PackageRecord Reject(string id, string? reason, string by) => Change(id, record =>
     {
+        if (!record.Received)
+            throw new TransportRefused("Um pacote montado aqui não é recusado: ele pode ser excluído", StatusCodes.Status409Conflict);
         if (record.Status is not ("Pending" or "Approved"))
             throw new TransportRefused("Este pacote não está aguardando aprovação nem aplicação", StatusCodes.Status409Conflict);
         record.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = by, What = record.Status == "Approved" ? "cancelled" : "rejected", Detail = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim() });

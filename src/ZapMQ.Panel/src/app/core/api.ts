@@ -267,6 +267,10 @@ export class Api {
     return this.http.get<PackageDetail>(`api/transport/packages/${id}`);
   }
 
+  deletePackage(id: string): Observable<void> {
+    return this.http.delete<void>(`api/transport/packages/${id}`);
+  }
+
   packageCheck(id: string): Observable<{ checks: ItemCheck[] }> {
     return this.http.get<{ checks: ItemCheck[] }>(`api/transport/packages/${id}/check`);
   }

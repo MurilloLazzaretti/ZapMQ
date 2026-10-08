@@ -380,4 +380,33 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         lock (here.Applied)
             Assert.Empty(here.Applied);
     }
+
+    [Fact]
+    public async Task What_was_made_here_can_be_deleted_and_what_arrived_can_only_be_refused()
+    {
+        var (_, made) = await Made();
+        var mine = (string)JObject.Parse(await Api.GetStringAsync("api/transport/packages"))["packages"]!.First(package => !(bool)package["received"]!)["id"]!;
+        var here = new PretendDatabase();
+        await using var _ = await Serve(here);
+        var arrived = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+
+        // Made here: it goes away, file and all, and is not refused.
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{mine}/reject", new { }), HttpStatusCode.Conflict);
+        Assert.Equal(HttpStatusCode.NoContent, (await Api.DeleteAsync($"api/transport/packages/{mine}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Api.GetAsync($"api/transport/packages/{mine}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Api.GetAsync($"api/transport/packages/{mine}/download")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Api.DeleteAsync($"api/transport/packages/{mine}")).StatusCode);
+        // What it carried counts as not carried again.
+        Assert.False(JObject.Parse(await Api.GetStringAsync("api/transport/packaged")).ContainsKey("procedure|dbo|spnew"));
+
+        // Arrived: it stays, refused or not, with what it brought.
+        Assert.Equal(HttpStatusCode.Conflict, (await Api.DeleteAsync($"api/transport/packages/{arrived}")).StatusCode);
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{arrived}/reject", new { reason = "Não vai entrar" }));
+        Assert.Equal(HttpStatusCode.Conflict, (await Api.DeleteAsync($"api/transport/packages/{arrived}")).StatusCode);
+        var kept = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{arrived}"));
+        Assert.Equal(("Rejected", 4), ((string?)kept["package"]!["status"], kept["items"]!.Count()));
+        Assert.Contains("fncTotal", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{arrived}/items/1"))["script"]);
+        lock (here.Applied)
+            Assert.Empty(here.Applied);
+    }
 }

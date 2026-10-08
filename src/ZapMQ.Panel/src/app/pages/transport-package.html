@@ -30,6 +30,7 @@
             <span class="muted">Leve o arquivo ao ambiente seguinte e importe-o lá, em Transporte → Pacotes. É lá que ele é aprovado e aplicado.</span>
           </div>
           <span class="spacer"></span>
+          <button mat-button (click)="remove()" [disabled]="busy()"><mat-icon svgIcon="delete" /> Excluir</button>
           <button mat-flat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button>
         </section>
       }
@@ -97,7 +98,7 @@
         <section class="panel decide warned"><div><strong class="bad">Nenhum item foi aplicado.</strong><span class="muted">Veja o motivo no primeiro item.</span></div></section>
       }
       @case ('Rejected') {
-        <section class="panel decide"><div><strong>Recusado.</strong><span class="muted">Um pacote recusado não é aplicado. A correção vem em outro pacote.</span></div></section>
+        <section class="panel decide"><div><strong>Recusado em {{ now.environment }}.</strong><span class="muted">Não pode mais ser aplicado aqui. O que ele trazia continua registrado abaixo; a correção vem em outro pacote.</span></div></section>
       }
     }
 

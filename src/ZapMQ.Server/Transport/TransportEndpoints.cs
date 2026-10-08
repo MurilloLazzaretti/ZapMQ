@@ -112,6 +112,14 @@ public static class TransportEndpoints
         api.MapGet("/packages/{id}", (string id, TransportStore store) =>
             store.Find(id) is { } record ? Results.Json(Detail(record, store)) : Results.Json(new { error = "Não existe esse pacote neste ambiente" }, statusCode: StatusCodes.Status404NotFound));
 
+        // Only what was made here goes away; what arrived is refused and stays.
+        api.MapDelete("/packages/{id}", (string id, TransportStore store, HttpContext context, ILoggerFactory loggers) => Guarded(() =>
+        {
+            var gone = store.Delete(id);
+            loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: package {Name} ({Id}), made here with {Items} items, deleted (by {User})", gone.Manifest.Name, id, gone.Manifest.Items.Count, User(context));
+            return Task.FromResult(Results.NoContent());
+        }));
+
         api.MapGet("/packages/{id}/download", (string id, TransportStore store, HttpContext context, TimeProvider time) =>
         {
             if (store.Find(id) is not { } record || !File.Exists(store.FilePath(id)))

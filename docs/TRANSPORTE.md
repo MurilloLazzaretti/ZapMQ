@@ -294,13 +294,18 @@ procedures e, por fim, exclusões; dentro disso, cada objeto depois dos que ele 
 por resposta. Cada item é uma transação. Antes de cada objeto, o script que estava no destino é
 guardado com o resultado. A situação final é *aplicado*, *aplicado em parte* ou *falhou*.
 
+**Excluir e recusar.** Um pacote **montado aqui** pode ser excluído: some deste ambiente, com o
+arquivo, e os objetos que levava voltam a contar como não transportados. Um pacote **que chegou**
+nunca é excluído: pode ser recusado, o que impede para sempre a aplicação dele aqui e mantém
+registrado tudo o que trazia.
+
 **Onde fica.** No painel, a pasta `transport` ao lado do executável (`ZapMQ:Transport:Directory`):
 `area.json` e, por pacote, `packages/{id}/package.zpkg` e `state.json`. O nome do ambiente vem de
 `ZapMQ:Transport:Environment`; sem ele, vale o nome da máquina.
 
 **Rotas** (todas sob `api/transport`, atrás do login): `summary`; `area`, `area/objects`,
 `area/scripts`, `area/{id}`; `packaged`; `packages`, `packages/import`, `packages/{id}`,
-`packages/{id}/download`, `/check`, `/items/{n}`, `/approve`, `/reject`.
+`packages/{id}/download`, `/check`, `/items/{n}`, `/approve`, `/reject`; `DELETE packages/{id}`.
 
 **No agente:** o comando `DatabaseApply` e o componente `SqlServerWriter`, o único que escreve
 no banco. Ele recusa um banco fora de `Databases`, cria ou altera conforme o objeto exista, não

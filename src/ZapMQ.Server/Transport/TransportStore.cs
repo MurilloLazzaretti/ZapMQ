@@ -255,6 +255,32 @@ public sealed class TransportStore
     }
 
     /// <summary>
+    /// Removes a package that was made here, file and all. One that arrived from somewhere else
+    /// is never removed: it can be refused, and what it brought stays to be looked at.
+    /// </summary>
+    public PackageRecord Delete(string id)
+    {
+        lock (_gate)
+        {
+            if (!_packages.TryGetValue(id, out var record))
+                throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
+            if (record.Received)
+                throw new TransportRefused("Um pacote que chegou de outro ambiente não é excluído: ele pode ser recusado, e o que trouxe continua registrado", StatusCodes.Status409Conflict);
+            _packages.Remove(id);
+            try
+            {
+                if (Directory.Exists(Folder(id)))
+                    Directory.Delete(Folder(id), recursive: true);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogError("The files of package {Id} could not be removed: {Error}", id, error.Message);
+            }
+            return record;
+        }
+    }
+
+    /// <summary>
     /// The script an item carries, read from the file of the package.
     /// </summary>
     public string? Script(string id, int number)

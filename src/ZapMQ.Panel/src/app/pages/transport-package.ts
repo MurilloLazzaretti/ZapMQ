@@ -6,7 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { kindIcon, kindName, size } from '../core/database';
@@ -45,6 +45,7 @@ const STATES: Record<string, { text: string; tone: string; hint: string }> = {
 export class TransportPackagePage implements OnInit, OnDestroy {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   private readonly transport = inject(Transport);
@@ -171,6 +172,30 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     if (sure) {
       await this.act(this.api.approvePackage(this.id, at ? at.toISOString() : null));
       this.scheduling.set(false);
+    }
+  }
+
+  /** Only for what was made here: it goes away, file and all. */
+  protected async remove(): Promise<void> {
+    const sure = await confirm(this.dialog, {
+      title: 'Excluir o pacote?',
+      message: `"${this.detail()!.package.name}" é apagado deste ambiente, com o arquivo. Os objetos que ele levava voltam a aparecer como ainda não transportados.`,
+      warning: 'Se o arquivo já foi levado a outro ambiente, lá ele continua existindo.',
+      action: 'Excluir',
+      danger: true,
+    });
+    if (!sure) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      await firstValueFrom(this.api.deletePackage(this.id));
+      this.transport.refresh();
+      void this.router.navigate(['/transporte/pacotes']);
+    } catch (failure) {
+      this.say(failure);
+    } finally {
+      this.busy.set(false);
     }
   }
 
