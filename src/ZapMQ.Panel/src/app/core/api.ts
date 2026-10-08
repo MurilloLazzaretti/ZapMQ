@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult, TapEvent,
+  PanelUser,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, DatabasePoint, DatabaseQuery, DatabaseState,
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
@@ -33,6 +34,30 @@ export class Api {
 
   login(user: string, password: string): Observable<Session> {
     return this.http.post<Session>('api/login', { user, password });
+  }
+
+  changePassword(current: string, password: string): Observable<Session> {
+    return this.http.post<Session>('api/password', { current, password });
+  }
+
+  users(): Observable<{ users: PanelUser[]; minimumPassword: number }> {
+    return this.http.get<{ users: PanelUser[]; minimumPassword: number }>('api/users');
+  }
+
+  createUser(user: { login: string; name: string; password: string }): Observable<PanelUser> {
+    return this.http.post<PanelUser>('api/users', user);
+  }
+
+  changeUser(login: string, change: { name?: string; enabled?: boolean }): Observable<PanelUser> {
+    return this.http.put<PanelUser>(`api/users/${encodeURIComponent(login)}`, change);
+  }
+
+  resetPassword(login: string, password: string): Observable<void> {
+    return this.http.post<void>(`api/users/${encodeURIComponent(login)}/password`, { password });
+  }
+
+  deleteUser(login: string): Observable<void> {
+    return this.http.delete<void>(`api/users/${encodeURIComponent(login)}`);
   }
 
   logout(): Observable<void> {

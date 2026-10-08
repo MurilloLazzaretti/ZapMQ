@@ -2,8 +2,24 @@
 
 export interface Session {
   user: string | null;
+  name?: string;
+  /** The one who creates and removes the other users. */
+  master?: boolean;
+  /** The password is still the one the user was given and has not chosen. */
   defaultPassword?: boolean;
   version: string;
+}
+
+/** Someone who may get into the panel, as the master sees them. */
+export interface PanelUser {
+  login: string;
+  name: string;
+  master: boolean;
+  enabled: boolean;
+  initialPassword: boolean;
+  createdAt: string;
+  createdBy: string | null;
+  lastLoginAt: string | null;
 }
 
 export interface Totals {

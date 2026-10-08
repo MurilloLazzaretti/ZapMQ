@@ -110,8 +110,9 @@ Only `Port` is commonly changed. Everything else may be left out.
 | `Panel.Enabled` | true | `false` turns the panel and its port off |
 | `Panel.Port` | 5680 | Port of the panel |
 | `Panel.BasePath` | `/zapmq` | Path the panel is published under by a reverse proxy. It also answers at the root of its port |
-| `Panel.User` | `admin` | User of the panel |
-| `Panel.Password` | `admin` | Password of the panel. **Change it**: while it is the initial one, the service says so in the log at every start and the panel shows a notice |
+| `Panel.User` | `admin` | The master the panel starts with, the first time it runs |
+| `Panel.Password` | `admin` | Its password. Both are read only while there is no user yet; from then on the users are in their own file and the password is changed in the panel |
+| `PanelUsersFile` | `users.json` | Where the users of the panel are kept, relative to the executable. No password is in it, only what tells whether one is right |
 | `Panel.SessionHours` | 8 | How long a login lasts |
 | `V2.Enabled` | true | `false` turns the v2 protocol off: the service answers 1.x only and v2 wrappers fall back to it |
 | `V2.MaxFrameBytes` | 4194304 | Largest v2 frame accepted |

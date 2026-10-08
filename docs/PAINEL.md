@@ -18,7 +18,7 @@ Decisões já tomadas:
 | Interface | Angular |
 | Porta | 5680, própria, separada da mensageria (5679) |
 | Publicação | Atrás do proxy reverso existente, no caminho `/zapmq` |
-| Acesso | Login no próprio painel, com um usuário e senha configuráveis; valor inicial `admin` / `admin` |
+| Acesso | Login no próprio painel, com usuários criados pelo master; o master inicial é `admin` / `admin` |
 | Vínculo com outros sistemas | Nenhum: o painel é parte do ZapMQ e não depende de nenhuma aplicação que use o broker |
 
 ## 2. Arquitetura
@@ -42,11 +42,35 @@ Bibliotecas da interface, sempre na versão estável mais recente: Angular (22 n
 
 ## 3. Acesso
 
-- Tela de login. Usuário e senha ficam no `appsettings.json` (`Panel.User`, `Panel.Password`), com o valor inicial `admin` / `admin`.
-- Enquanto a senha for a inicial, o serviço registra um aviso no log a cada início e o painel mostra um aviso fixo.
-- A sessão é um cookie assinado pelo serviço, válido só para o caminho do painel, com duração configurável (padrão: 8 horas).
-- Toda rota de `/api` exige sessão. A verificação está em um ponto só, para que a forma de login possa ser trocada depois sem tocar no resto.
+Quem passa pelo login vê e faz tudo no painel. Não há, por ora, permissão por tela. A única
+distinção é o **master**, que é quem cria e remove os outros usuários.
+
+- **Usuários em arquivo próprio.** Ficam em `users.json`, ao lado do executável
+  (`ZapMQ:PanelUsersFile`). Na primeira partida, sem nenhum usuário, o master é criado a partir de
+  `Panel.User` e `Panel.Password` do `appsettings.json` (valor inicial `admin` / `admin`). Depois
+  disso as duas configurações não são mais lidas.
+- **Senhas.** Nenhuma senha é guardada: só o resultado de PBKDF2-SHA256 com 210.000 rodadas e um
+  sal por usuário. Mínimo de 8 caracteres. Nada disso sai pela API.
+- **O master** cria usuários com uma senha inicial, redefine a senha de um usuário, desativa,
+  reativa e exclui. Ele próprio não pode ser desativado nem excluído, e a senha dele só é trocada
+  por ele, informando a atual.
+- **Cada usuário troca a própria senha** no menu com o seu nome, informando a atual. Enquanto a
+  senha for a que lhe deram (a inicial do master, ou uma criada ou redefinida pelo master), o
+  painel mostra um aviso fixo; no caso do master, o serviço também avisa no log a cada início.
+- **Sessão.** Um cookie assinado pelo serviço, válido só para o caminho do painel, com duração
+  configurável (padrão: 8 horas). Desativar, excluir ou trocar a senha de um usuário encerra as
+  sessões dele na hora. Reiniciar o serviço encerra todas.
+- **Tentativas.** Depois de 5 senhas erradas seguidas para o mesmo login, esse login espera um
+  minuto, mesmo com a senha certa.
+- **Senha do master perdida.** Apagar o `users.json` (ou só a entrada dele) e reiniciar: o master
+  volta a ser o das configurações. Os outros usuários precisam ser criados de novo.
+- Toda rota de `/api` exige sessão, e as de `/api/users` exigem o master. A verificação está em um
+  ponto só, para que a forma de login possa ser trocada depois sem tocar no resto.
 - O usuário logado é enviado como `By` nos comandos ao Worker Control e fica no histórico dele.
+  Login, criação, exclusão e troca de senha ficam no log do serviço.
+
+Rotas: `POST api/password` (a própria senha); `GET` e `POST api/users`, `PUT api/users/{login}`,
+`POST api/users/{login}/password` e `DELETE api/users/{login}` (só o master).
 
 Autenticação do protocolo de mensageria continua fora do escopo.
 
@@ -237,4 +261,4 @@ O trace vem depois, com a etapa própria.
 2. **Ordem das etapas** (seção 7): telas do broker, depois Worker Control, depois mapa, depois exchange.
 3. **Esvaziar fila não gera mensagens mortas** (seção 5.3): as mensagens somem, com registro no log.
 4. **Pausar fila vale para v1 e v2** (seção 5.3).
-5. **Senha no `appsettings.json` em texto**, por ora, com aviso enquanto for a inicial (seção 3).
+5. **Usuários em arquivo próprio, com a senha protegida**; a do `appsettings.json` só cria o master na primeira partida (seção 3).

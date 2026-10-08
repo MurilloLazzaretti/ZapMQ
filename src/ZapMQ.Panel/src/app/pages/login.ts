@@ -133,7 +133,7 @@ export class LoginPage {
       this.enter();
     } catch (failure) {
       const response = failure as HttpErrorResponse;
-      this.error.set(response.status === 401 ? 'Usuário ou senha inválidos.' : 'Não foi possível falar com o serviço.');
+      this.error.set(response.status === 401 ? 'Usuário ou senha inválidos.' : response.status === 429 ? (response.error?.error ?? 'Muitas tentativas. Aguarde um minuto.') : 'Não foi possível falar com o serviço.');
       this.password = '';
     } finally {
       this.busy.set(false);

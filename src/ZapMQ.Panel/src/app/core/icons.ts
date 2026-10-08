@@ -83,6 +83,8 @@ import table from '@material-symbols/svg-400/rounded/table.svg';
 import code from '@material-symbols/svg-400/rounded/code.svg';
 import key from '@material-symbols/svg-400/rounded/key.svg';
 import accountTree from '@material-symbols/svg-400/rounded/account_tree.svg';
+import password from '@material-symbols/svg-400/rounded/password.svg';
+import manageAccounts from '@material-symbols/svg-400/rounded/manage_accounts.svg';
 import database from '@material-symbols/svg-400/rounded/database.svg';
 import hardDrive from '@material-symbols/svg-400/rounded/hard_drive.svg';
 import lock from '@material-symbols/svg-400/rounded/lock.svg';
@@ -92,6 +94,7 @@ const ICONS: Record<string, string> = {
   terminal, download, vertical_align_bottom: verticalAlignBottom, wrap_text: wrapText, delete_sweep: deleteSweep,
   stop, folder, autorenew, settings_applications: settingsApplications,
   web, widgets, publish,
+  password, manage_accounts: manageAccounts,
   database, hard_drive: hardDrive, lock, table, code, key, account_tree: accountTree,
   monitoring, timer, group, filter_alt: filterAlt,
   send, bookmark,

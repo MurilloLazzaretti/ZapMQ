@@ -3,7 +3,9 @@ import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -12,6 +14,7 @@ import { map } from 'rxjs';
 import { Auth } from '../core/auth';
 import { Live } from '../core/live';
 import { Theme } from '../core/theme';
+import { PasswordDialog } from '../shared/user-dialogs';
 
 interface Destination {
   path: string;
@@ -36,6 +39,8 @@ interface Destination {
 })
 export class Shell implements OnInit, OnDestroy {
   private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
+  private readonly snack = inject(MatSnackBar);
   protected readonly auth = inject(Auth);
   protected readonly live = inject(Live);
   protected readonly theme = inject(Theme);
@@ -96,6 +101,13 @@ export class Shell implements OnInit, OnDestroy {
     } else {
       this.collapsed.update((collapsed) => !collapsed);
     }
+  }
+
+  protected changePassword(): void {
+    this.dialog
+      .open(PasswordDialog, { maxWidth: '460px', width: 'calc(100vw - 32px)' })
+      .afterClosed()
+      .subscribe((changed) => changed && this.snack.open('Senha trocada', undefined, { duration: 2500 }));
   }
 
   protected navigated(): void {

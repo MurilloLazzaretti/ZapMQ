@@ -168,3 +168,6 @@ main { flex: 1; min-width: 0; }
   .live { padding: 8px; }
   .user { min-width: 0; padding: 0 8px; }
 }
+
+.who { padding: 8px 16px 6px; color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-label-large); }
+.notice .link { padding: 0; border: none; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }

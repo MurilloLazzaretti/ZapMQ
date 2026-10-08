@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { requireSession } from './core/auth';
+import { requireMaster, requireSession } from './core/auth';
 
 export const routes: Routes = [
   { path: 'login', title: 'Entrar · ZapMQ', loadComponent: () => import('./pages/login').then((m) => m.LoginPage) },
@@ -29,6 +29,7 @@ export const routes: Routes = [
       { path: 'web', title: 'Aplicação web · ZapMQ', loadComponent: () => import('./pages/web').then((m) => m.WebPage) },
       { path: 'workers/servicos', title: 'Serviços · ZapMQ', loadComponent: () => import('./pages/services').then((m) => m.ServicesPage) },
       { path: 'workers/conexoes', title: 'Conexões · ZapMQ', loadComponent: () => import('./pages/connections').then((m) => m.ConnectionsPage) },
+      { path: 'usuarios', title: 'Usuários · ZapMQ', canActivate: [requireMaster], loadComponent: () => import('./pages/users').then((m) => m.UsersPage) },
       { path: 'aplicacoes', redirectTo: 'workers/conexoes' },
     ],
   },

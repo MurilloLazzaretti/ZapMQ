@@ -16,6 +16,8 @@ export class Auth {
   private checked = false;
 
   readonly user = signal<string | null>(null);
+  readonly name = signal('');
+  readonly master = signal(false);
   readonly defaultPassword = signal(false);
   readonly version = signal('');
 
@@ -38,6 +40,11 @@ export class Auth {
     this.checked = true;
   }
 
+  /** The user choosing its own password; the session goes on. */
+  async changePassword(current: string, password: string): Promise<void> {
+    this.accept(await firstValueFrom(this.api.changePassword(current, password)));
+  }
+
   async logout(): Promise<void> {
     try {
       await firstValueFrom(this.api.logout());
@@ -58,6 +65,8 @@ export class Auth {
 
   private accept(session: Session): void {
     this.user.set(session.user);
+    this.name.set(session.name ?? '');
+    this.master.set(!!session.master);
     this.defaultPassword.set(!!session.defaultPassword);
     if (session.version) {
       this.version.set(session.version);
@@ -85,4 +94,11 @@ export const sessionInterceptor: HttpInterceptorFn = (request, next) => {
       return throwError(() => error);
     }),
   );
+};
+
+/** The users are the master's business alone. */
+export const requireMaster: CanActivateFn = async () => {
+  const auth = inject(Auth);
+  await auth.ensure();
+  return auth.master() ? true : inject(Router).createUrlTree(['/']);
 };

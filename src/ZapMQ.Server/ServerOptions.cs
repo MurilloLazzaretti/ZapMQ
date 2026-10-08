@@ -46,6 +46,11 @@ public sealed class ServerOptions
 
     public string QueueDefinitionsFile { get; set; } = "queues.json";
 
+    /// <summary>
+    /// Where the users of the panel are kept. Relative to the executable unless it is a full path.
+    /// </summary>
+    public string PanelUsersFile { get; set; } = "users.json";
+
     public V2Options V2 { get; set; } = new();
 
     public DeadLetterOptions DeadLetters { get; set; } = new();
@@ -90,6 +95,10 @@ public sealed class PanelOptions
     /// </summary>
     public string BasePath { get; set; } = "/zapmq";
 
+    /// <summary>
+    /// The master the panel starts with, the first time it runs. Afterwards the users are in
+    /// their own file and these two are not looked at again.
+    /// </summary>
     public string User { get; set; } = DefaultUser;
 
     public string Password { get; set; } = DefaultPassword;

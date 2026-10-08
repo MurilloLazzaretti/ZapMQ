@@ -77,7 +77,9 @@ public static class ServerHost
         }
         builder.Services.AddSingleton<V1.V1Callers>();
         builder.Services.AddHostedService<SweeperService>();
-        builder.Services.AddSingleton(services => new PanelAuth(options.Panel, services.GetRequiredService<TimeProvider>()));
+        builder.Services.AddSingleton(services => new PanelUserStore(Path.GetFullPath(options.PanelUsersFile, AppContext.BaseDirectory), options.Panel,
+            services.GetRequiredService<TimeProvider>(), services.GetRequiredService<ILogger<PanelUserStore>>()));
+        builder.Services.AddSingleton(services => new PanelAuth(options.Panel, services.GetRequiredService<PanelUserStore>(), services.GetRequiredService<TimeProvider>()));
         builder.Services.AddSingleton(services => new QueueDefinitionStore(services.GetRequiredService<Broker>(), services.GetRequiredService<ILogger<QueueDefinitionStore>>())
         {
             Path = Path.GetFullPath(options.QueueDefinitionsFile, AppContext.BaseDirectory)
@@ -124,9 +126,9 @@ public static class ServerHost
         var startedAt = DateTimeOffset.UtcNow;
         if (options.Panel.Enabled)
         {
-            if (options.Panel.HasDefaultPassword)
+            if (app.Services.GetRequiredService<PanelUserStore>().List().Any(user => user is { Master: true, InitialPassword: true }))
                 app.Lifetime.ApplicationStarted.Register(() => lifetimeLog.LogWarning(
-                    "The panel is using the initial user and password; change ZapMQ:Panel:User and ZapMQ:Panel:Password in appsettings.json"));
+                    "The master of the panel still has the initial password; change it in the panel, under the name of the user"));
             app.UsePanel(options, startedAt);
         }
 

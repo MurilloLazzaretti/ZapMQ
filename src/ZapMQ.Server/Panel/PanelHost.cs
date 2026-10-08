@@ -70,13 +70,20 @@ public static class PanelHost
             return next(context);
 
         var auth = context.RequestServices.GetRequiredService<PanelAuth>();
-        if (auth.Validate(context.Request.Cookies[PanelAuth.Cookie]) is not { } user)
+        if (auth.Session(context.Request.Cookies[PanelAuth.Cookie]) is not { } user)
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return context.Response.WriteAsJsonAsync(new { error = "Sessão expirada ou inexistente" });
         }
 
-        context.Items[UserItem] = user;
+        // Only the master sees and changes who else may get in.
+        if (path.StartsWithSegments("/api/users") && !user.Master)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return context.Response.WriteAsJsonAsync(new { error = "Só o usuário master gerencia os usuários" });
+        }
+
+        context.Items[UserItem] = user.Login;
         return next(context);
     }
 

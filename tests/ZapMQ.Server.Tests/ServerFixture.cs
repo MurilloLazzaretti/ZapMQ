@@ -60,7 +60,8 @@ public sealed class ServerFixture : IAsyncLifetime
                 ["ZapMQ:Port"] = "0",
                 ["ZapMQ:Panel:Port"] = "0",
                 ["ZapMQ:QueueDefinitionsFile"] = _definitions,
-                ["ZapMQ:MessageModelsFile"] = _definitions + ".models"
+                ["ZapMQ:MessageModelsFile"] = _definitions + ".models",
+                ["ZapMQ:PanelUsersFile"] = _definitions + ".users"
             });
             builder.Services.AddSingleton<global::ZapMQ.Server.V1.IPeerResolver>(new Peers(this));
         });

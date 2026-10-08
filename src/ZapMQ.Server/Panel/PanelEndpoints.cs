@@ -19,24 +19,28 @@ public static class PanelEndpoints
 
         // ── Session ─────────────────────────────────────────────────────────
 
+        static object Who(PanelUser user) => new
+        {
+            user = user.Login, name = user.Name, master = user.Master, defaultPassword = user.InitialPassword, version = ServerHost.Version
+        };
+
         api.MapPost("/login", (LoginRequest request, PanelAuth auth, HttpContext context, ILoggerFactory loggers) =>
         {
             var log = loggers.CreateLogger("ZapMQ.Panel");
-            if (!auth.Accepts(request.User, request.Password))
+            if (auth.Blocked(request.User))
+            {
+                log.LogWarning("Panel login for {User} from {Address} has to wait after too many wrong passwords", request.User, context.Connection.RemoteIpAddress);
+                return Results.Json(new { error = "Muitas tentativas com a senha errada. Aguarde um minuto e tente de novo." }, statusCode: StatusCodes.Status429TooManyRequests);
+            }
+            if (auth.Accepts(request.User, request.Password) is not { } user)
             {
                 log.LogWarning("Refused panel login for {User} from {Address}", request.User, context.Connection.RemoteIpAddress);
                 return Results.Json(new { error = "Usuário ou senha inválidos" }, statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            context.Response.Cookies.Append(PanelAuth.Cookie, auth.Issue(request.User!), new CookieOptions
-            {
-                HttpOnly = true,
-                SameSite = SameSiteMode.Strict,
-                Path = context.Request.PathBase.HasValue ? context.Request.PathBase.Value : "/",
-                MaxAge = auth.SessionLength
-            });
-            log.LogInformation("Panel login of {User} from {Address}", request.User, context.Connection.RemoteIpAddress);
-            return Results.Json(new { user = request.User, defaultPassword = auth.HasDefaultPassword });
+            Enter(context, auth, user.Login);
+            log.LogInformation("Panel login of {User} from {Address}", user.Login, context.Connection.RemoteIpAddress);
+            return Results.Json(Who(user));
         });
 
         api.MapPost("/logout", (HttpContext context) =>
@@ -49,9 +53,99 @@ public static class PanelEndpoints
         });
 
         api.MapGet("/session", (HttpContext context, PanelAuth auth) =>
-            auth.Validate(context.Request.Cookies[PanelAuth.Cookie]) is { } user
-                ? Results.Json(new { user, defaultPassword = auth.HasDefaultPassword, version = ServerHost.Version })
+            auth.Session(context.Request.Cookies[PanelAuth.Cookie]) is { } user
+                ? Results.Json(Who(user))
                 : Results.Json(new { user = (string?)null, version = ServerHost.Version }, statusCode: StatusCodes.Status401Unauthorized));
+
+        // ── Users ───────────────────────────────────────────────────────────
+
+        static IResult Refused(UserRefused refused) =>
+            Results.Json(new { error = refused.Message }, statusCode: refused.Missing ? StatusCodes.Status404NotFound : StatusCodes.Status400BadRequest);
+
+        static object Row(PanelUser user) => new
+        {
+            login = user.Login, name = user.Name, master = user.Master, enabled = user.Enabled, initialPassword = user.InitialPassword,
+            createdAt = user.CreatedAt, createdBy = user.CreatedBy, lastLoginAt = user.LastLoginAt
+        };
+
+        // Whoever is logged in chooses its own password; the session goes on with the new one.
+        api.MapPost("/password", (PasswordRequest request, PanelAuth auth, HttpContext context, ILoggerFactory loggers) =>
+        {
+            var login = (string)context.Items[PanelHost.UserItem]!;
+            try
+            {
+                auth.Users.ChangeOwn(login, request.Current, request.Password);
+            }
+            catch (UserRefused refused)
+            {
+                return Refused(refused);
+            }
+            Enter(context, auth, login);
+            Audit(loggers, context, "Panel: password changed");
+            return Results.Json(Who(auth.Users.Find(login)!));
+        });
+
+        // From here on, only for the master: the panel refuses the others before they get here.
+        api.MapGet("/users", (PanelAuth auth) => Results.Json(new { users = auth.Users.List().Select(Row), minimumPassword = PanelUserStore.MinimumPassword }));
+
+        api.MapPost("/users", (NewUserRequest request, PanelAuth auth, HttpContext context, ILoggerFactory loggers) =>
+        {
+            try
+            {
+                var user = auth.Users.Create(request.Login, request.Name, request.Password, (string)context.Items[PanelHost.UserItem]!);
+                Audit(loggers, context, "Panel: user {Login} created", user.Login);
+                return Results.Json(Row(user), statusCode: StatusCodes.Status201Created);
+            }
+            catch (UserRefused refused)
+            {
+                return Refused(refused);
+            }
+        });
+
+        api.MapPut("/users/{login}", (string login, ChangeUserRequest request, PanelAuth auth, HttpContext context, ILoggerFactory loggers) =>
+        {
+            try
+            {
+                var user = auth.Users.Change(login, request.Name, request.Enabled);
+                Audit(loggers, context, "Panel: user {Login} changed (enabled: {Enabled})", user.Login, user.Enabled);
+                return Results.Json(Row(user));
+            }
+            catch (UserRefused refused)
+            {
+                return Refused(refused);
+            }
+        });
+
+        api.MapPost("/users/{login}/password", (string login, PasswordRequest request, PanelAuth auth, HttpContext context, ILoggerFactory loggers) =>
+        {
+            try
+            {
+                // The master's own password is changed where everybody changes theirs, which asks for the one in use.
+                if (string.Equals(login, (string)context.Items[PanelHost.UserItem]!, StringComparison.OrdinalIgnoreCase))
+                    throw new UserRefused("Troque a sua própria senha em \"Trocar senha\"");
+                auth.Users.Reset(login, request.Password);
+                Audit(loggers, context, "Panel: password of user {Login} reset", login);
+                return Results.NoContent();
+            }
+            catch (UserRefused refused)
+            {
+                return Refused(refused);
+            }
+        });
+
+        api.MapDelete("/users/{login}", (string login, PanelAuth auth, HttpContext context, ILoggerFactory loggers) =>
+        {
+            try
+            {
+                auth.Users.Delete(login);
+                Audit(loggers, context, "Panel: user {Login} deleted", login);
+                return Results.NoContent();
+            }
+            catch (UserRefused refused)
+            {
+                return Refused(refused);
+            }
+        });
 
         // ── Overview and charts ─────────────────────────────────────────────
 
@@ -606,6 +700,21 @@ public static class PanelEndpoints
     }
 
     public sealed record LoginRequest(string? User, string? Password);
+
+    public sealed record PasswordRequest(string? Current, string? Password);
+
+    public sealed record NewUserRequest(string? Login, string? Name, string? Password);
+
+    public sealed record ChangeUserRequest(string? Name, bool? Enabled);
+
+    private static void Enter(HttpContext context, PanelAuth auth, string login) =>
+        context.Response.Cookies.Append(PanelAuth.Cookie, auth.Issue(login), new CookieOptions
+        {
+            HttpOnly = true,
+            SameSite = SameSiteMode.Strict,
+            Path = context.Request.PathBase.HasValue ? context.Request.PathBase.Value : "/",
+            MaxAge = auth.SessionLength
+        });
 
     public sealed record PublishRequest(JsonElement Body, int? TtlMs, bool? Rpc);
 

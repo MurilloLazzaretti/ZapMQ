@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -322,5 +323,141 @@ public class PanelTests(ServerFixture server) : IClassFixture<ServerFixture>
         // The test build carries no interface; a real one answers the page of the panel here.
         var text = await page.Content.ReadAsStringAsync();
         Assert.True(text.Contains("does not carry the panel interface") || text.Contains("<base href=\"/\">"), text[..Math.Min(200, text.Length)]);
+    }
+
+    private HttpClient Fresh() => new(new HttpClientHandler { CookieContainer = new CookieContainer() }) { BaseAddress = new Uri($"http://localhost:{server.PanelPort}/") };
+
+    private async Task<HttpClient> LoggedIn(string user, string password)
+    {
+        var client = Fresh();
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("api/login", new { user, password })).StatusCode);
+        return client;
+    }
+
+    [Fact]
+    public async Task The_master_creates_users_and_they_get_in_to_everything_but_the_users()
+    {
+        var created = await server.Admin.PostAsJsonAsync("api/users", new { login = "ana.silva", name = "Ana Silva", password = "primeira-senha" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.Admin.PostAsJsonAsync("api/users", new { login = "ANA.SILVA", password = "outra-senha-1" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.Admin.PostAsJsonAsync("api/users", new { login = "curta", password = "1234567" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.Admin.PostAsJsonAsync("api/users", new { login = "a b", password = "senha-longa-1" })).StatusCode);
+
+        using var ana = await LoggedIn("Ana.Silva", "primeira-senha");
+        var session = JObject.Parse(await ana.GetStringAsync("api/session"));
+        Assert.Equal(("ana.silva", "Ana Silva", false, true), ((string?)session["user"], (string?)session["name"], (bool)session["master"]!, (bool)session["defaultPassword"]!));
+        Assert.Equal(HttpStatusCode.OK, (await ana.GetAsync("api/overview")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ana.GetAsync("api/queues")).StatusCode);
+        // Who else may get in is the master's business alone.
+        Assert.Equal(HttpStatusCode.Forbidden, (await ana.GetAsync("api/users")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await ana.PostAsJsonAsync("api/users", new { login = "intruso", password = "senha-longa-1" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await ana.DeleteAsync("api/users/admin")).StatusCode);
+
+        var listed = JObject.Parse(await server.Admin.GetStringAsync("api/users"));
+        var row = listed["users"]!.Single(user => (string?)user["login"] == "ana.silva");
+        Assert.Equal(("admin", true), ((string?)row["createdBy"], (bool)row["enabled"]!));
+        Assert.NotNull(row["lastLoginAt"]);
+        Assert.True((bool)listed["users"]![0]!["master"]!);
+        // Nothing that could be used to get in is ever given out.
+        Assert.DoesNotContain("hash", listed.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("salt", listed.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_user_chooses_its_own_password_and_stays_logged_in()
+    {
+        await server.Admin.PostAsJsonAsync("api/users", new { login = "bruno", password = "senha-inicial" });
+        using var bruno = await LoggedIn("bruno", "senha-inicial");
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await bruno.PostAsJsonAsync("api/password", new { current = "errada", password = "senha-escolhida" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await bruno.PostAsJsonAsync("api/password", new { current = "senha-inicial", password = "curta" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await bruno.PostAsJsonAsync("api/password", new { current = "senha-inicial", password = "senha-inicial" })).StatusCode);
+        var changed = await bruno.PostAsJsonAsync("api/password", new { current = "senha-inicial", password = "senha-escolhida" });
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        Assert.False((bool)JObject.Parse(await changed.Content.ReadAsStringAsync())["defaultPassword"]!);
+
+        Assert.Equal(HttpStatusCode.OK, (await bruno.GetAsync("api/overview")).StatusCode);
+        using var anonymous = Fresh();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("api/login", new { user = "bruno", password = "senha-inicial" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.PostAsJsonAsync("api/login", new { user = "bruno", password = "senha-escolhida" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Disabling_resetting_or_deleting_a_user_ends_its_sessions()
+    {
+        foreach (var login in new[] { "carla", "diego", "elisa" })
+            await server.Admin.PostAsJsonAsync("api/users", new { login, password = "senha-inicial" });
+        using var carla = await LoggedIn("carla", "senha-inicial");
+        using var diego = await LoggedIn("diego", "senha-inicial");
+        using var elisa = await LoggedIn("elisa", "senha-inicial");
+
+        Assert.Equal(HttpStatusCode.OK, (await server.Admin.PutAsJsonAsync("api/users/carla", new { enabled = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await server.Admin.PostAsJsonAsync("api/users/diego/password", new { password = "senha-redefinida" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await server.Admin.DeleteAsync("api/users/elisa")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await carla.GetAsync("api/overview")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await diego.GetAsync("api/overview")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await elisa.GetAsync("api/overview")).StatusCode);
+        using var anonymous = Fresh();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("api/login", new { user = "carla", password = "senha-inicial" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.PostAsJsonAsync("api/login", new { user = "diego", password = "senha-redefinida" })).StatusCode);
+
+        // Back on, the same password lets her in again.
+        await server.Admin.PutAsJsonAsync("api/users/carla", new { enabled = true });
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.PostAsJsonAsync("api/login", new { user = "carla", password = "senha-inicial" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await server.Admin.DeleteAsync("api/users/elisa")).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_master_cannot_be_removed_disabled_or_have_its_password_reset_without_the_old_one()
+    {
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.Admin.DeleteAsync("api/users/admin")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.Admin.PutAsJsonAsync("api/users/admin", new { enabled = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await server.Admin.PostAsJsonAsync("api/users/ADMIN/password", new { password = "sem-a-senha-atual" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await server.Admin.GetAsync("api/overview")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Too_many_wrong_passwords_make_a_login_wait()
+    {
+        await server.Admin.PostAsJsonAsync("api/users", new { login = "fabio", password = "senha-inicial" });
+        using var anonymous = Fresh();
+
+        for (var attempt = 0; attempt < PanelAuth.Attempts; attempt++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("api/login", new { user = "fabio", password = "errada" })).StatusCode);
+
+        // Even the right password waits now, and nobody else is kept out.
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await anonymous.PostAsJsonAsync("api/login", new { user = "fabio", password = "senha-inicial" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.PostAsJsonAsync("api/login", new { user = "admin", password = "admin" })).StatusCode);
+    }
+
+    [Fact]
+    public void The_users_outlive_a_restart_and_the_settings_are_not_looked_at_again()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "zapmq-users-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var first = new PanelUserStore(file, new PanelOptions { User = "root", Password = "chosen-at-install" }, TimeProvider.System, NullLogger<PanelUserStore>.Instance);
+            Assert.False(first.List().Single().InitialPassword);
+            first.Create("gina", "Gina", "senha-inicial", "root");
+            first.ChangeOwn("root", "chosen-at-install", "another-one-now");
+
+            // Started again, with settings that say something else.
+            var second = new PanelUserStore(file, new PanelOptions { User = "admin", Password = "admin" }, TimeProvider.System, NullLogger<PanelUserStore>.Instance);
+
+            Assert.Equal(["root", "gina"], second.List().Select(user => user.Login));
+            Assert.NotNull(second.Check("root", "another-one-now"));
+            Assert.Null(second.Check("root", "chosen-at-install"));
+            Assert.Null(second.Check("admin", "admin"));
+            Assert.NotNull(second.Check("GINA", "senha-inicial"));
+            // The file holds nothing a password could be read from.
+            var text = File.ReadAllText(file);
+            Assert.DoesNotContain("another-one-now", text);
+            Assert.DoesNotContain("senha-inicial", text);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
     }
 }

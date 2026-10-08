@@ -66,6 +66,19 @@
         <span class="text">{{ auth.user() }}</span>
       </button>
       <mat-menu #userMenu="matMenu" xPosition="before">
+        @if (auth.name() && auth.name() !== auth.user()) {
+          <div class="who">{{ auth.name() }}</div>
+        }
+        <button mat-menu-item (click)="changePassword()">
+          <mat-icon svgIcon="password" />
+          <span>Trocar senha</span>
+        </button>
+        @if (auth.master()) {
+          <a mat-menu-item routerLink="/usuarios">
+            <mat-icon svgIcon="manage_accounts" />
+            <span>Usuários</span>
+          </a>
+        }
         <button mat-menu-item (click)="auth.logout()">
           <mat-icon svgIcon="logout" />
           <span>Sair</span>
@@ -76,10 +89,7 @@
     @if (auth.defaultPassword()) {
       <div class="notice" role="status">
         <mat-icon svgIcon="warning" />
-        <span>
-          O painel está com o usuário e a senha iniciais. Troque <code>ZapMQ:Panel:User</code> e <code>ZapMQ:Panel:Password</code> no
-          <code>appsettings.json</code> do serviço.
-        </span>
+        <span>Você ainda está com a senha inicial. <button type="button" class="link" (click)="changePassword()">Trocar senha</button></span>
       </div>
     }
 
