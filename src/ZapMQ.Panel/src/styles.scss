@@ -1,0 +1,260 @@
+@use '@angular/material' as mat;
+@use '@fontsource-variable/inter/wght.css';
+@use '@fontsource-variable/jetbrains-mono/wght.css' as mono;
+
+// One theme for light and dark: the palette is generated for both and the browser picks by
+// color-scheme, which the theme switch sets on <html>.
+html {
+  color-scheme: light dark;
+
+  @include mat.theme((
+    color: (
+      primary: mat.$violet-palette,
+      tertiary: mat.$cyan-palette,
+    ),
+    typography: (
+      plain-family: 'Inter Variable, system-ui, sans-serif',
+      brand-family: 'Inter Variable, system-ui, sans-serif',
+      bold-weight: 650,
+      medium-weight: 550,
+      regular-weight: 420,
+    ),
+    density: -1,
+  ));
+
+  // What the Material palette does not have: the colours of a state.
+  --zap-ok: light-dark(#12805c, #4fd6a8);
+  --zap-ok-container: light-dark(#d9f5ea, #0f3b2d);
+  --zap-warn: light-dark(#a15c00, #ffb95c);
+  --zap-warn-container: light-dark(#ffecd1, #452b00);
+  --zap-danger: light-dark(#ba1a1a, #ffb4ab);
+  --zap-danger-container: light-dark(#ffdad6, #4a0f0f);
+  --zap-info: light-dark(#0b5cad, #9ecaff);
+  --zap-info-container: light-dark(#d9e9ff, #0b2f52);
+
+  --zap-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --zap-radius: 20px;
+  --zap-gap: clamp(12px, 1.6vw, 20px);
+  --zap-page: clamp(12px, 2.4vw, 32px);
+  --zap-border: color-mix(in srgb, var(--mat-sys-outline-variant) 70%, transparent);
+  --zap-surface: var(--mat-sys-surface-container-lowest);
+  --zap-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 6px 24px -12px rgb(0 0 0 / 0.18);
+}
+
+html.theme-light { color-scheme: light; }
+html.theme-dark { color-scheme: dark; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--mat-sys-surface-container-low);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+
+a { color: var(--mat-sys-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, pre, .mono { font-family: var(--zap-mono); font-size: 0.86em; }
+
+::selection { background: color-mix(in srgb, var(--mat-sys-primary) 28%, transparent); }
+
+// ── Building blocks shared by every screen ───────────────────────────────
+
+.page {
+  padding: var(--zap-page);
+  padding-bottom: calc(var(--zap-page) + env(safe-area-inset-bottom));
+  max-width: 1680px;
+  margin: 0 auto;
+  display: grid;
+  gap: var(--zap-gap);
+}
+
+.panel {
+  background: var(--zap-surface);
+  border: 1px solid var(--zap-border);
+  border-radius: var(--zap-radius);
+  box-shadow: var(--zap-shadow);
+  min-width: 0;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px 0;
+  flex-wrap: wrap;
+
+  h2 { margin: 0; font: var(--mat-sys-title-medium); }
+  .hint { color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-body-small); }
+  .spacer { flex: 1; }
+}
+
+.panel-body { padding: 16px 20px 20px; }
+
+.grid {
+  display: grid;
+  gap: var(--zap-gap);
+}
+
+.grid.stats { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+
+// On a phone, two figures side by side instead of a long column of them.
+@media (max-width: 560px) {
+  .grid.stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+
+.muted { color: var(--mat-sys-on-surface-variant); }
+.num { font-variant-numeric: tabular-nums; }
+.nowrap { white-space: nowrap; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font: var(--mat-sys-label-medium);
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+  white-space: nowrap;
+
+  &.ok { background: var(--zap-ok-container); color: var(--zap-ok); }
+  &.warn { background: var(--zap-warn-container); color: var(--zap-warn); }
+  &.danger { background: var(--zap-danger-container); color: var(--zap-danger); }
+  &.info { background: var(--zap-info-container); color: var(--zap-info); }
+  &.primary { background: var(--mat-sys-primary-container); color: var(--mat-sys-on-primary-container); }
+
+  mat-icon { width: 16px; height: 16px; font-size: 16px; }
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mat-sys-outline);
+  flex: none;
+
+  &.ok { background: var(--zap-ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--zap-ok) 20%, transparent); }
+  &.warn { background: var(--zap-warn); }
+  &.danger { background: var(--zap-danger); }
+}
+
+// A table that turns into a list of cards on a narrow screen: each cell shows its own label.
+.table-wrap { overflow-x: auto; }
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+
+  th, td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--zap-border);
+    vertical-align: middle;
+  }
+
+  th {
+    font: var(--mat-sys-label-medium);
+    color: var(--mat-sys-on-surface-variant);
+    white-space: nowrap;
+    user-select: none;
+
+    &.sortable { cursor: pointer; }
+    &.sortable:hover { color: var(--mat-sys-on-surface); }
+    mat-icon { width: 14px; height: 14px; vertical-align: -2px; margin-left: 2px; }
+  }
+
+  th.right, td.right { text-align: right; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.clickable { cursor: pointer; }
+  tbody tr.clickable:hover { background: color-mix(in srgb, var(--mat-sys-primary) 6%, transparent); }
+}
+
+@media (max-width: 760px) {
+  table.data.stack {
+    thead { display: none; }
+
+    tbody tr {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--zap-border);
+    }
+    tbody tr:last-child { border-bottom: none; }
+
+    td {
+      padding: 0;
+      border: none;
+      text-align: left !important;
+      min-width: 0;
+    }
+    td[data-label]::before {
+      content: attr(data-label);
+      display: block;
+      font: var(--mat-sys-label-small);
+      color: var(--mat-sys-on-surface-variant);
+    }
+    td.wide { grid-column: 1 / -1; }
+  }
+}
+
+// A cell that takes what is left of the row and cuts its text short instead of wrapping it
+// letter by letter. On a narrow screen, where the row is a card, it shows a few lines.
+td.cut {
+  width: 50%;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+@media (max-width: 760px) {
+  table.data.stack td.cut {
+    width: auto;
+    max-width: none;
+    white-space: normal;
+    word-break: break-all;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon { width: 40px; height: 40px; opacity: 0.6; }
+  strong { color: var(--mat-sys-on-surface); font: var(--mat-sys-title-small); }
+}
+
+pre.json {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--mat-sys-surface-container);
+  overflow: auto;
+  max-height: min(60vh, 520px);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+// Material, adjusted where the defaults fight the layout.
+.mat-mdc-dialog-container { --mat-dialog-container-shape: 24px; }
+.mat-mdc-snack-bar-container { --mat-snack-bar-container-shape: 12px; }
+mat-icon svg { width: 100%; height: 100%; fill: currentColor; }

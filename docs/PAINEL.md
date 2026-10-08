@@ -1,6 +1,6 @@
 # ZapMQ — Painel de administração
 
-Situação: proposta, aguardando aprovação das decisões da seção 9.
+Situação: aprovada em 2026-10-07. Etapa A implementada; ainda não instalada em ambiente algum.
 Última revisão: 2026-10-07.
 
 Este documento especifica o painel web do ZapMQ (versão 2.2), que inclui a seção do Worker Control. Corresponde à fase 6 do [plano](PLANO-2.0.md) e à etapa 4 da [especificação do Worker Control 2.0](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md).
@@ -38,7 +38,7 @@ navegador ──► proxy reverso (/zapmq) ──► serviço ZapMQ, porta 5680
 - **Worker Control.** O painel não fala com o serviço do Worker Control diretamente: usa a fila `WorkerControlAdmin`, pelo contrato de administração 2.0. O Worker Control pode estar em outra máquina. Sem ele no ar, a seção correspondente diz isso e o resto do painel funciona.
 - **As rotas `/admin` saem da porta da mensageria** e passam a existir só na porta do painel, atrás do login, como decidido na especificação do protocolo v2.
 
-Bibliotecas da interface: Angular (versão estável corrente), Angular Material para os componentes e ECharts para gráficos e para o mapa. Nenhuma delas é carregada da internet; tudo vai dentro do executável.
+Bibliotecas da interface, sempre na versão estável mais recente: Angular (22 na etapa A), Angular Material para os componentes e ECharts para gráficos e para o mapa. Fontes e ícones também vão embutidos. A interface se adapta do celular ao monitor largo e tem tema claro e escuro. Nenhuma delas é carregada da internet; tudo vai dentro do executável.
 
 ## 3. Acesso
 
@@ -190,7 +190,7 @@ O trace vem depois, com a etapa própria.
 - Um roteiro automatizado em navegador contra o serviço real: login, cada tela, uma ação de cada tipo.
 - Uso no ambiente de desenvolvimento, atrás do proxy em `/zapmq`.
 
-## 9. Decisões a tomar
+## 9. Decisões tomadas
 
 1. **Bibliotecas da interface:** Angular Material e ECharts (seção 2).
 2. **Ordem das etapas** (seção 7): telas do broker, depois Worker Control, depois mapa, depois exchange.

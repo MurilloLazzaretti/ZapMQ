@@ -1,0 +1,215 @@
+<div class="page">
+  <header class="head">
+    <a mat-icon-button routerLink="/filas" aria-label="Voltar para as filas"><mat-icon svgIcon="arrow_back" /></a>
+    <div class="title">
+      <h1>{{ name() }}</h1>
+      <div class="tags">
+        @if (detail(); as queue) {
+          @if (snapshot()?.paused || queue.settings?.paused) {
+            <span class="pill info"><mat-icon svgIcon="pause" /> pausada</span>
+          }
+          @if (!queue.exists) {
+            <span class="pill">sem mensagens nem consumidores agora</span>
+          }
+          <span class="pill" [class.primary]="!!queue.settings">{{ queue.settings ? 'definição própria' : 'padrão do serviço' }}</span>
+        }
+      </div>
+    </div>
+    <span class="spacer"></span>
+    <div class="actions">
+      <button mat-stroked-button (click)="togglePause()" [disabled]="!detail()">
+        <mat-icon [svgIcon]="snapshot()?.paused || detail()?.settings?.paused ? 'play_arrow' : 'pause'" />
+        {{ snapshot()?.paused || detail()?.settings?.paused ? 'Retomar' : 'Pausar' }}
+      </button>
+      <button mat-stroked-button class="danger" (click)="purge()" [disabled]="!snapshot()?.pending">
+        <mat-icon svgIcon="delete" /> Esvaziar
+      </button>
+    </div>
+  </header>
+
+  @if (failed() && !detail()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Não foi possível ler a fila</strong>
+      <span>O serviço não respondeu. A tela tenta de novo sozinha.</span>
+    </section>
+  }
+
+  @if (detail(); as queue) {
+    <section class="grid stats">
+      <zap-stat label="Pendentes" icon="hourglass_empty" [tone]="(snapshot()?.pending ?? 0) > 0 ? 'warn' : 'neutral'" [value]="snapshot()?.pending ?? 0 | num" hint="aguardando entrega" />
+      <zap-stat label="Em processamento" icon="pending" tone="info" [value]="snapshot()?.processing ?? 0 | num" [hint]="(snapshot()?.awaitingResponse ?? 0) + ' aguardando resposta de RPC'" />
+      <zap-stat label="Consumidores" icon="lan" [tone]="queue.consumers.length ? 'ok' : 'neutral'" [value]="queue.consumers.length | num" [hint]="queue.askers.length ? queue.askers.length + ' cliente(s) v1 consultando' : 'conectados por v2'" />
+      <zap-stat label="Publicadas" icon="bolt" [value]="snapshot()?.published ?? 0 | num: 'compact'" [hint]="(snapshot()?.confirmed ?? 0 | num: 'compact') + ' confirmadas'" />
+      <zap-stat label="Mensagens mortas" icon="skull" [tone]="dead() > 0 ? 'danger' : 'ok'" [value]="dead() | num" [hint]="dead() ? 'guardadas para inspeção' : 'nenhuma guardada'" />
+    </section>
+
+    <div class="grid two">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Definição</h2>
+          <span class="spacer"></span>
+          @if (!editing()) {
+            @if (queue.settings) {
+              <button mat-button (click)="reset()">Voltar ao padrão</button>
+            }
+            <button mat-flat-button (click)="edit()"><mat-icon svgIcon="tune" /> Editar</button>
+          }
+        </div>
+
+        @if (!editing()) {
+          @if (effective(); as now) {
+            <dl class="facts">
+              <div>
+                <dt>Retenção</dt>
+                <dd>{{ now.retention }} <span class="origin">{{ now.retentionOwn ? 'desta fila' : 'padrão' }}</span></dd>
+                <dd class="help">Tempo máximo que uma mensagem espera por um consumidor antes de virar mensagem morta.</dd>
+              </div>
+              <div>
+                <dt>Mensagem não confirmada</dt>
+                <dd>
+                  @if (now.redeliver) {
+                    <span class="pill warn">volta para a fila</span>
+                  } @else {
+                    <span class="pill ok">vai para as mensagens mortas</span>
+                  }
+                </dd>
+                <dd class="help">O que acontece quando o consumidor cai antes de confirmar a mensagem que recebeu.</dd>
+              </div>
+              <div>
+                <dt>Mensagens mortas guardadas</dt>
+                <dd>
+                  até {{ now.deadLimit | num }} <span class="origin">{{ now.deadLimitOwn ? 'desta fila' : 'padrão' }}</span>
+                  · por {{ now.deadAge | num }} h <span class="origin">{{ now.deadAgeOwn ? 'desta fila' : 'padrão' }}</span>
+                </dd>
+                <dd class="help">Acima disso as mais antigas são descartadas. Zero em qualquer dos dois desliga o armazenamento.</dd>
+              </div>
+            </dl>
+          }
+        } @else {
+          <form class="form panel-body" (ngSubmit)="save()">
+            <mat-form-field>
+              <mat-label>Retenção (segundos)</mat-label>
+              <input matInput type="number" min="1" name="retention" [(ngModel)]="form.retentionSeconds" [placeholder]="'padrão: ' + queue.defaults.retentionSeconds" />
+              <mat-hint>Em branco usa o padrão do serviço ({{ queue.defaults.retentionSeconds }} s).</mat-hint>
+            </mat-form-field>
+
+            <div class="switch">
+              <mat-slide-toggle name="redeliver" [(ngModel)]="form.redeliverUnconfirmed">Reentregar mensagem não confirmada</mat-slide-toggle>
+              <p class="help">
+                Desligado, a mensagem entregue e não confirmada vai para as mensagens mortas. Ligado, ela volta para a fila e
+                <strong>pode ser processada duas vezes</strong>.
+              </p>
+            </div>
+
+            <div class="pair">
+              <mat-form-field>
+                <mat-label>Mensagens mortas guardadas</mat-label>
+                <input matInput type="number" min="0" name="deadLimit" [(ngModel)]="form.deadLimit" [placeholder]="'padrão: ' + queue.defaults.deadLetters.maxMessagesPerQueue" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Idade máxima (horas)</mat-label>
+                <input matInput type="number" min="0" name="deadAge" [(ngModel)]="form.deadAgeHours" [placeholder]="'padrão: ' + queue.defaults.deadLetters.maxAgeHours" />
+              </mat-form-field>
+            </div>
+
+            <div class="buttons">
+              <button mat-button type="button" (click)="editing.set(false)" [disabled]="saving()">Cancelar</button>
+              <button mat-flat-button type="submit" [disabled]="saving()">Gravar</button>
+            </div>
+          </form>
+        }
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Quem usa esta fila</h2>
+          <span class="hint">últimos 10 minutos</span>
+        </div>
+        <div class="panel-body parties">
+          <div>
+            <h3>Consome</h3>
+            @for (consumer of queue.consumers; track consumer.id) {
+              <div class="party">
+                <span class="dot" [class.ok]="!consumer.busy" [class.warn]="consumer.busy" [matTooltip]="consumer.busy ? 'Processando uma mensagem' : 'Livre'"></span>
+                <span class="who truncate">{{ consumer.application }}</span>
+                <span class="muted mono nowrap">pid {{ consumer.pid }} · {{ consumer.host }}</span>
+                <span class="pill">v2</span>
+              </div>
+            }
+            @for (asker of queue.askers; track asker.application) {
+              <div class="party">
+                <span class="dot"></span>
+                <span class="who truncate">{{ asker.application }}</span>
+                <span class="muted nowrap">{{ asker.lastSeen | ago }}</span>
+                <span class="pill">v1</span>
+              </div>
+            }
+            @if (!queue.consumers.length && !queue.askers.length) {
+              <p class="muted none">Ninguém consumindo.</p>
+            }
+          </div>
+          <div>
+            <h3>Publica</h3>
+            @for (publisher of queue.publishers; track publisher.connection ?? publisher.application) {
+              <div class="party">
+                <span class="dot"></span>
+                <span class="who truncate">{{ publisher.application }}</span>
+                <span class="muted nowrap">{{ publisher.count | num: 'compact' }} msg · {{ publisher.lastSeen | ago }}</span>
+                <span class="pill">{{ publisher.protocol }}</span>
+              </div>
+            } @empty {
+              <p class="muted none">Ninguém publicou há pouco.</p>
+            }
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Mensagens pendentes</h2>
+        <span class="hint">as {{ messages().length }} mais antigas, só para leitura</span>
+        <span class="spacer"></span>
+        @if (dead() > 0) {
+          <a mat-button [routerLink]="['/mortas']" [queryParams]="{ fila: name() }"><mat-icon svgIcon="skull" /> {{ dead() }} mortas</a>
+        }
+      </div>
+      @if (messages().length) {
+        <div class="table-wrap">
+          <table class="data stack">
+            <thead>
+              <tr>
+                <th>Publicada</th>
+                <th>Esperando</th>
+                <th>Conteúdo</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (message of messages(); track message.id) {
+                <tr class="clickable" (click)="show(message)">
+                  <td class="nowrap num" data-label="Publicada">{{ message.publishedAt | when: 'time' }}</td>
+                  <td class="nowrap num" data-label="Esperando">
+                    {{ message.publishedAt | since }}
+                    @if (message.rpc) {
+                      <span class="pill info">RPC</span>
+                    }
+                  </td>
+                  <td class="wide mono cut" data-label="Conteúdo">{{ preview(message.body) }}</td>
+                  <td class="right chevron"><mat-icon svgIcon="visibility" /></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="empty">
+          <mat-icon svgIcon="check_circle" />
+          <strong>Nada esperando</strong>
+          <span>O que chegou nesta fila já foi entregue.</span>
+        </div>
+      }
+    </section>
+  }
+</div>

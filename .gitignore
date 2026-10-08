@@ -82,3 +82,8 @@ TestResults/
 # runtime output
 logs/
 publish/
+
+# The panel: dependencies and what the Angular build writes into the server project
+node_modules/
+.angular/
+src/ZapMQ.Server/wwwroot/

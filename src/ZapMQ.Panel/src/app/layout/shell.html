@@ -1,0 +1,90 @@
+<mat-sidenav-container class="frame" [class.rail]="rail()">
+  <mat-sidenav
+    class="side"
+    [mode]="narrow() ? 'over' : 'side'"
+    [opened]="!narrow() || drawerOpen()"
+    (closedStart)="drawerOpen.set(false)"
+    [fixedInViewport]="true"
+  >
+    <a class="brand" routerLink="/" (click)="navigated()" aria-label="ZapMQ">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><path d="M36 10 18 36h13l-3 18 18-26H33z" /></svg>
+      </span>
+      <span class="name">ZapMQ</span>
+    </a>
+
+    <nav>
+      @for (destination of destinations; track destination.path) {
+        <a
+          class="destination"
+          [routerLink]="destination.path"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: !!destination.exact }"
+          [matTooltip]="rail() ? destination.label : ''"
+          matTooltipPosition="right"
+          (click)="navigated()"
+        >
+          <mat-icon
+            [svgIcon]="destination.icon"
+            [matBadge]="destination.badge && destination.badge() > 0 ? (destination.badge() > 99 ? '99+' : destination.badge()) : null"
+            matBadgeSize="small"
+            aria-hidden="false"
+          />
+          <span class="label">{{ destination.label }}</span>
+        </a>
+      }
+    </nav>
+
+    <div class="foot">
+      <span class="version">v{{ auth.version() }}</span>
+    </div>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="content">
+    <header class="bar">
+      <button mat-icon-button (click)="toggleNavigation()" aria-label="Navegação">
+        <mat-icon svgIcon="menu" />
+      </button>
+
+      @if (narrow()) {
+        <span class="title">ZapMQ</span>
+      }
+
+      <span class="spacer"></span>
+
+      <span class="live" [class.on]="live.connected()" [matTooltip]="live.connected() ? 'Recebendo atualizações do serviço' : 'Sem contato com o serviço; tentando de novo'">
+        <span class="dot" [class.ok]="live.connected()" [class.danger]="!live.connected()"></span>
+        <span class="text">{{ live.connected() ? 'ao vivo' : 'sem contato' }}</span>
+      </span>
+
+      <button mat-icon-button (click)="theme.cycle()" [matTooltip]="themeLabel()" [attr.aria-label]="themeLabel()">
+        <mat-icon [svgIcon]="themeIcon()" />
+      </button>
+
+      <button mat-button class="user" [matMenuTriggerFor]="userMenu">
+        <mat-icon svgIcon="account_circle" />
+        <span class="text">{{ auth.user() }}</span>
+      </button>
+      <mat-menu #userMenu="matMenu" xPosition="before">
+        <button mat-menu-item (click)="auth.logout()">
+          <mat-icon svgIcon="logout" />
+          <span>Sair</span>
+        </button>
+      </mat-menu>
+    </header>
+
+    @if (auth.defaultPassword()) {
+      <div class="notice" role="status">
+        <mat-icon svgIcon="warning" />
+        <span>
+          O painel está com o usuário e a senha iniciais. Troque <code>ZapMQ:Panel:User</code> e <code>ZapMQ:Panel:Password</code> no
+          <code>appsettings.json</code> do serviço.
+        </span>
+      </div>
+    }
+
+    <main>
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

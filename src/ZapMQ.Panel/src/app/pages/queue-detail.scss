@@ -1,0 +1,82 @@
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  .title { min-width: 0; }
+  h1 { margin: 0; font: var(--mat-sys-headline-small); font-weight: 650; letter-spacing: -0.02em; word-break: break-all; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .spacer { flex: 1; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+}
+
+.danger:not(:disabled) {
+  --mat-button-outlined-label-text-color: var(--zap-danger);
+  --mat-button-outlined-outline-color: color-mix(in srgb, var(--zap-danger) 50%, transparent);
+}
+
+.facts {
+  margin: 0;
+  padding: 8px 20px 20px;
+  display: grid;
+  gap: 4px;
+
+  > div { padding: 12px 0; border-bottom: 1px solid var(--zap-border); }
+  > div:last-child { border-bottom: none; padding-bottom: 0; }
+  dt { font: var(--mat-sys-label-medium); color: var(--mat-sys-on-surface-variant); }
+  dd { margin: 4px 0 0; font: var(--mat-sys-title-medium); }
+  dd.help { font: var(--mat-sys-body-small); color: var(--mat-sys-on-surface-variant); }
+  .origin {
+    font: var(--mat-sys-label-small);
+    color: var(--mat-sys-on-surface-variant);
+    background: var(--mat-sys-surface-container-high);
+    padding: 1px 8px;
+    border-radius: 999px;
+    vertical-align: 2px;
+  }
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+
+  mat-form-field { width: 100%; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .switch {
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: var(--mat-sys-surface-container);
+  }
+  .help { margin: 8px 0 0; font: var(--mat-sys-body-small); color: var(--mat-sys-on-surface-variant); }
+  .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+}
+
+.parties {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 20px;
+
+  h3 { margin: 0 0 8px; font: var(--mat-sys-label-large); color: var(--mat-sys-on-surface-variant); }
+  .none { margin: 0; }
+}
+
+.party {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--zap-border);
+
+  &:last-child { border-bottom: none; }
+  .who { font-weight: 550; }
+}
+
+.chevron { width: 40px; color: var(--mat-sys-on-surface-variant); }
+
+@media (max-width: 760px) {
+  .chevron { display: none; }
+  .party { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .party .muted { grid-column: 2 / -1; grid-row: 2; }
+}

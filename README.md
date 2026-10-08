@@ -45,7 +45,7 @@ Messages and dead letters live in memory: restarting the service empties them. A
 
 | Where | What |
 | ----- | ---- |
-| Build machine | [.NET 10 SDK](https://dotnet.microsoft.com/download). Any operating system |
+| Build machine | [.NET 10 SDK](https://dotnet.microsoft.com/download) and, for the panel, [Node.js](https://nodejs.org) 22 or later. Any operating system |
 | Server | Windows x64. Nothing to install: the executable carries the .NET runtime. Tested on Windows Server 2019 |
 
 ## 🔨 Build
@@ -53,15 +53,17 @@ Messages and dead letters live in memory: restarting the service empties them. A
 From the repository root:
 
 ```
-dotnet publish src/ZapMQ.Server -c Release -r win-x64 -o publish/win-x64
+./publish.sh        # on Windows: .\publish.ps1
 ```
 
-The folder `publish/win-x64` now has the two files the server needs:
+It compiles the panel interface (`src/ZapMQ.Panel`, Angular) and then the service with the interface inside. The folder `publish/win-x64` now has the two files the server needs:
 
 | File | What it is |
 | ---- | ---------- |
-| `ZapMQ.exe` | the service |
+| `ZapMQ.exe` | the service, with the panel in it |
 | `appsettings.json` | its settings |
+
+`dotnet publish src/ZapMQ.Server -c Release -r win-x64 -o publish/win-x64` alone also works and needs no Node.js, but the service then has no panel interface, only its API.
 
 ## ⚡️ Configuration
 
@@ -103,6 +105,13 @@ Only `Port` is commonly changed. Everything else may be left out.
 | `LogLevel` | `Information` | `Verbose`, `Debug`, `Information`, `Warning` or `Error` |
 | `DeadLetters.MaxMessagesPerQueue` | 1000 | Dead letters kept per queue; the oldest leave first. `0` keeps none |
 | `DeadLetters.MaxAgeHours` | 168 | Longest a dead letter is kept. `0` keeps none |
+| `QueueDefinitionsFile` | `queues.json` | Where the queue settings made through the panel are kept. Relative to the executable unless it is a full path |
+| `Panel.Enabled` | true | `false` turns the panel and its port off |
+| `Panel.Port` | 5680 | Port of the panel |
+| `Panel.BasePath` | `/zapmq` | Path the panel is published under by a reverse proxy. It also answers at the root of its port |
+| `Panel.User` | `admin` | User of the panel |
+| `Panel.Password` | `admin` | Password of the panel. **Change it**: while it is the initial one, the service says so in the log at every start and the panel shows a notice |
+| `Panel.SessionHours` | 8 | How long a login lasts |
 | `V2.Enabled` | true | `false` turns the v2 protocol off: the service answers 1.x only and v2 wrappers fall back to it |
 | `V2.MaxFrameBytes` | 4194304 | Largest v2 frame accepted |
 | `V2.PingSeconds` | 15 | Interval of the keep-alive ping sent to v2 clients |
@@ -116,10 +125,44 @@ Only `Port` is commonly changed. Everything else may be left out.
 | `RedeliverUnconfirmed` | `false` | Puts a message that was delivered and not confirmed back in the queue instead of dead-lettering it. Only for queues where handling the same message twice does no harm |
 | `DeadLetters.MaxMessagesPerQueue` | the general one | Dead letters kept for this queue |
 | `DeadLetters.MaxAgeHours` | the general one | Age limit of the dead letters of this queue |
+| `Paused` | `false` | A paused queue keeps receiving and hands nothing to anybody |
+
+The settings of a queue can also be made in the panel, with the service running. Those are written to `queues.json` and, at start, go on top of what `appsettings.json` says.
+
+## 🖥 Panel
+
+A web application served by the service itself, on a port of its own (5680), behind a login. It shows what is going through the broker and lets you act on it:
+
+| Screen | What is there |
+| ------ | ------------- |
+| Overview | Messages per second, pending, in processing, dead letters and connected applications, with charts of the last hour and of the last day |
+| Queues | Every queue with its counters, live. For each one: its definition (retention, redelivery, dead-letter limits), editable and kept across restarts; the pending messages, to read; who publishes and who consumes; pause, resume and empty |
+| Dead letters | What was not delivered or not confirmed, by queue and by reason: inspect, send back to the queue, discard |
+| Applications | Who is connected over v2, by application and process, and the addresses still talking 1.x |
+
+Open `http://<server>:5680/` and log in with the user and password of the settings (`admin` / `admin` until you change them).
+
+Nothing of the panel answers on the messaging port, and nothing is loaded from the internet: interface, fonts and icons are inside the executable.
+
+🔀 _Behind a reverse proxy_
+
+The panel also answers under `Panel.BasePath`, so an existing site can publish it as a path of its own. For NGINX:
+
+```nginx
+location /zapmq/ {
+    proxy_pass http://127.0.0.1:5680/zapmq/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Connection "";
+    # The panel keeps one request open to receive updates as they happen.
+    proxy_buffering off;
+    proxy_read_timeout 1h;
+}
+```
 
 ## 🛠 Administration
 
-Plain HTTP on the service port. There is no access control: whoever reaches the port can use these routes.
+The routes the panel is built on are on the panel port, under `/api`, and ask for the session of the login. The administration routes of earlier 2.x versions are there too, under `/admin`:
 
 | Route | What it does |
 | ----- | ------------ |
@@ -130,10 +173,12 @@ Plain HTTP on the service port. There is no access control: whoever reaches the 
 | `DELETE /admin/dead-letters/{queue}/{id}` | Discards one |
 | `DELETE /admin/dead-letters/{queue}` | Discards all of a queue |
 | `GET /admin/queues/{queue}` | The settings given to a queue |
-| `PUT /admin/queues/{queue}` | Changes them, effective immediately |
+| `PUT /admin/queues/{queue}` | Changes them, effective immediately, until the service restarts |
 | `DELETE /admin/queues/{queue}` | Goes back to the general values |
 
-A change made through `PUT /admin/queues` lasts until the service restarts, when `appsettings.json` applies again. Message ids contain braces and have to be URL-encoded in the routes.
+To script against them, log in first (`POST /api/login` with `{"user": "...", "password": "..."}`) and send the cookie it returns. Message ids contain braces and have to be URL-encoded in the routes.
+
+`GET /health` and `GET /metrics` stay on the messaging port, open, for whoever monitors the service.
 
 ## ⚙️ Installation
 
