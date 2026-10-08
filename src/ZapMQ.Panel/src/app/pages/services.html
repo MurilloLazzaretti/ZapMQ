@@ -1,0 +1,113 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Serviços</h1>
+      <p class="muted">Serviços do Windows acompanhados pelo Worker Control{{ status() ? ', em ' + status()!.Service.Machine : '' }}.</p>
+    </div>
+    <span class="spacer"></span>
+    <zap-worker-tabs />
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Sem resposta do Worker Control</strong>
+      <span>{{ problem() }}</span>
+      <span>Esta tela tenta de novo sozinha.</span>
+    </section>
+  } @else if (outdated()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="info" />
+      <strong>O Worker Control instalado é anterior a este recurso</strong>
+      <span>O acompanhamento de serviços do Windows existe a partir da versão 2.2 dele; a que está no ar é a {{ status()!.Version }}.</span>
+    </section>
+  }
+
+  @if (services(); as list) {
+    <div class="bar">
+      <section class="grid stats">
+        <zap-stat label="Rodando" icon="check_circle" [tone]="totals().running === totals().all ? 'ok' : 'warn'" [value]="totals().running | num" [unit]="'de ' + totals().all" hint="serviços acompanhados" />
+        <zap-stat label="Pedem atenção" icon="warning" [tone]="totals().attention ? 'danger' : 'ok'" [value]="totals().attention | num" [hint]="totals().attention ? 'caído, instável ou sem responder' : 'nenhum'" />
+        <zap-stat label="Memória" icon="memory" tone="info" [value]="megabytes(totals().memory) | num" unit="MB" hint="soma dos serviços" />
+      </section>
+      <button mat-flat-button class="add" (click)="add()"><mat-icon svgIcon="add" /> Adicionar serviço</button>
+    </div>
+
+    @if (list.length) {
+      <section class="cards">
+        @for (service of list; track service.Name) {
+          <article class="panel service" [class.busy]="busy() === service.Name" [class.wrong]="wrong(service)">
+            <header>
+              <span class="mark" [class]="'mark ' + state(service).tone"><mat-icon svgIcon="settings_applications" /></span>
+              <div class="who">
+                <strong class="truncate">{{ service.DisplayName || service.Name }}</strong>
+                <span class="muted truncate" [matTooltip]="service.ExecutablePath ?? ''">{{ service.Name }}{{ service.ExecutablePath ? ' · ' + executable(service.ExecutablePath) : '' }}</span>
+              </div>
+              <button mat-icon-button [matMenuTriggerFor]="menu" [attr.aria-label]="'Mais sobre ' + service.Name"><mat-icon svgIcon="more_vert" /></button>
+              <mat-menu #menu="matMenu" xPosition="before">
+                <button mat-menu-item (click)="health(service)" [disabled]="!service.ProcessId"><mat-icon svgIcon="monitor_heart" /> <span>Saúde</span></button>
+                <a mat-menu-item routerLink="/workers/eventos" [queryParams]="{ grupo: 'service:' + service.Name }"><mat-icon svgIcon="history" /> <span>Histórico</span></a>
+                <button mat-menu-item (click)="settings(service)"><mat-icon svgIcon="tune" /> <span>Configurar</span></button>
+                <button mat-menu-item (click)="remove(service)"><mat-icon svgIcon="delete" /> <span>Deixar de acompanhar</span></button>
+              </mat-menu>
+            </header>
+
+            <div class="tags">
+              <span class="pill" [class]="'pill ' + state(service).tone"><span class="dot" [class]="'dot ' + state(service).tone"></span> {{ state(service).label }}</span>
+              @if (service.State === 'Stopped' && service.ExitCode) {
+                <span class="pill danger" matTooltip="Código com que o serviço terminou, segundo o Windows">caiu · código {{ service.ExitCode }}</span>
+              }
+              @if (service.Unstable) {
+                <span class="pill danger" matTooltip="Caiu várias vezes seguidas, logo depois de iniciar"><mat-icon svgIcon="warning" /> instável</span>
+              }
+              @if (service.RestartingAt) {
+                <span class="pill primary"><mat-icon svgIcon="autorenew" /> reinício automático em instantes</span>
+              } @else if (service.Restarting) {
+                <span class="pill info"><mat-icon svgIcon="autorenew" /> reiniciando</span>
+              }
+              @if (service.AutoRestart) {
+                <span class="pill" matTooltip="É iniciado de novo quando cai sozinho"><mat-icon svgIcon="autorenew" /> volta sozinho</span>
+              }
+              @if (service.Check; as check) {
+                <span class="pill" [class.ok]="check.Ok === true" [class.danger]="check.Ok === false" [matTooltip]="(check.Detail ?? 'Ainda não verificado') + (check.At ? ' · ' + (check.At | ago) : '')">
+                  <mat-icon [svgIcon]="check.Ok === false ? 'error' : 'verified'" /> {{ check.Target }}
+                </span>
+              }
+              @if (service.IsSupervisor) {
+                <span class="pill info">é o próprio Worker Control</span>
+              }
+            </div>
+
+            <dl>
+              <div><dt>No ar há</dt><dd>{{ service.StartedAt ? (service.StartedAt | since) : '—' }}</dd></div>
+              <div><dt>Processador</dt><dd>{{ service.CpuPercent === null ? '—' : (service.CpuPercent | num: 'decimal') + '%' }}</dd></div>
+              <div><dt>Memória</dt><dd>{{ megabytes(service.MemoryBytes) === null ? '—' : megabytes(service.MemoryBytes) + ' MB' }}</dd></div>
+              <div><dt>Threads</dt><dd>{{ service.Threads ?? '—' }}</dd></div>
+              <div><dt>Processo</dt><dd class="mono">{{ service.ProcessId ?? '—' }}</dd></div>
+              <div><dt>Início</dt><dd>{{ service.StartType === 'Automatic' ? 'automático' : service.StartType === 'Manual' ? 'manual' : service.StartType === 'Disabled' ? 'desabilitado' : (service.StartType ?? '—') }}</dd></div>
+            </dl>
+
+            <footer>
+              @if (service.State === 'Stopped') {
+                <button mat-button (click)="act(service, 'start')" [disabled]="busy() === service.Name"><mat-icon svgIcon="play_arrow" /> Iniciar</button>
+              } @else {
+                <button mat-button (click)="act(service, 'stop')" [disabled]="busy() === service.Name || service.State === 'Missing' || service.IsSupervisor"><mat-icon svgIcon="stop" /> Parar</button>
+              }
+              <span class="spacer"></span>
+              <button mat-button (click)="act(service, 'restart')" [disabled]="busy() === service.Name || service.State === 'Missing' || service.IsSupervisor">
+                <mat-icon svgIcon="restart_alt" /> Reiniciar
+              </button>
+            </footer>
+          </article>
+        }
+      </section>
+    } @else {
+      <section class="panel empty">
+        <mat-icon svgIcon="settings_applications" />
+        <strong>Nenhum serviço acompanhado ainda</strong>
+        <span>Escolha, entre os serviços instalados na máquina, os que quer ver aqui.</span>
+        <button mat-flat-button (click)="add()"><mat-icon svgIcon="add" /> Adicionar serviço</button>
+      </section>
+    }
+  }
+</div>

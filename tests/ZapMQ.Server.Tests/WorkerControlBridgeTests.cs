@@ -114,6 +114,8 @@ public class WorkerControlBridgeTests(ServerFixture server) : IClassFixture<Serv
     [InlineData("invalid-config", HttpStatusCode.BadRequest)]
     [InlineData("invalid-request", HttpStatusCode.BadRequest)]
     [InlineData("failed", HttpStatusCode.BadGateway)]
+    [InlineData("invalid-state", HttpStatusCode.Conflict)]
+    [InlineData("unknown-command", HttpStatusCode.NotImplemented)]
     public async Task A_refusal_of_the_worker_control_comes_back_with_its_reason(string code, HttpStatusCode expected)
     {
         var (worker, _) = await Pretend(_ => new JObject
@@ -138,5 +140,26 @@ public class WorkerControlBridgeTests(ServerFixture server) : IClassFixture<Serv
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("api/workers/status")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync("api/workers/groups/Pedidos/restart", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_services_of_the_machine_are_asked_for_and_acted_on_by_name()
+    {
+        var (worker, asked) = await Pretend(request => new JObject { ["Ok"] = true, ["Command"] = request["Command"] });
+        await using var _ = worker;
+
+        var installed = JObject.Parse(await Api.GetStringAsync("api/workers/services/installed"));
+        Assert.Equal("ListServices", (string?)installed["Command"]);
+
+        Assert.Equal(HttpStatusCode.OK, (await Api.PostAsync("api/workers/services/Meu%20Servico/start", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Api.PostAsync("api/workers/services/Orders/stop", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Api.PostAsync("api/workers/services/Orders/restart", null)).StatusCode);
+
+        lock (asked)
+        {
+            Assert.Equal(["ListServices", "StartService", "StopService", "RestartService"], asked.Select(request => (string?)request["Command"]));
+            Assert.Equal("Meu Servico", (string?)asked[1]["Name"]);
+            Assert.Equal("admin", (string?)asked[3]["By"]);
+        }
     }
 }

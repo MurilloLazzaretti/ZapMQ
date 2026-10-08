@@ -17,10 +17,12 @@ import { Series, TimeChart } from './chart';
         <zap-time-chart [series]="cpu()" unit="%" />
         <h3>Memória <span class="muted">MB</span></h3>
         <zap-time-chart [series]="memory()" unit=" MB" />
-        <h3>Resposta do keep-alive <span class="muted">ms</span></h3>
-        <zap-time-chart [series]="keepAlive()" unit=" ms" />
+        @if (keepAlive()[0].data.length) {
+          <h3>Resposta do keep-alive <span class="muted">ms</span></h3>
+          <zap-time-chart [series]="keepAlive()" unit=" ms" />
+        }
       } @else {
-        <p class="muted">Ainda não há medições suficientes deste worker. Elas são feitas a cada 30 segundos.</p>
+        <p class="muted">Ainda não há medições suficientes deste processo. Elas são feitas a cada 30 segundos.</p>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">

@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
-  HealthSample, ParkMap, WorkerConfig, WorkerControlStatus, WorkerEvent,
+  HealthSample, InstalledService, ParkMap, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
 
 /**
@@ -117,6 +117,14 @@ export class Api {
 
   restartWorker(pid: number): Observable<unknown> {
     return this.http.post(`api/workers/processes/${pid}/restart`, null);
+  }
+
+  installedServices(): Observable<{ SuggestFrom: string[]; Services: InstalledService[] }> {
+    return this.http.get<{ SuggestFrom: string[]; Services: InstalledService[] }>('api/workers/services/installed');
+  }
+
+  serviceAction(name: string, action: 'start' | 'stop' | 'restart'): Observable<unknown> {
+    return this.http.post(`api/workers/services/${encodeURIComponent(name)}/${action}`, null);
   }
 
   workerEvents(filter: { group?: string; kind?: string; limit?: number }): Observable<{ Events: WorkerEvent[] }> {

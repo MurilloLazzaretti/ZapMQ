@@ -196,6 +196,57 @@ export interface WorkerControlStatus {
   Contract: number;
   Service: { StartedAt: string; Machine: string; ProcessId: number; ZapMQ: { Host: string; Port: number; Healthy: boolean } };
   Groups: WorkerGroup[];
+  /** Windows services that are watched. Absent when the Worker Control is older than that. */
+  Services?: MonitoredService[];
+}
+
+export type ServiceState = 'Missing' | 'Stopped' | 'Starting' | 'Stopping' | 'Running' | 'Paused';
+
+export interface MonitoredService {
+  Name: string;
+  DisplayName: string | null;
+  ExecutablePath: string | null;
+  State: ServiceState;
+  StartType: string | null;
+  ProcessId: number | null;
+  StartedAt: string | null;
+  ExitCode: number | null;
+  CpuPercent: number | null;
+  MemoryBytes: number | null;
+  Threads: number | null;
+  Handles: number | null;
+  AutoRestart: boolean;
+  /** When it is going to be started again by itself. */
+  RestartingAt: string | null;
+  /** Being restarted because somebody asked. */
+  Restarting: boolean;
+  Unstable: boolean;
+  /** It is the service of the Worker Control itself. */
+  IsSupervisor: boolean;
+  HasLog: boolean;
+  Check: { Target: string; Ok: boolean | null; Detail: string | null; At: string | null } | null;
+}
+
+export interface InstalledService {
+  Name: string;
+  DisplayName: string;
+  ExecutablePath: string | null;
+  State: ServiceState;
+  StartType: string;
+  /** Its executable is in one of the folders the suggestions come from. */
+  Suggested: boolean;
+  /** It is part of Windows. */
+  System: boolean;
+  Watched: boolean;
+}
+
+/** One entry of "Services.Items" in ConfigWorkers.json. */
+export interface ServiceConfig {
+  Name: string;
+  AutoRestart?: boolean;
+  StopTimeoutMs?: number;
+  LogFiles?: string;
+  Check?: { Tcp?: string; Url?: string };
 }
 
 export interface WorkerEvent {
@@ -228,6 +279,7 @@ export interface WorkerConfig {
   StartupGraceMs?: number;
   SafeStopTimeoutMs?: number;
   WorkerGroups: GroupConfig[];
+  Services?: { SuggestFrom?: string[]; Items?: ServiceConfig[] };
   [other: string]: unknown;
 }
 

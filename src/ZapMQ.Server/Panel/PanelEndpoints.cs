@@ -231,6 +231,15 @@ public static class PanelEndpoints
         workers.MapPost("/processes/{pid:int}/restart", (int pid, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
             Forward(client, context, "RestartWorker", request => request["ProcessId"] = pid, loggers, $"Worker Control: restart of worker {pid}"));
 
+        // The Windows services the Worker Control watches without having started them.
+        workers.MapGet("/services/installed", (WorkerControlClient client, HttpContext context) => Forward(client, context, "ListServices"));
+
+        foreach (var (action, command) in new[] { ("start", "StartService"), ("stop", "StopService"), ("restart", "RestartService") })
+        {
+            workers.MapPost($"/services/{{name}}/{action}", (string name, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+                Forward(client, context, command, request => request["Name"] = name, loggers, $"Worker Control: {action} of the service {name}"));
+        }
+
         workers.MapGet("/events", (string? group, string? kind, DateTimeOffset? from, DateTimeOffset? to, int? limit, WorkerControlClient client, HttpContext context) =>
             Forward(client, context, "Events", request =>
             {
@@ -422,6 +431,8 @@ public static class PanelEndpoints
             {
                 "not-found" => StatusCodes.Status404NotFound,
                 "failed" or "history-unavailable" => StatusCodes.Status502BadGateway,
+                "invalid-state" => StatusCodes.Status409Conflict,
+                "unknown-command" => StatusCodes.Status501NotImplemented,
                 _ => StatusCodes.Status400BadRequest
             };
             return Results.Json(new { error = answer.ErrorMessage, code = answer.ErrorCode }, statusCode: status);

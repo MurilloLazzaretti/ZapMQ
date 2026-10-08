@@ -2,14 +2,16 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
-/** The three screens of the Worker Control section. */
+/** The screens of the area for what runs on the machine: processes, services and connections. */
 @Component({
   selector: 'zap-worker-tabs',
   imports: [RouterLink, RouterLinkActive, MatIconModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <nav aria-label="Worker Control">
+    <nav aria-label="Processos e serviços">
       <a routerLink="/workers" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"><mat-icon svgIcon="precision_manufacturing" /> Grupos</a>
+      <a routerLink="/workers/servicos" routerLinkActive="active"><mat-icon svgIcon="settings_applications" /> Serviços</a>
+      <a routerLink="/workers/conexoes" routerLinkActive="active"><mat-icon svgIcon="lan" /> Conexões</a>
       <a routerLink="/workers/eventos" routerLinkActive="active"><mat-icon svgIcon="history" /> Histórico</a>
       <a routerLink="/workers/configuracao" routerLinkActive="active"><mat-icon svgIcon="tune" /> Configuração</a>
     </nav>
@@ -38,6 +40,9 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
     }
     a mat-icon { width: 18px; height: 18px; }
     a:hover { color: var(--mat-sys-on-surface); }
+    @media (max-width: 1099.98px) {
+      a mat-icon { display: none; }
+    }
     @media (max-width: 560px) {
       a { padding: 8px 12px; }
       a mat-icon { display: none; }

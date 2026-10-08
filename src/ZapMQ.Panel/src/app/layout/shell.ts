@@ -56,8 +56,7 @@ export class Shell implements OnInit, OnDestroy {
     { path: '/mapa', label: 'Mapa', icon: 'hub' },
     { path: '/filas', label: 'Filas', icon: 'stacks' },
     { path: '/mortas', label: 'Mensagens mortas', icon: 'skull', badge: this.dead },
-    { path: '/aplicacoes', label: 'Aplicações', icon: 'lan' },
-    { path: '/workers', label: 'Worker Control', icon: 'precision_manufacturing' },
+    { path: '/workers', label: 'Processos e serviços', icon: 'precision_manufacturing' },
   ];
 
   protected readonly themeIcon = computed(() => (this.theme.choice() === 'auto' ? 'tune' : this.theme.choice() === 'dark' ? 'dark_mode' : 'light_mode'));

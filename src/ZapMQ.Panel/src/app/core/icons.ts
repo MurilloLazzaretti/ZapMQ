@@ -63,6 +63,10 @@ import download from '@material-symbols/svg-400/rounded/download.svg';
 import verticalAlignBottom from '@material-symbols/svg-400/rounded/vertical_align_bottom.svg';
 import wrapText from '@material-symbols/svg-400/rounded/wrap_text.svg';
 import deleteSweep from '@material-symbols/svg-400/rounded/delete_sweep.svg';
+import stop from '@material-symbols/svg-400/rounded/stop.svg';
+import folder from '@material-symbols/svg-400/rounded/folder.svg';
+import autorenew from '@material-symbols/svg-400/rounded/autorenew.svg';
+import settingsApplications from '@material-symbols/svg-400/rounded/settings_applications.svg';
 import hub from '@material-symbols/svg-400/rounded/hub.svg';
 import openInNew from '@material-symbols/svg-400/rounded/open_in_new.svg';
 import deployedCode from '@material-symbols/svg-400/rounded/deployed_code.svg';
@@ -70,6 +74,7 @@ import precisionManufacturing from '@material-symbols/svg-400/rounded/precision_
 
 const ICONS: Record<string, string> = {
   terminal, download, vertical_align_bottom: verticalAlignBottom, wrap_text: wrapText, delete_sweep: deleteSweep,
+  stop, folder, autorenew, settings_applications: settingsApplications,
   hub, open_in_new: openInNew, deployed_code: deployedCode,
   memory, history, restart_alt: restartAlt, add, remove, monitor_heart: monitorHeart, data_object: dataObject, save, rocket_launch: rocketLaunch, recycling, trending_up: trendingUp, edit, precision_manufacturing: precisionManufacturing,
   account_circle: accountCircle, arrow_back: arrowBack, arrow_downward: arrowDownward, arrow_upward: arrowUpward, block, bolt,

@@ -1,6 +1,6 @@
 # ZapMQ — Monitoramento do ambiente
 
-Situação: proposta em 2026-10-08, com as decisões da seção 2 já tomadas. Nada implementado.
+Situação: aprovada em 2026-10-08. Etapa 1 implementada.
 Última revisão: 2026-10-08.
 
 Este documento especifica três recursos novos do painel, que vão além da mensageria: serviços Windows, tráfego HTTP medido pelo proxy reverso e micro frontends. Continua o [painel](PAINEL.md) e a [especificação do Worker Control](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md).
@@ -51,7 +51,7 @@ navegador ──► │ ZapMQ (painel) ◄── fila WorkerControlAdmin ──�
 
 Não se digita nome de serviço. O agente lista os serviços instalados e o painel oferece a lista, com busca, para marcar os que serão acompanhados.
 
-- A lista vem ordenada com os **sugeridos** primeiro: serviços cujo executável está dentro de uma das pastas de `Services.SuggestFrom` (configurável; vazio não sugere nenhum). Serviços do próprio Windows ficam no fim, recolhidos.
+- A lista vem ordenada com os **sugeridos** primeiro: serviços cujo executável está dentro de uma das pastas de `Services.SuggestFrom`. Essas pastas são editadas na própria tela de adicionar serviço (ou no arquivo); vazio não sugere nenhum. Serviços do próprio Windows ficam no fim, recolhidos.
 - O que é marcado vai para o `ConfigWorkers.json`, na seção `Services` (seção 9), e passa a valer na hora. Pode-se editar o arquivo à mão, como os grupos.
 - O próprio serviço do Worker Control não pode ser cadastrado. O do ZapMQ pode, com as ações de parar e reiniciar desabilitadas no painel, que depende dele.
 
@@ -63,10 +63,10 @@ Não se digita nome de serviço. O agente lista os serviços instalados e o pain
 | Tempo no ar | Horário de início do processo do serviço | — |
 | Saúde | Processador, memória, threads e handles do processo, com histórico e gráfico | Diz se está vivo e quanto consome, não se está travado por dentro |
 | Verificação | Opcional, por serviço: uma porta TCP que precisa aceitar conexão, ou uma URL que precisa responder 2xx | Só o que o serviço expõe |
-| Iniciar, parar, reiniciar | Pelo gerenciador de serviços, com confirmação; quem fez fica no histórico | Parar espera até `StopTimeoutMs`; depois disso informa que não parou, e não encerra à força |
-| Queda | Evento no histórico quando o serviço para sem ter sido pedido | — |
+| Iniciar, parar, reiniciar | Pelo gerenciador de serviços, com confirmação; quem fez fica no histórico | Parar espera até `StopTimeoutMs`; depois disso informa que não parou, e não encerra à força. Parar um serviço para também os que dependem dele, como faz o Windows |
+| Queda | Evento no histórico quando o serviço para sem ter sido pedido. É queda quando o Windows registra um código de saída diferente de zero; parada limpa feita por fora do painel é registrada como parada | Um serviço que cai devolvendo código zero é visto como parada limpa |
 | Reinício automático | Opcional (`AutoRestart`), desligado por padrão. Ligado, o agente inicia de novo o serviço que parou sozinho, com o mesmo recuo crescente dos grupos quando cai em sequência | Não age sobre serviço parado por alguém |
-| Atividade no ZapMQ | O serviço que usa o broker aparece no mapa, pelo número do processo, com as filas e a vazão | Só os que usam o broker |
+| Atividade no ZapMQ | Não se informa no cadastro: o serviço que usa o broker pelo protocolo v2 é reconhecido pelo número do processo, e aparece no mapa com as filas e a vazão (etapa 5) | Só os que usam o broker; os que usam o protocolo 1.x são vistos por endereço, sem ligação com o serviço |
 | Log ao vivo | Na tela de trace: o agente acompanha o arquivo de log do serviço e publica as linhas novas | Só serviço que grava log em arquivo |
 
 **Log ao vivo.** `Trace()` existe só para aplicação que carrega o wrapper. Para um serviço que não vai ser alterado, o equivalente é o arquivo de log dele: informa-se a pasta e o padrão do nome (`LogFiles`, por exemplo `logs\app-*.log`), e o agente acompanha o arquivo mais recente que casa com o padrão, passando para o próximo quando o serviço troca de arquivo. As linhas seguem o mesmo caminho do trace (filas descartáveis, só enquanto alguém assiste), e a tela é a mesma: filtro, pausa, exportação. Ao abrir, vêm as últimas 200 linhas do arquivo. A codificação é detectada como no trace (UTF-8; se não for, ANSI).

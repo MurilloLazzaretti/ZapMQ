@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, input, signal } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
@@ -10,8 +10,8 @@ import { WorkerTabs } from '../shared/worker-tabs';
 
 /** What each kind of event is called on screen, and how much attention it asks for. */
 export const KINDS: Record<string, { label: string; tone: string }> = {
-  ServiceStarted: { label: 'Serviço iniciado', tone: 'info' },
-  ServiceStopped: { label: 'Serviço parado', tone: 'info' },
+  ServiceStarted: { label: 'Worker Control iniciado', tone: 'info' },
+  ServiceStopped: { label: 'Worker Control parado', tone: 'info' },
   ConfigApplied: { label: 'Configuração aplicada', tone: '' },
   ConfigRefused: { label: 'Configuração recusada', tone: 'danger' },
   ManualAction: { label: 'Ação manual', tone: 'primary' },
@@ -34,6 +34,14 @@ export const KINDS: Record<string, { label: string; tone: string }> = {
   ScaleChanged: { label: 'Escala pela fila', tone: 'primary' },
   RecycleStarted: { label: 'Substituição iniciada', tone: 'info' },
   RecycleFinished: { label: 'Substituição concluída', tone: 'info' },
+  MonitoredStarted: { label: 'Serviço rodando', tone: 'ok' },
+  MonitoredStopped: { label: 'Serviço parou', tone: '' },
+  MonitoredCrashed: { label: 'Serviço caiu', tone: 'danger' },
+  MonitoredRestarting: { label: 'Reinício automático', tone: 'primary' },
+  MonitoredStopTimedOut: { label: 'Serviço não parou no prazo', tone: 'warn' },
+  MonitoredActionFailed: { label: 'Ação recusada pelo Windows', tone: 'danger' },
+  MonitoredCheckFailed: { label: 'Verificação falhou', tone: 'danger' },
+  MonitoredCheckRecovered: { label: 'Verificação voltou', tone: 'ok' },
 };
 
 @Component({
@@ -54,11 +62,11 @@ export const KINDS: Record<string, { label: string; tone: string }> = {
       <section class="panel">
         <div class="tools">
           <mat-form-field>
-            <mat-label>Grupo</mat-label>
+            <mat-label>Grupo ou serviço</mat-label>
             <mat-select [value]="group()" (selectionChange)="group.set($event.value); load()">
               <mat-option value="">Todos</mat-option>
               @for (name of groups(); track name) {
-                <mat-option [value]="name">{{ name }}</mat-option>
+                <mat-option [value]="name">{{ origin(name) }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
@@ -94,7 +102,7 @@ export const KINDS: Record<string, { label: string; tone: string }> = {
                 <tr>
                   <th>Quando</th>
                   <th>O quê</th>
-                  <th>Grupo</th>
+                  <th>Grupo ou serviço</th>
                   <th class="right">Processo</th>
                   <th>Detalhe</th>
                 </tr>
@@ -104,7 +112,7 @@ export const KINDS: Record<string, { label: string; tone: string }> = {
                   <tr>
                     <td class="nowrap num" data-label="Quando">{{ event.At | when }}</td>
                     <td data-label="O quê"><span class="pill" [class]="describe(event).tone">{{ describe(event).label }}</span></td>
-                    <td data-label="Grupo">{{ event.Group || '—' }}</td>
+                    <td data-label="Grupo">{{ origin(event.Group) }}</td>
                     <td class="right mono" data-label="Processo">{{ event.ProcessId ?? '—' }}</td>
                     <td class="wide detail" data-label="Detalhe">{{ event.Detail }}</td>
                   </tr>
@@ -137,6 +145,9 @@ export class WorkerEventsPage implements OnInit, OnDestroy {
   private timer: ReturnType<typeof setInterval> | null = null;
 
   protected readonly kinds = Object.entries(KINDS).map(([key, value]) => ({ key, label: value.label })).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  /** From the query string, when another screen sends here already filtered. */
+  readonly grupo = input<string>();
+
   protected readonly group = signal('');
   protected readonly kind = signal('');
   protected readonly limit = signal(100);
@@ -146,7 +157,8 @@ export class WorkerEventsPage implements OnInit, OnDestroy {
   protected readonly groups = computed(() => this.known());
 
   ngOnInit(): void {
-    this.api.workerStatus().subscribe({ next: (status) => this.known.set(status.Groups.map((item) => item.Name).sort()), error: () => undefined });
+    this.api.workerStatus().subscribe({ next: (status) => this.known.set([...status.Groups.map((item) => item.Name).sort(), ...(status.Services ?? []).map((item) => 'service:' + item.Name).sort()]), error: () => undefined });
+    this.group.set(this.grupo() ?? '');
     this.load();
     this.timer = setInterval(() => this.load(), 5000);
   }
@@ -155,6 +167,11 @@ export class WorkerEventsPage implements OnInit, OnDestroy {
     if (this.timer) {
       clearInterval(this.timer);
     }
+  }
+
+  /** A group as it is; a service without the mark that tells it from a group. */
+  protected origin(group: string | null): string {
+    return !group ? '—' : group.startsWith('service:') ? group.slice(8) + ' (serviço)' : group;
   }
 
   protected describe(event: WorkerEvent) {

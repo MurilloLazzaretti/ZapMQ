@@ -8,6 +8,7 @@ import { RouterLink } from '@angular/router';
 import { Api } from '../core/api';
 import { AgoPipe, NumPipe, SincePipe } from '../core/format';
 import { Connection, V1Client } from '../core/models';
+import { WorkerTabs } from '../shared/worker-tabs';
 
 /** Queues that exist only to talk to one process. */
 const INTERNAL = /^(\d+)(SS|TR)?$|^WorkerControl\.Canary/;
@@ -23,21 +24,25 @@ interface Application {
 /** Who is connected: applications over v2, grouped by name, and whoever still talks v1. */
 @Component({
   selector: 'zap-connections',
-  imports: [FormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, NumPipe, AgoPipe, SincePipe],
+  imports: [FormsModule, RouterLink, WorkerTabs, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, NumPipe, AgoPipe, SincePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page">
       <header class="head">
         <div>
-          <h1>Aplicações</h1>
+          <h1>Conexões</h1>
           <p class="muted">{{ applications().length }} aplicações em {{ processes() }} processos · {{ v2().length }} conexões v2 · {{ v1().length }} cliente(s) v1</p>
         </div>
         <span class="spacer"></span>
+        <zap-worker-tabs />
+      </header>
+
+      <div class="head">
         <mat-form-field class="search">
           <mat-icon matPrefix svgIcon="search" />
           <input matInput placeholder="Buscar aplicação ou fila" [ngModel]="filter()" (ngModelChange)="filter.set($event)" aria-label="Buscar" />
         </mat-form-field>
-      </header>
+      </div>
 
       @if (shown().length) {
         <section class="cards">
