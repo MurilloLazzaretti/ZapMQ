@@ -192,7 +192,7 @@ export class AddServiceDialog implements OnInit {
 
 /**
  * How one service is watched: whether it is started again when it falls, how long it is
- * waited for when asked to stop, what proves it is well, and where its log is.
+ * waited for when asked to stop, and what proves it is well.
  */
 @Component({
   imports: [FormsModule, MatDialogModule, MatButtonModule, MatButtonToggleModule, MatFormFieldModule, MatInputModule, MatSlideToggleModule],
@@ -233,11 +233,6 @@ export class AddServiceDialog implements OnInit {
         }
       </div>
 
-      <mat-form-field>
-        <mat-label>Arquivos de log</mat-label>
-        <input matInput [(ngModel)]="logFiles" placeholder="D:\\Apps\\servico\\logs\\app-*.log" spellcheck="false" />
-        <mat-hint>Pasta e padrão do nome, para acompanhar o log ao vivo.</mat-hint>
-      </mat-form-field>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancelar</button>

@@ -67,7 +67,7 @@ Não se digita nome de serviço. O agente lista os serviços instalados e o pain
 | Queda | Evento no histórico quando o serviço para sem ter sido pedido. É queda quando o Windows registra um código de saída diferente de zero; parada limpa feita por fora do painel é registrada como parada | Um serviço que cai devolvendo código zero é visto como parada limpa |
 | Reinício automático | Opcional (`AutoRestart`), desligado por padrão. Ligado, o agente inicia de novo o serviço que parou sozinho, com o mesmo recuo crescente dos grupos quando cai em sequência | Não age sobre serviço parado por alguém |
 | Atividade no ZapMQ | Não se informa no cadastro: o serviço que usa o broker pelo protocolo v2 é reconhecido pelo número do processo, e aparece no mapa com as filas e a vazão (etapa 5) | Só os que usam o broker; os que usam o protocolo 1.x são vistos por endereço, sem ligação com o serviço |
-| Log ao vivo | Na tela de trace: o agente acompanha o arquivo de log do serviço e publica as linhas novas | Só serviço que grava log em arquivo |
+| Log ao vivo | Na tela de trace: o agente acompanha o arquivo de log do serviço e publica as linhas novas. Não implementado (etapa 2, adiada) | Só serviço que grava log em arquivo |
 
 **Log ao vivo.** `Trace()` existe só para aplicação que carrega o wrapper. Para um serviço que não vai ser alterado, o equivalente é o arquivo de log dele: informa-se a pasta e o padrão do nome (`LogFiles`, por exemplo `logs\app-*.log`), e o agente acompanha o arquivo mais recente que casa com o padrão, passando para o próximo quando o serviço troca de arquivo. As linhas seguem o mesmo caminho do trace (filas descartáveis, só enquanto alguém assiste), e a tela é a mesma: filtro, pausa, exportação. Ao abrir, vêm as últimas 200 linhas do arquivo. A codificação é detectada como no trace (UTF-8; se não for, ANSI).
 
@@ -224,7 +224,7 @@ Cada etapa é entregue utilizável no ambiente de desenvolvimento.
 | Etapa | Entrega | Depende de fora |
 |---|---|---|
 | 1 | Serviços Windows: descoberta e cadastro, estado, saúde, ações, quedas e reinício automático; área "Processos e serviços" | — |
-| 2 | Log ao vivo dos serviços, na tela de trace | — |
+| 2 | Log ao vivo dos serviços, na tela de trace. **Adiada em 2026-10-08**: nenhum serviço do ambiente grava log em arquivo hoje. Fica especificada (4.2) para quando houver um | — |
 | 3 | Frontend: módulos, versões, no ar, integridade, linha do tempo de publicações | — |
 | 4 | Tráfego: leitura e rotação do log, agregação, tela com endpoints, instâncias e erros | Formato de log no proxy (5.1) |
 | 5 | Uso por módulo e publicações marcadas no tráfego; Visão geral do ambiente; coluna do proxy no mapa | 3 e 4 |
