@@ -143,6 +143,19 @@ public sealed class PackageRecord
     public string? ApprovedBy { get; set; }
     public List<HistoryEntry> History { get; set; } = [];
     public List<ItemResult> Results { get; set; } = [];
+
+    /// <summary>
+    /// The environments that said they received it from here. Once one did, the package is
+    /// part of what happened there and is not deleted here any more.
+    /// </summary>
+    public List<Delivery> Deliveries { get; set; } = [];
+}
+
+public sealed class Delivery
+{
+    public string To { get; set; } = "";
+    public DateTimeOffset At { get; set; }
+    public string By { get; set; } = "";
 }
 
 /// <summary>

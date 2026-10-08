@@ -802,6 +802,8 @@ export interface PackageSummary {
   status: PackageStatus;
   /** It came from another environment, to be applied here. */
   received: boolean;
+  /** The environments that received it from here. */
+  deliveries: { to: string; at: string; by: string }[];
   applyAt: string | null;
   approvedBy: string | null;
   size: number;

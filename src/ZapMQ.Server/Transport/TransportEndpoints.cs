@@ -41,7 +41,7 @@ public static class TransportEndpoints
     {
         id = record.Manifest.Id, name = record.Manifest.Name, description = record.Manifest.Description, origin = record.Manifest.Origin,
         createdAt = record.Manifest.CreatedAt, createdBy = record.Manifest.CreatedBy, items = record.Manifest.Items.Count,
-        status = record.Status, received = record.Received, applyAt = record.ApplyAt, approvedBy = record.ApprovedBy, size = record.Size,
+        status = record.Status, received = record.Received, deliveries = record.Deliveries, applyAt = record.ApplyAt, approvedBy = record.ApprovedBy, size = record.Size,
         changedAt = record.History.LastOrDefault()?.At ?? record.Manifest.CreatedAt
     };
 
@@ -113,9 +113,9 @@ public static class TransportEndpoints
             store.Find(id) is { } record ? Results.Json(Detail(record, store)) : Results.Json(new { error = "Não existe esse pacote neste ambiente" }, statusCode: StatusCodes.Status404NotFound));
 
         // Only what was made here goes away; what arrived is refused and stays.
-        api.MapDelete("/packages/{id}", (string id, TransportStore store, HttpContext context, ILoggerFactory loggers) => Guarded(() =>
+        api.MapDelete("/packages/{id}", (string id, TransportStore store, HttpContext context, TimeProvider time, ILoggerFactory loggers) => Guarded(() =>
         {
-            var gone = store.Delete(id);
+            var gone = store.Delete(id, User(context), time.GetUtcNow());
             loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: package {Name} ({Id}), made here with {Items} items, deleted (by {User})", gone.Manifest.Name, id, gone.Manifest.Items.Count, User(context));
             return Task.FromResult(Results.NoContent());
         }));

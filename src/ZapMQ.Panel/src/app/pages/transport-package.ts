@@ -179,7 +179,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected async remove(): Promise<void> {
     const sure = await confirm(this.dialog, {
       title: 'Excluir o pacote?',
-      message: `"${this.detail()!.package.name}" é apagado deste ambiente, com o arquivo. Os objetos que ele levava voltam a aparecer como ainda não transportados.`,
+      message: `"${this.detail()!.package.name}" é apagado deste ambiente, com o arquivo. Os itens que ele levava voltam para a área.`,
       warning: 'Se o arquivo já foi levado a outro ambiente, lá ele continua existindo.',
       action: 'Excluir',
       danger: true,
@@ -191,7 +191,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     try {
       await firstValueFrom(this.api.deletePackage(this.id));
       this.transport.refresh();
-      void this.router.navigate(['/transporte/pacotes']);
+      void this.router.navigate(['/transporte']);
     } catch (failure) {
       this.say(failure);
     } finally {

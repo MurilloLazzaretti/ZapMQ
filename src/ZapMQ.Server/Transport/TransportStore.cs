@@ -255,10 +255,11 @@ public sealed class TransportStore
     }
 
     /// <summary>
-    /// Removes a package that was made here, file and all. One that arrived from somewhere else
-    /// is never removed: it can be refused, and what it brought stays to be looked at.
+    /// Removes a package that was made here, file and all, and puts back in the area what it
+    /// carried. One that arrived from somewhere else is never removed: it can be refused, and
+    /// what it brought stays to be looked at. Neither is one that another environment received.
     /// </summary>
-    public PackageRecord Delete(string id)
+    public PackageRecord Delete(string id, string by, DateTimeOffset now)
     {
         lock (_gate)
         {
@@ -266,6 +267,23 @@ public sealed class TransportStore
                 throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
             if (record.Received)
                 throw new TransportRefused("Um pacote que chegou de outro ambiente não é excluído: ele pode ser recusado, e o que trouxe continua registrado", StatusCodes.Status409Conflict);
+            if (record.Deliveries.Count > 0)
+                throw new TransportRefused($"Este pacote já foi entregue a {string.Join(", ", record.Deliveries.Select(delivery => delivery.To).Distinct())} e não pode mais ser excluído aqui", StatusCodes.Status409Conflict);
+
+            // Back to the area, as it was before the package was closed. An object is pointed at again; a script comes back with its text.
+            foreach (var item in record.Manifest.Items)
+            {
+                var back = new AreaItem
+                {
+                    Id = Guid.NewGuid().ToString("N")[..12], Kind = item.Kind, Action = item.Action, ObjectKind = item.ObjectKind, Variety = item.Variety, Schema = item.Schema, Name = item.Name,
+                    Title = item.Title, Database = item.Database, Fingerprint = item.Fingerprint, AddedBy = by, AddedAt = now,
+                    Script = item.Action == "Script" ? Script(id, item.Number) : null
+                };
+                if (back.Action == "Script" ? back.Script is not null : !_area.Any(other => Same(other, back)))
+                    _area.Add(back);
+            }
+            SaveArea();
+
             _packages.Remove(id);
             try
             {

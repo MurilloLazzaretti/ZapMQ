@@ -27,10 +27,16 @@
         <section class="panel decide">
           <div>
             <strong>Pacote fechado em {{ now.environment }}.</strong>
-            <span class="muted">Leve o arquivo ao ambiente seguinte e importe-o lá, em Transporte → Pacotes. É lá que ele é aprovado e aplicado.</span>
+            @if (now.package.deliveries.length) {
+              <span class="muted">@for (delivery of now.package.deliveries; track $index) { Entregue a <strong>{{ delivery.to }}</strong> em {{ delivery.at | when }}, por {{ delivery.by }}. } Um pacote entregue não é mais excluído aqui.</span>
+            } @else {
+              <span class="muted">Leve o arquivo ao ambiente seguinte e importe-o lá, em Transporte → Pacotes. É lá que ele é aprovado e aplicado.</span>
+            }
           </div>
           <span class="spacer"></span>
-          <button mat-button (click)="remove()" [disabled]="busy()"><mat-icon svgIcon="delete" /> Excluir</button>
+          @if (!now.package.deliveries.length) {
+            <button mat-button (click)="remove()" [disabled]="busy()"><mat-icon svgIcon="delete" /> Excluir</button>
+          }
           <button mat-flat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button>
         </section>
       }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
@@ -390,9 +391,13 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using var _ = await Serve(here);
         var arrived = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
 
-        // Made here: it goes away, file and all, and is not refused.
+        // Made here: it goes away, file and all, and is not refused. What it carried is in the area again.
         await Json(await Api.PostAsJsonAsync($"api/transport/packages/{mine}/reject", new { }), HttpStatusCode.Conflict);
+        Assert.Empty(JObject.Parse(await Api.GetStringAsync("api/transport/area"))["items"]!);
         Assert.Equal(HttpStatusCode.NoContent, (await Api.DeleteAsync($"api/transport/packages/{mine}")).StatusCode);
+        var back = JObject.Parse(await Api.GetStringAsync("api/transport/area"))["items"]!;
+        Assert.Equal(["fncTotal|Define", "spClose|Define", "spNew|Define", "vwOld|Drop"], back.Select(item => $"{(string?)item["name"]}|{(string?)item["action"]}").Order());
+        Assert.All(back, item => Assert.Equal("admin", (string?)item["addedBy"]));
         Assert.Equal(HttpStatusCode.NotFound, (await Api.GetAsync($"api/transport/packages/{mine}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Api.GetAsync($"api/transport/packages/{mine}/download")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Api.DeleteAsync($"api/transport/packages/{mine}")).StatusCode);
@@ -408,5 +413,32 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         Assert.Contains("fncTotal", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{arrived}/items/1"))["script"]);
         lock (here.Applied)
             Assert.Empty(here.Applied);
+    }
+
+    [Fact]
+    public async Task A_script_comes_back_to_the_area_with_its_text_and_a_delivered_package_is_not_deleted()
+    {
+        var database = new PretendDatabase();
+        database.Objects["spNew"] = ("Procedure", "CREATE PROCEDURE dbo.spNew AS RETURN", []);
+        await using var _ = await Serve(database);
+        await ClearArea();
+        await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { title = "Nova coluna", script = "ALTER TABLE dbo.Orders ADD Channel varchar(10) NULL" }), HttpStatusCode.Created);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "Procedure", schema = "dbo", name = "spNew" }), HttpStatusCode.Created);
+        var first = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "To be deleted" }), HttpStatusCode.Created))["package"]!["id"]!;
+
+        Assert.Equal(HttpStatusCode.NoContent, (await Api.DeleteAsync($"api/transport/packages/{first}")).StatusCode);
+        var area = JObject.Parse(await Api.GetStringAsync("api/transport/area"))["items"]!;
+        Assert.Equal("ALTER TABLE dbo.Orders ADD Channel varchar(10) NULL", (string?)area.Single(item => (string?)item["action"] == "Script")["script"]);
+        Assert.Equal(2, area.Count());
+
+        // Closed again and received somewhere: from then on it stays.
+        var second = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Delivered" }), HttpStatusCode.Created))["package"]!["id"]!;
+        server.Services.GetRequiredService<global::ZapMQ.Server.Transport.TransportStore>().Update(second, record =>
+            record.Deliveries.Add(new global::ZapMQ.Server.Transport.Delivery { To = "QAS", At = DateTimeOffset.UtcNow, By = "admin" }));
+
+        var refused = await Json(await Api.DeleteAsync($"api/transport/packages/{second}"), HttpStatusCode.Conflict);
+        Assert.Contains("entregue a QAS", (string?)refused["error"]);
+        Assert.Equal("QAS", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{second}"))["package"]!["deliveries"]![0]!["to"]);
+        Assert.Empty(JObject.Parse(await Api.GetStringAsync("api/transport/area"))["items"]!);
     }
 }
