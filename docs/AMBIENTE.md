@@ -1,6 +1,6 @@
 # ZapMQ — Monitoramento do ambiente
 
-Situação: aprovada em 2026-10-08. Etapas 1, 3 e 4 implementadas, e a 5 sem o proxy no mapa; a 2 foi adiada.
+Situação: aprovada em 2026-10-08. Etapas 1, 3, 4 e 5 implementadas; a 2 foi adiada.
 Última revisão: 2026-10-08.
 
 Este documento especifica três recursos novos do painel, que vão além da mensageria: serviços Windows, tráfego HTTP medido pelo proxy reverso e micro frontends. Continua o [painel](PAINEL.md) e a [especificação do Worker Control](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md).
@@ -168,11 +168,24 @@ Saber qual versão cada usuário tem aberta exige que o frontend informe, o que 
 | Hoje | Passa a ser |
 |---|---|
 | Visão geral (só o broker) | **Visão geral** do ambiente: no topo, tudo o que pede atenção em qualquer parte dele, cada item levando à tela onde se resolve; depois um bloco para processos e serviços, um para tráfego e um para a aplicação web, com três números cada; e a mensageria, como era |
-| Mapa | **Mapa**, com uma coluna a mais, à esquerda: o proxy e as aplicações que ele alcança. Os serviços Windows que usam o broker entram como aplicações, com o estado do serviço |
+| Mapa | **Mapa**, com uma coluna a mais, à esquerda: o proxy, ligado às aplicações para as quais encaminha. Uma aplicação que é um serviço Windows diz qual é (seção 7.1) |
 | Filas, Mensagens mortas | Uma área só, **Filas**, com as mensagens mortas em uma aba |
 | Aplicações, Worker Control | **Processos e serviços**: grupos e workers, serviços Windows e conexões, em abas. Histórico e Configuração continuam nela, e passam a cobrir os serviços |
 | — | **Tráfego** |
 | — | **Aplicação web** |
+
+### 7.1 O proxy no mapa
+
+O log do proxy diz para qual endereço cada requisição foi encaminhada (`127.0.0.1:9014`); o mapa conhece as aplicações pelos processos que se conectam ao broker. O que junta os dois é saber **qual processo atende em cada porta**, e o agente descobre isso de duas formas:
+
+- a porta é escutada pela própria aplicação: o processo é ela;
+- a porta é escutada pelo servidor web da máquina (IIS) em nome de um site: a aplicação é o que roda a partir da pasta do site, lida do `applicationHost.config`.
+
+Com o processo em mãos, a linha do proxy vai para a aplicação do mapa que tem esse processo entre as instâncias. Se o processo existe mas não está conectado ao broker, a aplicação é desenhada mesmo assim, pelo nome do processo (é com esse nome que ela aparecerá quando se conectar). Se o processo não pôde ser identificado — o endereço é de outra máquina, ou ninguém conhecido escuta ali — ela aparece pelo nome com que o proxy a chama (`api/pedidos`).
+
+A linha leva as requisições por minuto do período; a aplicação que devolve erro do servidor em 2% ou mais do que recebe fica marcada, como o próprio proxy.
+
+Um serviço Windows acompanhado é reconhecido como aplicação pelos números de processo: o do serviço e os dos processos que ele iniciou.
 
 O painel "Atenção" do mapa passa a existir também na Visão geral, e inclui serviço parado, verificação falhando, instância de upstream sem resposta e módulo fora do ar.
 
@@ -248,7 +261,7 @@ Cada etapa é entregue utilizável no ambiente de desenvolvimento.
 | 2 | Log ao vivo dos serviços, na tela de trace. **Adiada em 2026-10-08**: nenhum serviço do ambiente grava log em arquivo hoje. Fica especificada (4.2) para quando houver um | — |
 | 3 | Frontend: módulos, versões, no ar, integridade, linha do tempo de publicações | — |
 | 4 | Tráfego: leitura e rotação do log, agregação, tela com endpoints, instâncias e erros | Formato de log no proxy (5.1) |
-| 5 | Uso por módulo e publicações marcadas no tráfego; Visão geral do ambiente; coluna do proxy no mapa. Feito, menos o proxy no mapa, que depende de o agente descobrir qual processo atende em cada porta | 3 e 4 |
+| 5 | Uso por módulo e publicações marcadas no tráfego; Visão geral do ambiente; coluna do proxy no mapa | 3 e 4 |
 
 ## 11. Verificação
 

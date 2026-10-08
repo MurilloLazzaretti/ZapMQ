@@ -244,6 +244,20 @@ export interface TrafficRoute extends TrafficTally {
   PreviousP95: number | null;
 }
 
+/** An address the proxy forwards to, with what went there and which processes answer on it. */
+export interface TrafficUpstream extends TrafficTally {
+  Upstream: string;
+  App: string;
+  /** The site of the web server of the machine that listens there on behalf of the application, if one does. */
+  Site: string | null;
+  Processes: { ProcessId: number; Name: string }[];
+}
+
+export interface TrafficUpstreams {
+  Minutes: number;
+  Upstreams: TrafficUpstream[];
+}
+
 /** A screen of the web application, by what was asked from it. */
 export interface TrafficScreen {
   Host: string;
@@ -346,6 +360,8 @@ export interface MonitoredService {
   Unstable: boolean;
   /** It is the service of the Worker Control itself. */
   IsSupervisor: boolean;
+  /** The process of the service and of everything it started. */
+  ProcessIds?: number[];
   /** Names of the programs the service started, which are measured with it. */
   Children?: string[] | null;
   HasLog: boolean;

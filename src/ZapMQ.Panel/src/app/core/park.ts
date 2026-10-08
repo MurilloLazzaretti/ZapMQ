@@ -1,10 +1,21 @@
-import { MapApplication, MapLink, MapQueue, ParkMap, WorkerControlStatus, WorkerGroup } from './models';
+import { MapApplication, MapLink, MapQueue, MonitoredService, ParkMap, TrafficUpstreams, WorkerControlStatus, WorkerGroup } from './models';
 
 export type Tone = 'ok' | 'warn' | 'danger' | 'off' | 'neutral';
-export type NodeKind = 'application' | 'queue' | 'supervisor' | 'group';
+export type NodeKind = 'application' | 'queue' | 'supervisor' | 'group' | 'proxy';
 
-/** Publishers, queues, consumers and, when there is one, the Worker Control. */
-export type Column = 0 | 1 | 2 | 3;
+/** The reverse proxy (when its traffic is known), publishers, queues, consumers and, when there is one, the Worker Control. */
+export type Column = -1 | 0 | 1 | 2 | 3;
+
+/** What the reverse proxy sent to an application in the period. */
+export interface HttpTraffic {
+  /** How the proxy calls what it forwards there: `api/orders`. */
+  apps: string[];
+  upstreams: string[];
+  count: number;
+  perMinute: number;
+  serverErrors: number;
+  p95: number | null;
+}
 
 export interface ParkNode {
   id: string;
@@ -21,6 +32,10 @@ export interface ParkNode {
   queue?: MapQueue;
   /** Groups of the Worker Control this node stands for. */
   groups: WorkerGroup[];
+  /** Windows services this application is, when it is one. */
+  services?: MonitoredService[];
+  /** What it receives through the reverse proxy. On the proxy itself, everything it forwarded. */
+  http?: HttpTraffic;
   x: number;
   y: number;
 }
@@ -29,8 +44,8 @@ export interface ParkEdge {
   id: string;
   from: string;
   to: string;
-  kind: 'publish' | 'consume' | 'supervise';
-  /** Messages per minute, lately. */
+  kind: 'publish' | 'consume' | 'supervise' | 'http';
+  /** Messages (or, from the proxy, requests) per minute, lately. */
   rate: number;
   /** Something went through it in the last minute. */
   active: boolean;
@@ -64,9 +79,13 @@ export const linkKey = (link: MapLink) => `${link.kind}|${link.application}|${li
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
+/** With every column in use the nodes may be a little narrower, so the drawing still fits a common screen. */
+const sizes = (columns: number) => (columns >= 5 ? { node: 164, gap: 54 } : { node: MIN_NODE, gap: MIN_GAP });
+
 /** The narrowest the drawing can be with that many columns. */
 export function minimumWidth(columns: number): number {
-  return PADDING * 2 + columns * MIN_NODE + (columns - 1) * MIN_GAP;
+  const { node, gap } = sizes(columns);
+  return PADDING * 2 + columns * node + (columns - 1) * gap;
 }
 
 function sameMachine(one: string | undefined, other: string | undefined): boolean {
@@ -90,6 +109,7 @@ export function assemble(
   rates: ReadonlyMap<string, number>,
   waiting: ReadonlySet<string>,
   now: number,
+  traffic: TrafficUpstreams | null = null,
 ): { nodes: ParkNode[]; edges: ParkEdge[] } {
   const nodes: ParkNode[] = [];
   const edges: ParkEdge[] = [];
@@ -276,7 +296,93 @@ export function assemble(
     }
   }
 
+  // An application that is a Windows service says so.
+  for (const node of nodes) {
+    if (node.kind === 'application' && node.application) {
+      const services = (status?.Services ?? []).filter((service) => node.application!.instances.some((instance) => service.ProcessIds?.includes(instance.pid)));
+      if (services.length) {
+        node.services = services;
+      }
+    }
+  }
+
+  addProxy(nodes, edges, traffic);
   return { nodes, edges };
+}
+
+/**
+ * The reverse proxy and what it forwards to: each address it sends requests to is joined to
+ * the application whose process answers there. An application that is not connected to the
+ * broker is drawn too, by the name of its process, or by how the proxy calls it when the
+ * process could not be told.
+ */
+function addProxy(nodes: ParkNode[], edges: ParkEdge[], traffic: TrafficUpstreams | null): void {
+  if (!traffic?.Upstreams.length) {
+    return;
+  }
+  const targets = new Map<string, HttpTraffic>();
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+
+  for (const upstream of traffic.Upstreams) {
+    const pids = new Set(upstream.Processes.map((process) => process.ProcessId));
+    let node = nodes.find((candidate) => candidate.kind === 'application' && candidate.application?.instances.some((instance) => pids.has(instance.pid)));
+    if (!node) {
+      // By the name of the process when it is known: an application connects to the broker under that name.
+      const name = upstream.Processes[0]?.Name;
+      const id = name ? 'v2:' + name : 'http:' + upstream.App;
+      node = byId.get(id) ?? [...byId.values()].find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
+      if (!node) {
+        node = { id, kind: 'application', column: 0, label: name ?? upstream.App, detail: name ? 'sem conexão com o ZapMQ' : 'processo não identificado', tone: 'neutral', reasons: [], figure: null, groups: [], x: 0, y: 0 };
+        nodes.push(node);
+        byId.set(id, node);
+      }
+    }
+
+    const sum = targets.get(node.id) ?? { apps: [], upstreams: [], count: 0, perMinute: 0, serverErrors: 0, p95: null };
+    if (!sum.apps.includes(upstream.App)) {
+      sum.apps.push(upstream.App);
+    }
+    sum.upstreams.push(upstream.Upstream);
+    sum.count += upstream.Count;
+    sum.serverErrors += upstream.S5;
+    sum.p95 = upstream.P95 === null ? sum.p95 : Math.max(sum.p95 ?? 0, upstream.P95);
+    sum.perMinute = sum.count / Math.max(1, traffic.Minutes);
+    targets.set(node.id, sum);
+  }
+
+  const all: HttpTraffic = { apps: [], upstreams: [], count: 0, perMinute: 0, serverErrors: 0, p95: null };
+  for (const [id, sum] of targets) {
+    const node = byId.get(id)!;
+    node.http = sum;
+    // A handful of requests says little; a share of many does.
+    const failing = sum.count >= 20 && sum.serverErrors / sum.count >= 0.02;
+    if (failing) {
+      node.tone = 'danger';
+      node.reasons.push(`${((sum.serverErrors / sum.count) * 100).toFixed(1).replace('.', ',')}% das requisições recebidas do proxy terminaram em erro do servidor.`);
+    }
+    edges.push({ id: 'http|' + id, from: 'proxy', to: id, kind: 'http', rate: sum.perMinute, active: sum.perMinute > 0, stale: false, back: false, path: '' });
+    all.apps.push(...sum.apps);
+    all.count += sum.count;
+    all.serverErrors += sum.serverErrors;
+    all.p95 = sum.p95 === null ? all.p95 : Math.max(all.p95 ?? 0, sum.p95);
+  }
+  all.perMinute = all.count / Math.max(1, traffic.Minutes);
+
+  const failing = all.count >= 20 && all.serverErrors / all.count >= 0.02;
+  nodes.push({
+    id: 'proxy',
+    kind: 'proxy',
+    column: -1,
+    label: 'Proxy reverso',
+    detail: `${all.perMinute >= 10 ? Math.round(all.perMinute) : all.perMinute.toFixed(1).replace('.', ',')} requisições/min`,
+    tone: failing ? 'danger' : 'ok',
+    reasons: failing ? [`${((all.serverErrors / all.count) * 100).toFixed(1).replace('.', ',')}% do que foi encaminhado terminou em erro do servidor.`] : [],
+    figure: targets.size,
+    groups: [],
+    http: all,
+    x: 0,
+    y: 0,
+  });
 }
 
 /**
@@ -284,9 +390,10 @@ export function assemble(
  * the lines from crossing more than they have to.
  */
 export function place(nodes: ParkNode[], edges: ParkEdge[], available: number): Park {
-  const used = ([0, 1, 2, 3] as Column[]).filter((column) => column < 3 || nodes.some((node) => node.column === 3));
+  const used = ([-1, 0, 1, 2, 3] as Column[]).filter((column) => (column >= 0 && column < 3) || nodes.some((node) => node.column === column));
   const width = Math.max(available, minimumWidth(used.length));
-  const nodeWidth = Math.min(MAX_NODE, Math.max(MIN_NODE, (width - PADDING * 2 - (used.length - 1) * MIN_GAP) / used.length));
+  const least = sizes(used.length);
+  const nodeWidth = Math.min(MAX_NODE, Math.max(least.node, (width - PADDING * 2 - (used.length - 1) * least.gap) / used.length));
   const gap = (width - PADDING * 2 - used.length * nodeWidth) / (used.length - 1);
   const columns = used.map((column, index) => ({ column, x: PADDING + index * (nodeWidth + gap) }));
 
@@ -339,7 +446,7 @@ export function place(nodes: ParkNode[], edges: ParkEdge[], available: number): 
       continue;
     }
     // Lines that go against the flow run a little lower, so they do not hide the ones that go with it.
-    const shift = edge.kind === 'supervise' ? 0 : edge.back ? 9 : -4;
+    const shift = edge.kind === 'supervise' || edge.kind === 'http' ? 0 : edge.back ? 9 : -4;
     const leftToRight = from.x < to.x;
     const x1 = leftToRight ? from.x + nodeWidth : from.x;
     const x2 = leftToRight ? to.x - 5 : to.x + nodeWidth + 5;

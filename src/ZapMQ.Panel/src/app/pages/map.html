@@ -30,6 +30,9 @@
           <span class="pill warn" matTooltip="Sem o Worker Control, o mapa não sabe quais processos deveriam estar no ar"><mat-icon svgIcon="cloud_off" /> Worker Control sem resposta</span>
         }
         <span class="spacer"></span>
+        @if (park()?.columns?.[0]?.column === -1) {
+          <span class="legend"><i class="line http"></i> encaminha</span>
+        }
         <span class="legend"><i class="line publish"></i> publica</span>
         <span class="legend"><i class="line consume"></i> consome</span>
         <span class="legend"><i class="line supervise"></i> supervisiona</span>
@@ -46,6 +49,7 @@
               <svg [attr.width]="park.width" [attr.height]="park.height" [attr.viewBox]="'0 0 ' + park.width + ' ' + park.height" aria-hidden="true">
                 <defs>
                   <marker id="head-publish" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="head publish" d="M0,0 L10,5 L0,10 z" /></marker>
+                  <marker id="head-http" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="head http" d="M0,0 L10,5 L0,10 z" /></marker>
                   <marker id="head-consume" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="head consume" d="M0,0 L10,5 L0,10 z" /></marker>
                 </defs>
                 @for (edge of park.edges; track edge.id) {
@@ -125,6 +129,28 @@
           </dl>
         }
 
+        @if (node.http; as http) {
+          <h3>{{ node.kind === 'proxy' ? 'Encaminhou no período' : 'Recebe do proxy' }}</h3>
+          <dl>
+            <div><dt>Requisições</dt><dd>{{ http.count | num }}</dd></div>
+            <div><dt>Por minuto</dt><dd>{{ rate(http.perMinute).replace('/min', '') }}</dd></div>
+            <div><dt>Erros do servidor</dt><dd>{{ share(http.serverErrors, http.count) }}</dd></div>
+            <div><dt>P95</dt><dd>{{ ms(http.p95) }}</dd></div>
+          </dl>
+          @if (node.kind !== 'proxy') {
+            <p class="muted note">Como <span class="mono">{{ http.apps.join(', ') }}</span>, em <span class="mono">{{ http.upstreams.join(', ') }}</span>.</p>
+          }
+        }
+
+        @if (node.services?.length) {
+          <p class="muted note">
+            É o serviço do Windows
+            @for (service of node.services; track service.Name) {
+              <strong>{{ service.DisplayName || service.Name }}</strong>{{ $last ? '' : ', ' }}
+            }.
+          </p>
+        }
+
         @if (node.kind !== 'queue' && node.groups.length && node.kind !== 'supervisor') {
           <dl>
             <div><dt>No ar</dt><dd>{{ up(node) | num }}</dd></div>
@@ -162,6 +188,18 @@
           @if (node.application.internalQueues) {
             <p class="muted note">Mais {{ node.application.internalQueues | num }} filas próprias (keep-alive, parada e trace), que não são desenhadas.</p>
           }
+        }
+
+        @if (lines().http.length) {
+          <h3>{{ node.kind === 'proxy' ? 'Encaminha para' : 'Recebe de' }}</h3>
+          <ul class="lines">
+            @for (line of lines().http; track line.edge.id) {
+              <li>
+                <button type="button" (click)="select(line.node)"><i class="line http"></i> <span class="truncate">{{ line.node.label }}</span></button>
+                <span class="muted num">{{ rate(line.edge.rate) }}</span>
+              </li>
+            }
+          </ul>
         }
 
         @if (lines().publish.length) {
@@ -203,6 +241,8 @@
         <footer>
           @if (node.queue) {
             <a mat-flat-button [routerLink]="['/filas', node.queue.name]"><mat-icon svgIcon="open_in_new" /> Abrir a fila</a>
+          } @else if (node.kind === 'proxy' || (node.http && !node.groups.length)) {
+            <a mat-flat-button routerLink="/trafego"><mat-icon svgIcon="open_in_new" /> Abrir o tráfego</a>
           } @else if (node.kind === 'supervisor' || node.groups.length) {
             <a mat-flat-button routerLink="/workers"><mat-icon svgIcon="open_in_new" /> Abrir no Worker Control</a>
           }

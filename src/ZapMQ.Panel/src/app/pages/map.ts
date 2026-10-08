@@ -8,11 +8,11 @@ import { RouterLink } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 import { Api } from '../core/api';
 import { AgoPipe, NumPipe } from '../core/format';
-import { ParkMap, WorkerControlStatus } from '../core/models';
+import { ParkMap, TrafficUpstreams, WorkerControlStatus } from '../core/models';
 import { Column, NODE_HEIGHT, ParkEdge, ParkNode, assemble, linkKey, place } from '../core/park';
 
-const TITLES: Record<Column, string> = { 0: 'Publicam', 1: 'Filas', 2: 'Consomem', 3: 'Supervisão' };
-const ICONS = { application: 'deployed_code', queue: 'stacks', supervisor: 'precision_manufacturing', group: 'memory' } as const;
+const TITLES: Record<Column, string> = { [-1]: 'Entrada', 0: 'Publicam', 1: 'Filas', 2: 'Consomem', 3: 'Supervisão' };
+const ICONS = { application: 'deployed_code', queue: 'stacks', supervisor: 'precision_manufacturing', group: 'memory', proxy: 'dns' } as const;
 const RATE = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 const RATE_WHOLE = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 
@@ -48,6 +48,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly minutes = signal(60);
   protected readonly map = signal<ParkMap | null>(null);
   protected readonly status = signal<WorkerControlStatus | null>(null);
+  /** Where the reverse proxy sends its requests; null while the Worker Control does not say. */
+  private readonly upstreams = signal<TrafficUpstreams | null>(null);
   protected readonly problem = signal('');
   protected readonly selectedId = signal<string | null>(null);
   private readonly available = signal(0);
@@ -59,7 +61,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     if (!map || !this.available()) {
       return null;
     }
-    const { nodes, edges } = assemble(map, this.status(), this.rates(), this.waiting(), Date.now());
+    const { nodes, edges } = assemble(map, this.status(), this.rates(), this.waiting(), Date.now(), this.upstreams());
     return place(nodes, edges, this.available());
   });
 
@@ -105,7 +107,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const selected = this.selected();
     const park = this.park();
     if (!selected || !park) {
-      return { publish: [], consume: [], supervise: [] };
+      return { publish: [], consume: [], supervise: [], http: [] };
     }
     const label = new Map(park.nodes.map((node) => [node.id, node]));
     const other = (edge: ParkEdge) => label.get(edge.from === selected.id ? edge.to : edge.from)!;
@@ -115,7 +117,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         .filter((edge) => edge.kind === kind)
         .map((edge) => ({ edge, node: other(edge) }))
         .sort((a, b) => a.node.label.localeCompare(b.node.label, 'pt-BR'));
-    return { publish: list('publish'), consume: list('consume'), supervise: list('supervise') };
+    return { publish: list('publish'), consume: list('consume'), supervise: list('supervise'), http: list('http') };
   });
 
   ngOnInit(): void {
@@ -152,7 +154,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   /** Thicker the more goes through. */
   protected stroke(edge: ParkEdge): number {
-    return edge.kind === 'supervise' ? 1 : 1.25 + Math.min(2.75, Math.log10(1 + edge.rate) * 0.9);
+    return edge.kind === 'supervise' ? 1 : edge.kind === 'http' ? 1.25 + Math.min(2.75, Math.log10(1 + edge.rate) * 1.2) : 1.25 + Math.min(2.75, Math.log10(1 + edge.rate) * 0.9);
   }
 
   protected dimmed(id: string): boolean {
@@ -174,6 +176,14 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.refresh();
   }
 
+  protected ms(value: number | null): string {
+    return value === null ? '—' : value >= 1000 ? `${RATE.format(value / 1000)} s` : `${Math.round(value)} ms`;
+  }
+
+  protected share(part: number, whole: number): string {
+    return whole ? RATE.format((part / whole) * 100) + '%' : '0%';
+  }
+
   protected up(node: ParkNode): number {
     return node.groups.reduce((total, group) => total + group.Workers.filter((worker) => worker.State === 'Up').length, 0);
   }
@@ -183,10 +193,12 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       map: this.api.map(this.minutes()),
       // The map is still worth seeing without the Worker Control.
       status: this.api.workerStatus().pipe(catchError(() => of(null))),
+      upstreams: this.api.trafficUpstreams(this.minutes()).pipe(catchError(() => of(null))),
     }).subscribe({
-      next: ({ map, status }) => {
+      next: ({ map, status, upstreams }) => {
         this.measure(map);
         this.status.set(status);
+        this.upstreams.set(upstreams);
         this.map.set(map);
         this.problem.set('');
       },

@@ -257,6 +257,10 @@ public static class PanelEndpoints
                 request["Limit"] = Math.Clamp(limit ?? 100, 1, 500);
             }));
 
+        // Where the proxy sent the requests, and which processes are behind each address.
+        workers.MapGet("/traffic/upstreams", (int? minutes, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "TrafficUpstreams", request => request["Minutes"] = Math.Clamp(minutes ?? 60, 1, 60 * 24 * 366)));
+
         // The screens the requests came from; "names" asks how much the screens under each name were used.
         workers.MapGet("/traffic/pages", (int? minutes, string? host, string? search, int? limit, string? names, WorkerControlClient client, HttpContext context) =>
             Forward(client, context, "TrafficPages", request =>

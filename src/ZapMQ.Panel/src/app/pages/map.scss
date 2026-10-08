@@ -2,6 +2,7 @@
   --map-publish: var(--mat-sys-primary);
   --map-consume: var(--zap-ok);
   --map-supervise: var(--mat-sys-outline);
+  --map-http: var(--zap-info);
 }
 
 .head {
@@ -51,6 +52,7 @@ i.line {
   flex: none;
 
   &.consume { border-color: var(--map-consume); }
+  &.http { border-color: var(--map-http); }
   &.supervise { border-color: var(--map-supervise); border-top-style: dashed; }
 }
 
@@ -88,6 +90,7 @@ i.line {
   transition: opacity 0.2s;
 
   &.consume { stroke: var(--map-consume); }
+  &.http { stroke: var(--map-http); }
   &.supervise { stroke: var(--map-supervise); stroke-dasharray: 3 5; opacity: 0.45; }
   &.stale { stroke-dasharray: 2 6; opacity: 0.3; }
   &.active { opacity: 0.85; stroke-dasharray: 7 7; animation: flow 1s linear infinite; }
@@ -96,6 +99,7 @@ i.line {
 
 .head.publish { fill: var(--map-publish); }
 .head.consume { fill: var(--map-consume); }
+.head.http { fill: var(--map-http); }
 
 @keyframes flow {
   to { stroke-dashoffset: -14; }
@@ -135,6 +139,7 @@ i.line {
   &.queue { border-radius: 26px; padding-left: 8px; }
   &.queue .mark { border-radius: 50%; }
   &.supervisor { background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); }
+  &.proxy { background: var(--zap-info-container); border-color: color-mix(in srgb, var(--zap-info) 45%, transparent); }
 
   &:hover { border-color: var(--tone); transform: translateY(-1px); }
   &:focus-visible { outline: 2px solid var(--mat-sys-primary); outline-offset: 2px; }
