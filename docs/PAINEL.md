@@ -1,6 +1,6 @@
 # ZapMQ — Painel de administração
 
-Situação: aprovada em 2026-10-07. Etapas A e B implementadas.
+Situação: aprovada em 2026-10-07. Etapas A, B e C implementadas.
 Última revisão: 2026-10-08.
 
 Este documento especifica o painel web do ZapMQ (versão 2.2), que inclui a seção do Worker Control. Corresponde à fase 6 do [plano](PLANO-2.0.md) e à etapa 4 da [especificação do Worker Control 2.0](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md).
@@ -88,6 +88,8 @@ De onde vêm os dados:
 | Clientes v1 (Delphi, DLL antiga) | Só o endereço de rede e as filas que consultam ou em que publicam. Aparecem como "cliente v1" por endereço; um worker Delphi conhecido do Worker Control aparece pelo grupo dele |
 
 Filas de uso interno (keep-alive, safe stop e trace de cada processo) são recolhidas dentro do nó da aplicação, para o desenho mostrar as filas de trabalho.
+
+Como ficou: o desenho é em colunas (quem publica, filas, quem consome, supervisão), feito com HTML e SVG próprios em vez do ECharts, que continua nos gráficos; assim os nós são botões comuns, com o tema e a acessibilidade do resto do painel. A vazão de cada ligação é medida pelo navegador entre uma leitura e outra (janela de um minuto). O servidor lembra quem publicou em cada fila por até 24 horas; a tela escolhe olhar 15 minutos, 1 hora ou 24 horas. Ao clicar, abre-se um resumo com as ligações do nó e o atalho para a tela dele. Uma fila é dita "acumulando" quando passa 30 segundos com mensagens esperando sem diminuir.
 
 ### 4.3 Filas
 

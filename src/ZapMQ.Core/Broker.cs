@@ -313,6 +313,11 @@ public sealed class Broker
     /// <summary>
     /// Who has published to each queue, asked it for messages or is bound to it, lately.
     /// </summary>
+    /// <summary>
+    /// The longest window <see cref="GetActivity"/> can answer for.
+    /// </summary>
+    public static TimeSpan ActivityMemory => MessageQueue.PartyMemory;
+
     public IReadOnlyList<QueueActivity> GetActivity(TimeSpan window)
     {
         var since = _time.GetUtcNow() - window;

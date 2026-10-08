@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
-  HealthSample, WorkerConfig, WorkerControlStatus, WorkerEvent,
+  HealthSample, ParkMap, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
 
 /**
@@ -85,6 +85,10 @@ export class Api {
   connections(): Observable<{ v2: Connection[]; v1: V1Client[] }> {
     return this.http.get<{ v2: Connection[]; v1: V1Client[] }>('api/connections');
   }
+  map(minutes: number): Observable<ParkMap> {
+    return this.http.get<ParkMap>('api/map', { params: { minutes } });
+  }
+
   // ── Worker Control ───────────────────────────────────────────────────────
 
   workerStatus(): Observable<WorkerControlStatus> {

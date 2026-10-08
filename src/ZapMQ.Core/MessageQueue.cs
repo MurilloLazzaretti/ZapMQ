@@ -47,6 +47,13 @@ internal sealed class MessageQueue(string name, TimeProvider time, QueueSettings
     private long _published, _delivered, _confirmed, _responded, _redelivered, _expired, _notConsumed, _unconfirmed, _dropped, _purged;
     // Who has been publishing here and who has been asking for messages (the 1.x way), with the
     // last time and how often. Consumers that get messages pushed are in _consumers already.
+    /// <summary>
+    /// For how long the queue remembers who published in it and who asked it for messages.
+    /// </summary>
+    public static readonly TimeSpan PartyMemory = TimeSpan.FromHours(24);
+
+    private const int PartiesBeforeForgetting = 32;
+
     private readonly Dictionary<string, (DateTimeOffset Last, long Count)> _publishers = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (DateTimeOffset Last, long Count)> _askers = new(StringComparer.Ordinal);
 
@@ -441,15 +448,21 @@ internal sealed class MessageQueue(string name, TimeProvider time, QueueSettings
     {
         if (name is null)
             return;
-        who[name] = (time.GetUtcNow(), who.GetValueOrDefault(name).Count + 1);
+        var now = time.GetUtcNow();
+        who[name] = (now, who.GetValueOrDefault(name).Count + 1);
+
+        // Whoever asks chooses how far back to look, so nothing is forgotten on reading; only
+        // here, and only what is older than anybody may ask for.
+        if (who.Count > PartiesBeforeForgetting)
+            foreach (var old in who.Where(pair => pair.Value.Last < now - PartyMemory).Select(pair => pair.Key).ToList())
+                who.Remove(old);
     }
 
-    private static List<QueueParty> Recent(Dictionary<string, (DateTimeOffset Last, long Count)> who, DateTimeOffset since)
-    {
-        foreach (var old in who.Where(pair => pair.Value.Last < since).Select(pair => pair.Key).ToList())
-            who.Remove(old);
-        return who.Select(pair => new QueueParty(pair.Key, pair.Value.Last, pair.Value.Count)).OrderBy(party => party.Name, StringComparer.Ordinal).ToList();
-    }
+    private static List<QueueParty> Recent(Dictionary<string, (DateTimeOffset Last, long Count)> who, DateTimeOffset since) =>
+        who.Where(pair => pair.Value.Last >= since)
+            .Select(pair => new QueueParty(pair.Key, pair.Value.Last, pair.Value.Count))
+            .OrderBy(party => party.Name, StringComparer.Ordinal)
+            .ToList();
 
     private bool BuryIfDead(LinkedListNode<Entry> node)
     {

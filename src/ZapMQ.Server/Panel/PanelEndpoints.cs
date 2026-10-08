@@ -254,6 +254,11 @@ public static class PanelEndpoints
         workers.MapPost("/detach", (WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
             Forward(client, context, "DetachAndStop", null, loggers, "Worker Control: asked to stop leaving the workers running"));
 
+        // ── The map ─────────────────────────────────────────────────────────
+
+        api.MapGet("/map", (int? minutes, Broker broker, V2Connections connections) =>
+            Results.Json(ParkMap.Build(broker, connections, TimeSpan.FromMinutes(Math.Clamp(minutes ?? 60, 1, (int)Broker.ActivityMemory.TotalMinutes)))));
+
         // ── Who is connected ────────────────────────────────────────────────
 
         api.MapGet("/connections", (Broker broker, V2Connections connections) => Results.Json(new

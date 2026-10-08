@@ -255,3 +255,52 @@ export interface GroupConfig {
   Recycle?: { Time: string; Days?: string[] } | null;
   [other: string]: unknown;
 }
+
+// ── Map ────────────────────────────────────────────────────────────────────
+
+export interface MapInstance {
+  host: string;
+  pid: number;
+  connections: number;
+  busy: boolean;
+}
+
+export interface MapApplication {
+  id: string;
+  protocol: 'v1' | 'v2';
+  name: string;
+  lastSeen: string | null;
+  /** Queues of its own (keep-alive, safe stop, trace) that are not drawn. */
+  internalQueues: number;
+  instances: MapInstance[];
+}
+
+export interface MapQueue {
+  name: string;
+  /** False when the queue is only remembered by what was published in it. */
+  exists: boolean;
+  pending: number;
+  processing: number;
+  consumers: number;
+  paused: boolean;
+  published: number;
+  delivered: number;
+  deadLetters: number;
+}
+
+export interface MapLink {
+  application: string;
+  queue: string;
+  kind: 'publish' | 'consume';
+  count: number;
+  lastSeen: string | null;
+  /** Consuming over a connection that is open now. */
+  bound: boolean;
+}
+
+export interface ParkMap {
+  windowMinutes: number;
+  applications: MapApplication[];
+  queues: MapQueue[];
+  links: MapLink[];
+}

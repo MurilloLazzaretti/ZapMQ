@@ -9,6 +9,7 @@ export const routes: Routes = [
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),
     children: [
       { path: '', pathMatch: 'full', title: 'Visão geral · ZapMQ', loadComponent: () => import('./pages/overview').then((m) => m.OverviewPage) },
+      { path: 'mapa', title: 'Mapa · ZapMQ', loadComponent: () => import('./pages/map').then((m) => m.MapPage) },
       { path: 'filas', title: 'Filas · ZapMQ', loadComponent: () => import('./pages/queues').then((m) => m.QueuesPage) },
       { path: 'filas/:name', title: 'Fila · ZapMQ', loadComponent: () => import('./pages/queue-detail').then((m) => m.QueueDetailPage) },
       { path: 'mortas', title: 'Mensagens mortas · ZapMQ', loadComponent: () => import('./pages/dead-letters').then((m) => m.DeadLettersPage) },

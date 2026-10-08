@@ -136,6 +136,7 @@ A web application served by the service itself, on a port of its own (5680), beh
 | Screen | What is there |
 | ------ | ------------- |
 | Overview | Messages per second, pending, in processing, dead letters and connected applications, with charts of the last hour and of the last day |
+| Map | Everything that talks through the broker in one drawing: the applications that publish, the queues, the applications that consume and the Worker Control over what it keeps running. The lines show who publishes in and consumes from which queue and how much is going through; the colours, what is not as it should be (a queue with messages and nobody consuming, a queue piling up, dead letters, an application with processes missing, an unstable group). Queues that carry no work (the keep-alive, safe-stop and trace queues of each process) are left out |
 | Queues | Every queue with its counters, live. For each one: its definition (retention, redelivery, dead-letter limits), editable and kept across restarts; the pending messages, to read; who publishes and who consumes; pause, resume and empty |
 | Dead letters | What was not delivered or not confirmed, by queue and by reason: inspect, send back to the queue, discard |
 | Applications | Who is connected over v2, by application and process, and the addresses still talking 1.x |

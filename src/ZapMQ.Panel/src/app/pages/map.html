@@ -1,0 +1,244 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Mapa</h1>
+      <p class="muted">Quem publica em cada fila, quem consome, e como cada parte está agora.</p>
+    </div>
+    <span class="spacer"></span>
+    <mat-button-toggle-group [value]="minutes()" (change)="window($event.value)" hideSingleSelectionIndicator aria-label="Período considerado">
+      <mat-button-toggle [value]="15" matTooltip="Ligações com atividade nos últimos 15 minutos">15 min</mat-button-toggle>
+      <mat-button-toggle [value]="60" matTooltip="Ligações com atividade na última hora">1 h</mat-button-toggle>
+      <mat-button-toggle [value]="1440" matTooltip="Ligações com atividade nas últimas 24 horas">24 h</mat-button-toggle>
+    </mat-button-toggle-group>
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Sem resposta do ZapMQ</strong>
+      <span>{{ problem() }}</span>
+    </section>
+  }
+
+  <div class="layout">
+    <section class="panel drawing">
+      <div class="summary">
+        <span class="pill"><mat-icon svgIcon="deployed_code" /> {{ totals().applications | num }} aplicações · {{ totals().instances | num }} instâncias</span>
+        <span class="pill"><mat-icon svgIcon="stacks" /> {{ totals().queues | num }} filas</span>
+        <span class="pill"><mat-icon svgIcon="bolt" /> {{ rate(totals().perMinute) }}</span>
+        @if (!status()) {
+          <span class="pill warn" matTooltip="Sem o Worker Control, o mapa não sabe quais processos deveriam estar no ar"><mat-icon svgIcon="cloud_off" /> Worker Control sem resposta</span>
+        }
+        <span class="spacer"></span>
+        <span class="legend"><i class="line publish"></i> publica</span>
+        <span class="legend"><i class="line consume"></i> consome</span>
+        <span class="legend"><i class="line supervise"></i> supervisiona</span>
+      </div>
+
+      <div class="scroll" #canvas>
+        <div class="canvas" (click)="select(null)">
+          @if (park(); as park) {
+            <div class="stage" [style.width.px]="park.width" [style.height.px]="park.height">
+              @for (column of park.columns; track column.column) {
+                <span class="column" [style.left.px]="column.x" [style.width.px]="park.nodeWidth">{{ title(column.column) }}</span>
+              }
+
+              <svg [attr.width]="park.width" [attr.height]="park.height" [attr.viewBox]="'0 0 ' + park.width + ' ' + park.height" aria-hidden="true">
+                <defs>
+                  <marker id="head-publish" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="head publish" d="M0,0 L10,5 L0,10 z" /></marker>
+                  <marker id="head-consume" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="head consume" d="M0,0 L10,5 L0,10 z" /></marker>
+                </defs>
+                @for (edge of park.edges; track edge.id) {
+                  <path
+                    class="edge"
+                    [class]="'edge ' + edge.kind"
+                    [class.active]="edge.active"
+                    [class.stale]="edge.stale"
+                    [class.dim]="edgeDimmed(edge)"
+                    [attr.d]="edge.path"
+                    [attr.stroke-width]="stroke(edge)"
+                    [attr.marker-end]="edge.kind === 'supervise' ? null : 'url(#head-' + edge.kind + ')'"
+                  />
+                }
+              </svg>
+
+              @for (node of park.nodes; track node.id) {
+                <button
+                  type="button"
+                  class="node"
+                  [class]="'node ' + node.kind + ' ' + node.tone"
+                  [class.selected]="selectedId() === node.id"
+                  [class.dim]="dimmed(node.id)"
+                  [style.left.px]="node.x"
+                  [style.top.px]="node.y"
+                  [style.width.px]="park.nodeWidth"
+                  [style.height.px]="nodeHeight"
+                  [attr.aria-pressed]="selectedId() === node.id"
+                  [matTooltip]="node.reasons.join(' ')"
+                  (click)="select(node); $event.stopPropagation()"
+                >
+                  <span class="mark"><mat-icon [svgIcon]="icon(node)" /></span>
+                  <span class="text">
+                    <strong>{{ node.label }}</strong>
+                    <small>{{ node.detail }}</small>
+                  </span>
+                  @if (node.figure !== null) {
+                    <span class="figure">{{ node.figure | num: 'compact' }}</span>
+                  }
+                </button>
+              }
+            </div>
+
+            @if (!park.nodes.length) {
+              <div class="empty">
+                <mat-icon svgIcon="hub" />
+                <strong>Nada para desenhar ainda</strong>
+                <span>Assim que alguma aplicação se conectar ou publicar, ela aparece aqui.</span>
+              </div>
+            }
+          }
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel side" [class.picked]="selected() !== null">
+      @if (selected(); as node) {
+        <header>
+          <span class="mark" [class]="'mark ' + node.tone"><mat-icon [svgIcon]="icon(node)" /></span>
+          <div class="who">
+            <strong>{{ node.label }}</strong>
+            <span class="muted">{{ node.detail }}</span>
+          </div>
+          <button mat-icon-button (click)="select(null)" aria-label="Fechar"><mat-icon svgIcon="close" /></button>
+        </header>
+
+        @for (reason of node.reasons; track reason) {
+          <p class="reason" [class]="'reason ' + node.tone"><mat-icon svgIcon="warning" /> {{ reason }}</p>
+        }
+
+        @if (node.queue; as queue) {
+          <dl>
+            <div><dt>Pendentes</dt><dd>{{ queue.pending | num }}</dd></div>
+            <div><dt>Em processamento</dt><dd>{{ queue.processing | num }}</dd></div>
+            <div><dt>Consumidores</dt><dd>{{ queue.consumers | num }}</dd></div>
+            <div><dt>Mensagens mortas</dt><dd>{{ queue.deadLetters | num }}</dd></div>
+          </dl>
+        }
+
+        @if (node.kind !== 'queue' && node.groups.length && node.kind !== 'supervisor') {
+          <dl>
+            <div><dt>No ar</dt><dd>{{ up(node) | num }}</dd></div>
+            <div>
+              <dt>{{ node.groups.length === 1 ? 'Grupo' : 'Grupos' }}</dt>
+              <dd class="names">
+                @for (group of node.groups; track group.Name) {
+                  <span>{{ group.Name }}</span>
+                }
+              </dd>
+            </div>
+          </dl>
+        }
+
+        @if (node.kind === 'supervisor' && status(); as now) {
+          <dl>
+            <div><dt>Versão</dt><dd>{{ now.Version }}</dd></div>
+            <div><dt>Máquina</dt><dd>{{ now.Service.Machine }}</dd></div>
+            <div><dt>Grupos</dt><dd>{{ now.Groups.length | num }}</dd></div>
+            <div><dt>Mantém</dt><dd>{{ lines().supervise.length | num }}</dd></div>
+          </dl>
+        }
+
+        @if (node.application && node.kind !== 'supervisor' && node.application.instances.length) {
+          <h3>Instâncias</h3>
+          <ul class="instances">
+            @for (instance of node.application.instances; track instance.host + instance.pid) {
+              <li>
+                <span class="dot" [class.ok]="!instance.busy" [class.warn]="instance.busy" [matTooltip]="instance.busy ? 'Processando uma mensagem' : 'Livre'"></span>
+                <span class="mono">{{ instance.pid }}</span>
+                <span class="muted truncate">{{ instance.host }}</span>
+              </li>
+            }
+          </ul>
+          @if (node.application.internalQueues) {
+            <p class="muted note">Mais {{ node.application.internalQueues | num }} filas próprias (keep-alive, parada e trace), que não são desenhadas.</p>
+          }
+        }
+
+        @if (lines().publish.length) {
+          <h3>{{ node.kind === 'queue' ? 'Quem publica' : 'Publica em' }}</h3>
+          <ul class="lines">
+            @for (line of lines().publish; track line.edge.id) {
+              <li>
+                <button type="button" (click)="select(line.node)"><i class="line publish"></i> <span class="truncate">{{ line.node.label }}</span></button>
+                <span class="muted num" [matTooltip]="line.edge.link?.lastSeen ? 'Última vez ' + (line.edge.link?.lastSeen | ago) : ''">{{ rate(line.edge.rate) }}</span>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (lines().consume.length) {
+          <h3>{{ node.kind === 'queue' ? 'Quem consome' : 'Consome de' }}</h3>
+          <ul class="lines">
+            @for (line of lines().consume; track line.edge.id) {
+              <li>
+                <button type="button" (click)="select(line.node)"><i class="line consume"></i> <span class="truncate">{{ line.node.label }}</span></button>
+                <span class="muted num">{{ rate(line.edge.rate) }}</span>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (node.kind === 'supervisor' && lines().supervise.length) {
+          <h3>Mantém no ar</h3>
+          <ul class="lines">
+            @for (line of lines().supervise; track line.edge.id) {
+              <li>
+                <button type="button" (click)="select(line.node)"><span class="dot" [class]="'dot ' + line.node.tone"></span> <span class="truncate">{{ line.node.label }}</span></button>
+                <span class="muted num">{{ line.node.detail }}</span>
+              </li>
+            }
+          </ul>
+        }
+
+        <footer>
+          @if (node.queue) {
+            <a mat-flat-button [routerLink]="['/filas', node.queue.name]"><mat-icon svgIcon="open_in_new" /> Abrir a fila</a>
+          } @else if (node.kind === 'supervisor' || node.groups.length) {
+            <a mat-flat-button routerLink="/workers"><mat-icon svgIcon="open_in_new" /> Abrir no Worker Control</a>
+          }
+          @if (node.application && node.kind !== 'supervisor') {
+            <a mat-button routerLink="/aplicacoes">Ver conexões</a>
+          }
+        </footer>
+      } @else {
+        <header>
+          <div class="who">
+            <strong>Atenção</strong>
+            <span class="muted">O que não está como deveria</span>
+          </div>
+        </header>
+        @if (attention().length) {
+          <ul class="lines attention">
+            @for (node of attention(); track node.id) {
+              <li>
+                <button type="button" (click)="select(node)">
+                  <span class="dot" [class]="'dot ' + node.tone"></span>
+                  <span class="stack">
+                    <span class="truncate">{{ node.label }}</span>
+                    <small class="muted">{{ node.reasons[0] }}</small>
+                  </span>
+                </button>
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="calm">
+            <mat-icon svgIcon="verified" />
+            <span>Tudo como esperado.</span>
+          </div>
+        }
+        <p class="muted note">Toque em uma aplicação ou fila para ver com quem ela conversa.</p>
+      }
+    </aside>
+  </div>
+</div>
