@@ -332,7 +332,21 @@ function addProxy(nodes: ParkNode[], edges: ParkEdge[], traffic: TrafficUpstream
       const id = name ? 'v2:' + name : 'http:' + upstream.App;
       node = byId.get(id) ?? [...byId.values()].find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
       if (!node) {
-        node = { id, kind: 'application', column: 0, label: name ?? upstream.App, detail: name ? 'sem conexão com o ZapMQ' : 'processo não identificado', tone: 'neutral', reasons: [], figure: null, groups: [], x: 0, y: 0 };
+        // A site of the web server with nothing running from its folder: the application was put to rest for want of requests.
+        const resting = !name && !!upstream.Site;
+        node = {
+          id,
+          kind: 'application',
+          column: 0,
+          label: name ?? upstream.App,
+          detail: name ? 'sem conexão com o ZapMQ' : resting ? 'sem processo no momento' : 'processo não identificado',
+          tone: resting ? 'off' : 'neutral',
+          reasons: resting ? [`O site ${upstream.Site} não tem nenhum processo rodando agora: o servidor web encerra a aplicação quando ela fica sem requisições e a inicia de novo na próxima.`] : [],
+          figure: null,
+          groups: [],
+          x: 0,
+          y: 0,
+        };
         nodes.push(node);
         byId.set(id, node);
       }
