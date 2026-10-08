@@ -89,6 +89,12 @@ export class ServicesPage implements OnInit, OnDestroy {
     return path ? path.split(/[\\/]/).pop()! : '';
   }
 
+  /** What the service runs, when it is only what starts the program that does the work. */
+  protected hosted(service: MonitoredService): string {
+    const names = [...new Set(service.Children ?? [])];
+    return names.length ? ' → ' + names.join(', ') : '';
+  }
+
   protected async act(service: MonitoredService, action: 'start' | 'stop' | 'restart'): Promise<void> {
     const name = service.DisplayName || service.Name;
     if (action !== 'start') {

@@ -200,6 +200,59 @@ export interface WorkerControlStatus {
   Services?: MonitoredService[];
 }
 
+// ── Web application ────────────────────────────────────────────────────────
+
+export interface ModuleVersion {
+  Version: string | null;
+  Date: string | null;
+  Descriptions: string[];
+}
+
+export interface WebModule {
+  Name: string;
+  Entry: string;
+  /** Incomplete: listed by the manifest and not on disk. */
+  State: 'Up' | 'Down' | 'Incomplete';
+  /** Null when nothing was asked, for want of an address. */
+  Online: boolean | null;
+  Status: number | null;
+  Problem: string | null;
+  /** How the module calls itself. */
+  Title: string | null;
+  Build: number | null;
+  PublishedAt: string | null;
+  Files: number;
+  Bytes: number;
+  /** The newest first, as the module tells them. */
+  Versions: ModuleVersion[];
+}
+
+export interface WebApplication {
+  Name: string;
+  Root: string;
+  BaseUrl: string | null;
+  Problem: string | null;
+  CheckedAt: string;
+  /** When the application around the modules was last published. */
+  ShellPublishedAt: string | null;
+  /** Folders beside the modules that the manifest does not list. */
+  Orphans: string[];
+  Modules: WebModule[];
+}
+
+export interface WebPublication {
+  At: string;
+  App: string;
+  /** A module, "(shell)" for the application around them, or "*" for the first look. */
+  Module: string;
+  Kind: 'first-seen' | 'published' | 'new' | 'removed';
+  FromVersion: string | null;
+  ToVersion: string | null;
+  FromBuild: number | null;
+  ToBuild: number | null;
+  Count: number;
+}
+
 export type ServiceState = 'Missing' | 'Stopped' | 'Starting' | 'Stopping' | 'Running' | 'Paused';
 
 export interface MonitoredService {
@@ -223,6 +276,8 @@ export interface MonitoredService {
   Unstable: boolean;
   /** It is the service of the Worker Control itself. */
   IsSupervisor: boolean;
+  /** Names of the programs the service started, which are measured with it. */
+  Children?: string[] | null;
   HasLog: boolean;
   Check: { Target: string; Ok: boolean | null; Detail: string | null; At: string | null } | null;
 }

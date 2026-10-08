@@ -231,6 +231,9 @@ public static class PanelEndpoints
         workers.MapPost("/processes/{pid:int}/restart", (int pid, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
             Forward(client, context, "RestartWorker", request => request["ProcessId"] = pid, loggers, $"Worker Control: restart of worker {pid}"));
 
+        // The micro frontends published on the machine of the Worker Control.
+        workers.MapGet("/frontends", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Frontends"));
+
         // The Windows services the Worker Control watches without having started them.
         workers.MapGet("/services/installed", (WorkerControlClient client, HttpContext context) => Forward(client, context, "ListServices"));
 

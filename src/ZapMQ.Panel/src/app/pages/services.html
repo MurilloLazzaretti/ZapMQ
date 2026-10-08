@@ -41,7 +41,7 @@
               <span class="mark" [class]="'mark ' + state(service).tone"><mat-icon svgIcon="settings_applications" /></span>
               <div class="who">
                 <strong class="truncate">{{ service.DisplayName || service.Name }}</strong>
-                <span class="muted truncate" [matTooltip]="service.ExecutablePath ?? ''">{{ service.Name }}{{ service.ExecutablePath ? ' · ' + executable(service.ExecutablePath) : '' }}</span>
+                <span class="muted truncate" [matTooltip]="service.ExecutablePath ?? ''">{{ service.Name }}{{ service.ExecutablePath ? ' · ' + executable(service.ExecutablePath) : '' }}{{ hosted(service) }}</span>
               </div>
               <button mat-icon-button [matMenuTriggerFor]="menu" [attr.aria-label]="'Mais sobre ' + service.Name"><mat-icon svgIcon="more_vert" /></button>
               <mat-menu #menu="matMenu" xPosition="before">

@@ -1,0 +1,157 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Aplicação web</h1>
+      @if (application(); as app) {
+        <p class="muted">
+          {{ app.BaseUrl || app.Root }} · {{ totals().all }} módulos
+          @if (totals().latest) {
+            · última publicação {{ totals().latest | ago }}
+          }
+        </p>
+      } @else {
+        <p class="muted">Os módulos publicados, a versão de cada um e se estão respondendo.</p>
+      }
+    </div>
+    <span class="spacer"></span>
+    @if ((applications()?.length ?? 0) > 1) {
+      <mat-button-toggle-group [value]="application()?.Name" (change)="chosen.set($event.value)" hideSingleSelectionIndicator aria-label="Aplicação">
+        @for (item of applications(); track item.Name) {
+          <mat-button-toggle [value]="item.Name">{{ item.Name }}</mat-button-toggle>
+        }
+      </mat-button-toggle-group>
+    }
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Sem resposta do Worker Control</strong>
+      <span>{{ problem() }}</span>
+      <span>Esta tela tenta de novo sozinha.</span>
+    </section>
+  } @else if (outdated()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="info" />
+      <strong>O Worker Control instalado é anterior a este recurso</strong>
+      <span>O acompanhamento da aplicação web existe a partir da versão 2.3 dele.</span>
+    </section>
+  } @else if (applications() && !applications()!.length) {
+    <section class="panel empty">
+      <mat-icon svgIcon="web" />
+      <strong>Nenhuma aplicação web configurada</strong>
+      <span>Informe, na seção <code>Frontends</code> do <code>ConfigWorkers.json</code>, a pasta de onde a aplicação é servida e o endereço dela.</span>
+    </section>
+  }
+
+  @if (application(); as app) {
+    @if (app.Problem) {
+      <div class="notice danger" role="alert"><mat-icon svgIcon="error" /><div><strong>{{ app.Name }}:</strong> {{ app.Problem }}</div></div>
+    }
+
+    <section class="grid stats">
+      <zap-stat label="No ar" icon="check_circle" [tone]="totals().up === totals().all ? 'ok' : 'danger'" [value]="totals().up | num" [unit]="'de ' + totals().all"
+        [hint]="totals().unchecked ? 'sem endereço para conferir' : 'módulos respondendo'" />
+      <zap-stat label="Pedem atenção" icon="warning" [tone]="totals().attention ? 'danger' : 'ok'" [value]="totals().attention | num" [hint]="totals().attention ? 'fora do ar, incompleto ou sobrando' : 'nenhum'" />
+      <zap-stat label="Publicações" icon="publish" tone="info" [value]="totals().published | num" hint="nos últimos 7 dias" />
+      <zap-stat label="Casca da aplicação" icon="web" tone="neutral" [value]="app.ShellPublishedAt ? (app.ShellPublishedAt | ago) : '—'" hint="última publicação" />
+    </section>
+
+    @if (app.Orphans.length) {
+      <div class="notice warn" role="status">
+        <mat-icon svgIcon="info" />
+        <div>
+          {{ app.Orphans.length === 1 ? 'Há uma pasta de módulo que o manifesto não lista' : 'Há pastas de módulo que o manifesto não lista' }}:
+          <strong class="mono">{{ app.Orphans.join(', ') }}</strong>. Ninguém consegue abrir {{ app.Orphans.length === 1 ? 'esse módulo' : 'esses módulos' }}.
+        </div>
+      </div>
+    }
+
+    <div class="tools">
+      <label class="search">
+        <mat-icon svgIcon="search" />
+        <input type="search" placeholder="Buscar módulo" [ngModel]="filter()" (ngModelChange)="filter.set($event)" aria-label="Buscar módulo" />
+      </label>
+      <span class="spacer"></span>
+      <mat-button-toggle-group [value]="order()" (change)="order.set($event.value)" hideSingleSelectionIndicator aria-label="Ordem">
+        <mat-button-toggle value="name">Nome</mat-button-toggle>
+        <mat-button-toggle value="published">Publicação</mat-button-toggle>
+      </mat-button-toggle-group>
+    </div>
+
+    <section class="cards">
+      @for (module of modules(); track module.Name) {
+        <button type="button" class="panel module" [class.wrong]="module.State !== 'Up'" (click)="open(module)">
+          <span class="top">
+            <span class="mark" [class]="'mark ' + state(module).tone"><mat-icon svgIcon="widgets" /></span>
+            <span class="who">
+              <strong class="truncate">{{ module.Title || module.Name }}</strong>
+              <span class="muted mono truncate">{{ module.Name }}</span>
+            </span>
+            <span class="pill" [class]="'pill ' + state(module).tone" [matTooltip]="why(module) || (module.Online === null ? 'Presente no disco; sem endereço configurado para conferir se responde' : 'Respondendo pelo servidor web')">
+              <span class="dot" [class]="'dot ' + state(module).tone"></span> {{ state(module).label }}
+            </span>
+          </span>
+
+          <span class="version">
+            <strong [class.none]="!module.Versions[0]?.Version">{{ version(module) }}</strong>
+            @if (module.Build !== null) {
+              <span class="muted">build {{ module.Build }}</span>
+            }
+          </span>
+
+          <span class="published muted">
+            <mat-icon svgIcon="schedule" />
+            @if (module.PublishedAt) {
+              publicado {{ module.PublishedAt | ago }} · {{ module.PublishedAt | when }}
+            } @else {
+              não está no disco
+            }
+          </span>
+
+          @if (module.Versions[0]?.Descriptions?.length) {
+            <span class="changes">
+              @for (description of module.Versions[0].Descriptions.slice(0, 2); track $index) {
+                <span>{{ description }}</span>
+              }
+              @if (module.Versions[0].Descriptions.length > 2) {
+                <span class="muted">e mais {{ module.Versions[0].Descriptions.length - 2 }}</span>
+              }
+            </span>
+          }
+        </button>
+      } @empty {
+        @if (!app.Problem) {
+          <section class="panel empty"><strong>Nenhum módulo com esse nome</strong></section>
+        }
+      }
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Publicações</h2>
+        <span class="hint">o que mudou no disco desde que o painel passou a olhar</span>
+      </div>
+      @if (timeline().length) {
+        <div class="table-wrap">
+          <table class="data stack">
+            <thead>
+              <tr><th>Quando</th><th>O quê</th><th>Mudança</th></tr>
+            </thead>
+            <tbody>
+              @for (publication of timeline(); track publication.At + publication.Module) {
+                <tr>
+                  <td class="nowrap num" data-label="Quando">{{ publication.At | when }}</td>
+                  <td data-label="O quê"><strong>{{ subject(publication) }}</strong></td>
+                  <td class="wide" data-label="Mudança">{{ describe(publication) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="empty"><span>Nenhuma publicação vista ainda.</span></div>
+      }
+    </section>
+  }
+</div>

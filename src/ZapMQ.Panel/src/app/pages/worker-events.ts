@@ -34,6 +34,9 @@ export const KINDS: Record<string, { label: string; tone: string }> = {
   ScaleChanged: { label: 'Escala pela fila', tone: 'primary' },
   RecycleStarted: { label: 'Substituição iniciada', tone: 'info' },
   RecycleFinished: { label: 'Substituição concluída', tone: 'info' },
+  FrontendPublished: { label: 'Publicação', tone: 'primary' },
+  FrontendDown: { label: 'Módulo fora do ar', tone: 'danger' },
+  FrontendUp: { label: 'Módulo voltou', tone: 'ok' },
   MonitoredStarted: { label: 'Serviço rodando', tone: 'ok' },
   MonitoredStopped: { label: 'Serviço parou', tone: '' },
   MonitoredCrashed: { label: 'Serviço caiu', tone: 'danger' },
@@ -171,7 +174,7 @@ export class WorkerEventsPage implements OnInit, OnDestroy {
 
   /** A group as it is; a service without the mark that tells it from a group. */
   protected origin(group: string | null): string {
-    return !group ? '—' : group.startsWith('service:') ? group.slice(8) + ' (serviço)' : group;
+    return !group ? '—' : group.startsWith('service:') ? group.slice(8) + ' (serviço)' : group.startsWith('frontend:') ? group.slice(9) + ' (web)' : group;
   }
 
   protected describe(event: WorkerEvent) {

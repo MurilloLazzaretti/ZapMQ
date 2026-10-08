@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ZapMQ</AssemblyName>
-    <Version>2.2.5</Version>
+    <Version>2.2.6</Version>
     <!-- The service is not hosted in IIS and serves no static files. -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>

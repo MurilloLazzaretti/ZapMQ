@@ -1,6 +1,6 @@
 # ZapMQ — Monitoramento do ambiente
 
-Situação: aprovada em 2026-10-08. Etapa 1 implementada.
+Situação: aprovada em 2026-10-08. Etapas 1 e 3 implementadas; a 2 foi adiada.
 Última revisão: 2026-10-08.
 
 Este documento especifica três recursos novos do painel, que vão além da mensageria: serviços Windows, tráfego HTTP medido pelo proxy reverso e micro frontends. Continua o [painel](PAINEL.md) e a [especificação do Worker Control](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md).
@@ -61,7 +61,7 @@ Não se digita nome de serviço. O agente lista os serviços instalados e o pain
 |---|---|---|
 | Estado | Estado no gerenciador de serviços (rodando, parado, iniciando, parando) e tipo de início | — |
 | Tempo no ar | Horário de início do processo do serviço | — |
-| Saúde | Processador, memória, threads e handles do processo, com histórico e gráfico | Diz se está vivo e quanto consome, não se está travado por dentro |
+| Saúde | Processador, memória, threads e handles do processo, com histórico e gráfico. Os processos que o serviço iniciou são somados a ele: um serviço instalado por um programa que só inicia outro (um "wrapper") é medido pelo que roda de fato | Diz se está vivo e quanto consome, não se está travado por dentro |
 | Verificação | Opcional, por serviço: uma porta TCP que precisa aceitar conexão, ou uma URL que precisa responder 2xx | Só o que o serviço expõe |
 | Iniciar, parar, reiniciar | Pelo gerenciador de serviços, com confirmação; quem fez fica no histórico | Parar espera até `StopTimeoutMs`; depois disso informa que não parou, e não encerra à força. Parar um serviço para também os que dependem dele, como faz o Windows |
 | Queda | Evento no histórico quando o serviço para sem ter sido pedido. É queda quando o Windows registra um código de saída diferente de zero; parada limpa feita por fora do painel é registrada como parada | Um serviço que cai devolvendo código zero é visto como parada limpa |
@@ -125,6 +125,10 @@ De arquivos, na pasta em que o proxy serve o frontend (`Frontends[].Root`):
 - o **manifesto** dos módulos (`Manifest`, por exemplo `assets/mf.manifest.json`): um objeto `nome → caminho do ponto de entrada`;
 - em cada módulo, o **arquivo de versão** (`VersionFile`, por exemplo `version.json`). Dele o agente lê, quando existirem, `nome`, `build` e a lista `versions` com `version`, `date` e `descriptions`; a versão atual é a primeira da lista. Outros formatos podem ser mapeados depois; sem arquivo de versão, o módulo aparece com a data de publicação apenas.
 
+No painel a tela se chama **Aplicação web**, e os cartões dela são os módulos.
+
+O endereço usado para conferir se um módulo responde é `BaseUrl`. Quando o agente está na mesma máquina do proxy e o nome do site não se resolve dali, usa-se `BaseUrl` com o endereço da máquina e `Host` com o nome do site.
+
 ### 6.2 O que se vê
 
 Por módulo:
@@ -134,13 +138,13 @@ Por módulo:
 | Versão, build, data e o que mudou | Arquivo de versão |
 | Publicado em | Data do ponto de entrada no disco |
 | No ar | O agente pede o ponto de entrada pelo proxy (`Frontends[].BaseUrl`) e espera 200. Verificado a cada minuto |
-| Íntegro | O manifesto lista o módulo e a pasta dele existe, com o ponto de entrada; pasta sem entrada no manifesto também é apontada |
+| Íntegro | O manifesto lista o módulo e a pasta dele existe, com o ponto de entrada (senão o módulo aparece como incompleto); pasta sem entrada no manifesto também é apontada |
 | Uso | Requisições e endereços distintos do módulo, do tráfego (seção 5) |
 | Arquivos pedidos que não existem | 404 em arquivos do módulo: costuma ser navegador com versão antiga em cache |
 
 E, para o conjunto:
 
-- **Linha do tempo de publicações.** O agente percebe quando o ponto de entrada ou o arquivo de versão de um módulo muda e registra data, versão e build. Guardado como evento, no histórico.
+- **Linha do tempo de publicações.** O agente percebe quando o ponto de entrada de um módulo muda e registra data, versão e build anteriores e novos; também módulo que entra ou sai do manifesto, e a publicação da aplicação em volta dos módulos (o `index.html` da raiz). A primeira leitura é uma entrada só, não uma publicação por módulo. Guardado em `frontends.json`, ao lado da configuração (as últimas 300), e como evento no histórico. Publicar sem mudar a versão é comum e não é tratado como problema: o cartão mostra a data real da publicação ao lado da versão.
 - **Publicação marcada no tráfego.** Os gráficos da tela de tráfego mostram o instante de cada publicação; erro que sobe depois de publicar aparece ao lado da causa.
 
 Saber qual versão cada usuário tem aberta exige que o frontend informe, o que é mudança nele. Fica fora desta especificação.
@@ -208,6 +212,7 @@ Chaves novas no `ConfigWorkers.json`, todas opcionais. Sem elas o agente faz o q
       "Name": "Aplicação",
       "Root": "D:\\www\\app",
       "BaseUrl": "http://app.exemplo",
+      "Host": "",
       "Manifest": "assets/mf.manifest.json",
       "VersionFile": "version.json"
     }
