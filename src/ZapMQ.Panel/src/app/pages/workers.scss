@@ -86,3 +86,5 @@
   // Processor and keep-alive stay in the health dialog; memory is what tells the most at a glance.
   .workers .metric:nth-of-type(4), .workers .metric:nth-of-type(6) { display: none; }
 }
+
+.hidden { visibility: hidden; }

@@ -82,9 +82,11 @@ public class TraceTests(ServerFixture server) : IClassFixture<ServerFixture>
             };
         });
 
-    private async Task<Watcher> Watch(int pid)
+    private Task<Watcher> Watch(int pid) => Watch($"api/trace/{pid}");
+
+    private async Task<Watcher> Watch(string path)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, $"api/trace/{pid}");
+        var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         var response = await server.Admin.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
@@ -359,5 +361,50 @@ public class TraceTests(ServerFixture server) : IClassFixture<ServerFixture>
         {
             hub.RenewEvery = before;
         }
+    }
+
+    [Fact]
+    public async Task Several_processes_are_followed_over_one_request_each_event_saying_whose_it_is()
+    {
+        var (one, two, gone) = (Pid(), Pid(), Pid());
+        var (first, _) = await Worker(one);
+        await using var __ = first;
+        var (second, asked) = await Worker(two);
+        await using var ___ = second;
+        var watcher = await Watch($"api/trace?pids={one},{two},{gone}");
+
+        var states = new Dictionary<int, string>();
+        while (states.Count(pair => pair.Value != "starting") < 3)
+        {
+            var state = await watcher.NextAsync("state");
+            states[(int)state["pid"]!] = (string)state["state"]!;
+        }
+        Assert.Equal("on", states[one]);
+        Assert.Equal("on", states[two]);
+        Assert.Equal("unreachable", states[gone]);
+
+        await Send(second, two, "from the second");
+        var lines = await watcher.NextAsync("lines");
+        Assert.Equal(two, (int)lines["pid"]!);
+        Assert.Equal("from the second", (string)lines["lines"]![0]!["text"]!);
+
+        await Send(first, one, "from the first");
+        lines = await watcher.NextAsync("lines");
+        Assert.Equal(one, (int)lines["pid"]!);
+
+        // Leaving turns all of them off.
+        watcher.Dispose();
+        await Eventually(() => { lock (asked) return asked.Any(request => (string)request["message"]! == "stop zapmq trace"); });
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("12,-3")]
+    public async Task Process_ids_that_make_no_sense_are_refused(string pids)
+    {
+        var response = await server.Admin.GetAsync("api/trace?pids=" + pids);
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

@@ -104,8 +104,11 @@
               <button mat-icon-button (click)="resize(group, 1)" [disabled]="busy() === group.Name" aria-label="Um processo a mais"><mat-icon svgIcon="add" /></button>
             </div>
             <span class="spacer"></span>
+            <a mat-button [routerLink]="['/workers/trace-grupo', group.Name]" [class.hidden]="!group.Workers.length" matTooltip="O trace de todos os processos do grupo, juntos">
+              <mat-icon svgIcon="terminal" /> Trace
+            </a>
             <button mat-button (click)="restartGroup(group)" [disabled]="!group.Enabled || !group.Workers.length || busy() === group.Name">
-              <mat-icon svgIcon="restart_alt" /> Reiniciar grupo
+              <mat-icon svgIcon="restart_alt" /> Reiniciar
             </button>
           </footer>
         </article>

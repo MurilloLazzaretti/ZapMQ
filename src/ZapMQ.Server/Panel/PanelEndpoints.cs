@@ -305,6 +305,83 @@ public static class PanelEndpoints
             }
         });
 
+        // The same for several processes at once, over one request: every event says which
+        // process it is of. This is how the instances of a group are followed together, when
+        // there is no telling which of them will take a message.
+        api.MapGet("/trace", async (string? pids, HttpContext context, TraceHub hub, IHostApplicationLifetime lifetime, ILoggerFactory loggers) =>
+        {
+            var wanted = (pids ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(text => int.TryParse(text, out var pid) && pid > 0 ? pid : 0)
+                .Distinct()
+                .ToList();
+            if (wanted.Count == 0 || wanted.Count > 64 || wanted.Contains(0))
+                return Results.Json(new { error = "\"pids\" takes 1 to 64 process ids, separated by commas" }, statusCode: StatusCodes.Status400BadRequest);
+
+            context.Response.Headers.ContentType = "text/event-stream";
+            context.Response.Headers.CacheControl = "no-cache";
+            context.Response.Headers["X-Accel-Buffering"] = "no";
+            Audit(loggers, context, "Trace of processes {ProcessIds} watched", string.Join(", ", wanted));
+
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, lifetime.ApplicationStopping);
+            // One writer at a time: the events of the processes arrive on their own.
+            using var writing = new SemaphoreSlim(1, 1);
+            var subscriptions = wanted.Select(pid => (Pid: pid, Subscription: hub.Subscribe(pid))).ToList();
+
+            async Task WriteAsync(string text)
+            {
+                await writing.WaitAsync(stop.Token);
+                try
+                {
+                    await context.Response.WriteAsync(text, stop.Token);
+                    await context.Response.Body.FlushAsync(stop.Token);
+                }
+                finally
+                {
+                    writing.Release();
+                }
+            }
+
+            async Task FollowAsync(int pid, TraceHub.TraceSubscription subscription)
+            {
+                await foreach (var item in subscription.Events.ReadAllAsync(stop.Token))
+                {
+                    var text = "";
+                    if (item.State is not null)
+                        text += $"event: state\ndata: {JsonSerializer.Serialize(new { pid, item.State.State, item.State.Message }, Web)}\n\n";
+                    if (item.Lines is { Count: > 0 })
+                        text += $"event: lines\ndata: {JsonSerializer.Serialize(new { pid, lines = item.Lines }, Web)}\n\n";
+                    if (text.Length > 0)
+                        await WriteAsync(text);
+                }
+            }
+
+            async Task KeepOpenAsync()
+            {
+                while (true)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(15), stop.Token);
+                    await WriteAsync(": idle\n\n");
+                }
+            }
+
+            try
+            {
+                await Task.WhenAll([KeepOpenAsync(), .. subscriptions.Select(item => FollowAsync(item.Pid, item.Subscription))]);
+            }
+            catch (OperationCanceledException)
+            {
+                // The browser went away or the service is stopping.
+            }
+            finally
+            {
+                // The first to end takes the others with it; nothing is left asking for trace.
+                stop.Cancel();
+                foreach (var (_, subscription) in subscriptions)
+                    subscription.Dispose();
+            }
+            return Results.Empty;
+        });
+
         // ── The map ─────────────────────────────────────────────────────────
 
         api.MapGet("/map", (int? minutes, Broker broker, V2Connections connections) =>

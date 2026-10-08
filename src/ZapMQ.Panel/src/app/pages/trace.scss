@@ -9,6 +9,8 @@
 
   h1 { margin: 0; font: var(--mat-sys-headline-small); font-weight: 650; letter-spacing: -0.02em; }
   h1 .mono { font-size: 0.8em; font-weight: 500; color: var(--mat-sys-on-surface-variant); }
+  h1 .name { color: var(--mat-sys-primary); overflow-wrap: anywhere; }
+  > div { min-width: 0; flex: 1 1 260px; }
   p { margin: 2px 0 0; }
   .spacer { flex: 1; }
 }
@@ -30,9 +32,45 @@
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  &:has(.processes) { grid-template-rows: auto auto minmax(0, 1fr); }
   // The console takes most of the window, and scrolls inside.
   height: max(360px, calc(100dvh - 300px));
   overflow: hidden;
+}
+
+// One colour for each process of a group: the same on its button and on its lines.
+.c0 { --hue: #7c4dff; }
+.c1 { --hue: #00a37a; }
+.c2 { --hue: #e0752d; }
+.c3 { --hue: #1e88e5; }
+.c4 { --hue: #d81b7a; }
+.c5 { --hue: #8a9a00; }
+.c6 { --hue: #00a4c4; }
+.c7 { --hue: #c2452d; }
+
+.processes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 12px 0;
+}
+
+.process {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--hue) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hue) 12%, transparent);
+  color: inherit;
+  font: var(--mat-sys-label-medium);
+  cursor: pointer;
+
+  i { width: 10px; height: 10px; border-radius: 3px; background: var(--hue); }
+  &.off { background: transparent; border-style: dashed; opacity: 0.55; }
+  &.off i { background: transparent; outline: 1px solid var(--hue); }
+  &:focus-visible { outline: 2px solid var(--mat-sys-primary); outline-offset: 2px; }
 }
 
 .tools {
@@ -85,8 +123,20 @@
     time { color: var(--mat-sys-on-surface-variant); opacity: 0.75; user-select: none; }
   }
 
+  &.many .line { grid-template-columns: auto auto minmax(0, 1fr); }
+  .line b {
+    align-self: start;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--hue) 16%, transparent);
+    color: color-mix(in srgb, var(--hue) 70%, var(--mat-sys-on-surface));
+    font-weight: 500;
+    user-select: none;
+  }
+
   &.wrap .line { white-space: pre-wrap; overflow-wrap: anywhere; }
   &:not(.wrap) .line { grid-template-columns: auto auto; justify-content: start; }
+  &.many:not(.wrap) .line { grid-template-columns: auto auto auto; }
 
   .gap {
     margin: 6px 16px;

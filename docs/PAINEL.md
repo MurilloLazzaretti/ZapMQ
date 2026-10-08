@@ -127,6 +127,7 @@ Declarar um exchange e as filas que recebem cópia do que é publicado nele. Ent
 
 Acompanhar ao vivo o `Trace()` de um worker, a partir do menu do processo na tela do Worker Control. O contrato com os workers está na [especificação do Worker Control](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md), seção 11.3.
 
+- **De um processo ou do grupo inteiro.** No menu de um processo, o trace dele; no rodapé do cartão do grupo, o de todos os processos do grupo juntos, na ordem em que as linhas foram escritas, cada processo com uma cor. É o que serve quando não se sabe qual instância vai pegar a mensagem. Um processo substituído ou acrescentado entra na tela sozinho, e as linhas do que saiu ficam. Cada processo pode ser escondido e mostrado de novo.
 - **Só enquanto alguém assiste.** Abrir a tela é o que liga o trace no processo; o serviço renova o pedido a cada 10 segundos enquanto houver alguém assistindo, e ao sair o último o trace é desligado. Se o painel ou o ZapMQ caírem, o processo desliga sozinho em 30 segundos.
 - **Descartável.** As linhas trafegam em filas `zapmq.trace.<pid>`, que o broker trata como descartáveis: não geram mensagens mortas, e o que ninguém consome some em 15 segundos. Um navegador que não acompanha o volume perde as linhas mais antigas que ainda não leu.
 - **Histórico curto.** O serviço guarda as últimas 2.000 linhas de cada processo, por até 5 minutos depois de o último sair; quem chega depois as vê.
