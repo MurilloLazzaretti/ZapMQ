@@ -7,7 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
 import { Auth } from '../core/auth';
 import { Live } from '../core/live';
@@ -18,6 +18,8 @@ interface Destination {
   label: string;
   icon: string;
   exact?: boolean;
+  /** Another address that belongs to this destination too. */
+  also?: string;
   badge?: () => number;
 }
 
@@ -27,12 +29,13 @@ interface Destination {
  */
 @Component({
   selector: 'zap-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatSidenavModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, MatBadgeModule],
+  imports: [RouterOutlet, RouterLink, MatSidenavModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, MatBadgeModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
 export class Shell implements OnInit, OnDestroy {
+  private readonly router = inject(Router);
   protected readonly auth = inject(Auth);
   protected readonly live = inject(Live);
   protected readonly theme = inject(Theme);
@@ -54,16 +57,31 @@ export class Shell implements OnInit, OnDestroy {
   protected readonly destinations: Destination[] = [
     { path: '/', label: 'Visão geral', icon: 'dashboard', exact: true },
     { path: '/mapa', label: 'Mapa', icon: 'hub' },
-    { path: '/filas', label: 'Filas', icon: 'stacks' },
-    { path: '/mortas', label: 'Mensagens mortas', icon: 'skull', badge: this.dead },
+    { path: '/filas', label: 'Filas', icon: 'stacks', also: '/mortas', badge: this.dead },
     { path: '/workers', label: 'Processos e serviços', icon: 'precision_manufacturing' },
+    { path: '/trafego', label: 'Tráfego', icon: 'monitoring' },
     { path: '/web', label: 'Aplicação web', icon: 'web' },
   ];
 
   protected readonly themeIcon = computed(() => (this.theme.choice() === 'auto' ? 'tune' : this.theme.choice() === 'dark' ? 'dark_mode' : 'light_mode'));
   protected readonly themeLabel = computed(() => (this.theme.choice() === 'auto' ? 'Tema: do sistema' : this.theme.choice() === 'dark' ? 'Tema: escuro' : 'Tema: claro'));
 
+  /** Where the panel is now, without what comes after the path. */
+  private readonly address = signal(this.router.url.split(/[?#]/)[0]);
+
+  /** Whether a destination of the menu is the one on screen. */
+  protected current(destination: Destination): boolean {
+    const address = this.address();
+    const under = (path: string) => address === path || address.startsWith(path + '/');
+    return destination.exact ? address === destination.path : under(destination.path) || (!!destination.also && under(destination.also));
+  }
+
   ngOnInit(): void {
+    this.router.events.subscribe((event) => {
+      if (event instanceof NavigationEnd) {
+        this.address.set(event.urlAfterRedirects.split(/[?#]/)[0]);
+      }
+    });
     this.live.start();
   }
 

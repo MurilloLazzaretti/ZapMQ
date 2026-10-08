@@ -1,3 +1,4 @@
+import { QueueTabs } from '../shared/queue-tabs';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -20,7 +21,7 @@ const INTERNAL = /^(\d+)(SS|TR)?$|^WorkerControl/;
 
 @Component({
   selector: 'zap-queues',
-  imports: [FormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatIconModule, MatButtonModule, MatButtonToggleModule, NumPipe],
+  imports: [QueueTabs, FormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatIconModule, MatButtonModule, MatButtonToggleModule, NumPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page">
@@ -30,6 +31,7 @@ const INTERNAL = /^(\d+)(SS|TR)?$|^WorkerControl/;
           <p class="muted">{{ rows().length }} de {{ all().length }} · atualizado ao vivo</p>
         </div>
         <span class="spacer"></span>
+        <zap-queue-tabs />
         <button mat-flat-button (click)="define()"><mat-icon svgIcon="tune" /> Definir fila</button>
       </header>
 

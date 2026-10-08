@@ -1,6 +1,6 @@
 # ZapMQ — Monitoramento do ambiente
 
-Situação: aprovada em 2026-10-08. Etapas 1 e 3 implementadas; a 2 foi adiada.
+Situação: aprovada em 2026-10-08. Etapas 1, 3 e 4 implementadas; a 2 foi adiada.
 Última revisão: 2026-10-08.
 
 Este documento especifica três recursos novos do painel, que vão além da mensageria: serviços Windows, tráfego HTTP medido pelo proxy reverso e micro frontends. Continua o [painel](PAINEL.md) e a [especificação do Worker Control](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md).
@@ -99,17 +99,21 @@ O arquivo de sempre continua sendo gravado. O agente lê só o novo, a partir de
 
 Nada do corpo, de cabeçalhos ou de parâmetros.
 
-- **Rota normalizada.** A query string é descartada, e os trechos do caminho que são identificadores viram `{id}`: números, GUIDs, e textos longos em hexadecimal ou base64. `/api/pedidos/48213/itens?x=1` é contado como `/api/pedidos/{id}/itens`. Regras adicionais por configuração (`Traffic.Routes`), para os casos que a regra geral não pega.
+- **Rota normalizada.** A query string é descartada, e os trechos do caminho que são identificadores viram `{id}`: números, GUIDs, textos longos em hexadecimal, textos codificados ou com mais de 40 caracteres, e códigos em que pelo menos metade são dígitos (`VG000017`). `/api/pedidos/48213/itens?x=1` é contado como `/api/pedidos/{id}/itens`. Um arquivo é contado pela pasta e pelo tipo (`/mfe/modulo/*.js`). O que a regra geral não pega — um código curto como `P2` — é resolvido escrevendo a rota em `Traffic.Routes`, com o trecho variável entre chaves.
 - **Agregado por minuto**, por rota, método, servidor virtual e instância do upstream: quantidade, por classe de status (2xx, 3xx, 4xx, 5xx), bytes, e a distribuição dos tempos em faixas fixas (o bastante para mediana, p95 e p99). Retenção: `Traffic.RetentionDays` (padrão 30). Depois de 48 horas, os minutos são consolidados em horas.
 - **Limite de rotas.** No máximo `Traffic.MaxRoutes` rotas distintas por dia (padrão 2.000); o excedente é somado em "outras". Protege contra caminho aleatório vindo de varredura.
-- **Endereços.** Por rota e por hora, o conjunto de endereços distintos, para contar usuários. Retenção: a mesma do tráfego.
+- **Endereços.** Por aplicação e por hora, o conjunto de endereços distintos, para contar pessoas (não por rota, que multiplicaria o que é guardado sem dizer muito mais). Retenção: a mesma do tráfego.
+- **O que não entra.** Caminhos que começam com um dos prefixos de `Traffic.Ignore` não são contados: serve para o próprio painel, que pede os números dele a cada poucos segundos e dominaria os de todo o resto.
+- **Aplicação.** É o primeiro trecho do caminho, ou os dois primeiros quando o primeiro está em `Traffic.GroupBy` (padrão `api` e `mfe`): `/api/pedidos/1` é da aplicação `api/pedidos`.
+- **Conexões entregues** (resposta 101, um web socket) contam como requisição e ficam fora dos tempos: duram enquanto são usadas, e isso não é tempo de resposta.
+- **Instância.** Quando o proxy tenta mais de uma, vale a que respondeu. `localhost`, `127.0.0.1` e `[::1]` são a mesma máquina e contam como uma instância só.
 - **Erros recentes.** As últimas `Traffic.KeepErrors` requisições com 5xx (padrão 500), com horário, rota original sem query string, status, instância e tempo, para ver o que falhou sem abrir o arquivo.
 
 ### 5.3 O que a tela mostra
 
 - **Agora:** requisições por segundo, taxa de erro (4xx e 5xx separados), mediana e p95, no total.
 - **Por aplicação** (o primeiro trecho do caminho que o proxy usa para rotear, ou o servidor virtual): os mesmos números, com gráfico da última hora e do último dia.
-- **Endpoints:** tabela com busca e ordenação — mais chamados, mais lentos, com mais erro, e os que pioraram em relação ao mesmo horário do dia anterior. O detalhe de um endpoint mostra a série dele, a divisão por status e por instância.
+- **Endpoints:** tabela com busca e ordenação — mais chamados, mais lentos, com mais erro, e os que pioraram em relação ao mesmo horário do dia anterior. As consultas prévias do navegador (`OPTIONS`) entram nos totais e ficam fora desta tabela. O detalhe de um endpoint, com a série dele, não foi feito nesta etapa.
 - **Instâncias:** para cada upstream com mais de uma, quanto cada uma recebeu, o tempo e os erros de cada uma. Uma instância que não recebe nada, ou que responde pior que a outra, aparece.
 - **Erros recentes** (5.2).
 - **Períodos:** última hora, 24 horas, 7 dias, 30 dias.
@@ -205,7 +209,9 @@ Chaves novas no `ConfigWorkers.json`, todas opcionais. Sem elas o agente faz o q
     "RetentionDays": 30,
     "MaxRoutes": 2000,
     "KeepErrors": 500,
-    "Routes": []
+    "GroupBy": ["api", "mfe"],
+    "Ignore": ["/zapmq/"],
+    "Routes": ["/api/pedidos/{codigo}/itens"]
   },
   "Frontends": [
     {

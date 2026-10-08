@@ -162,4 +162,25 @@ public class WorkerControlBridgeTests(ServerFixture server) : IClassFixture<Serv
             Assert.Equal("admin", (string?)asked[3]["By"]);
         }
     }
+
+    [Fact]
+    public async Task Traffic_is_asked_for_with_the_period_and_the_filters_given()
+    {
+        var (worker, asked) = await Pretend(_ => new JObject { ["Ok"] = true });
+        await using var __ = worker;
+
+        await Api.GetStringAsync("api/workers/traffic?minutes=1440&kind=api&app=api%2Fpedidos");
+        await Api.GetStringAsync("api/workers/traffic/routes?search=lote&sort=slow&limit=20&kind=nonsense");
+        await Api.GetStringAsync("api/workers/traffic/errors?limit=5");
+        await Api.GetStringAsync("api/workers/frontends");
+
+        lock (asked)
+        {
+            Assert.Equal(["Traffic", "TrafficRoutes", "TrafficErrors", "Frontends"], asked.Select(request => (string?)request["Command"]));
+            Assert.Equal((1440, "api", "api/pedidos"), ((int)asked[0]["Minutes"]!, (string?)asked[0]["Kind"], (string?)asked[0]["App"]));
+            Assert.Equal((60, "lote", "slow", 20), ((int)asked[1]["Minutes"]!, (string?)asked[1]["Search"], (string?)asked[1]["Sort"], (int)asked[1]["Limit"]!));
+            Assert.Null(asked[1]["Kind"]);
+            Assert.Equal(5, (int)asked[2]["Limit"]!);
+        }
+    }
 }

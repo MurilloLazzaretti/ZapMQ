@@ -18,8 +18,8 @@
         <a
           class="destination"
           [routerLink]="destination.path"
-          routerLinkActive="active"
-          [routerLinkActiveOptions]="{ exact: !!destination.exact }"
+          [class.active]="current(destination)"
+          [attr.aria-current]="current(destination) ? 'page' : null"
           [matTooltip]="rail() ? destination.label : ''"
           matTooltipPosition="right"
           (click)="navigated()"

@@ -231,6 +231,42 @@ public static class PanelEndpoints
         workers.MapPost("/processes/{pid:int}/restart", (int pid, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
             Forward(client, context, "RestartWorker", request => request["ProcessId"] = pid, loggers, $"Worker Control: restart of worker {pid}"));
 
+        // The traffic the Worker Control reads from the access log of the reverse proxy.
+        static void Period(System.Text.Json.Nodes.JsonObject request, int? minutes, string? kind, string? host, string? app)
+        {
+            request["Minutes"] = Math.Clamp(minutes ?? 60, 1, 60 * 24 * 366);
+            if (kind is "api" or "static")
+                request["Kind"] = kind;
+            if (!string.IsNullOrEmpty(host))
+                request["Host"] = host;
+            if (!string.IsNullOrEmpty(app))
+                request["App"] = app;
+        }
+
+        workers.MapGet("/traffic", (int? minutes, string? kind, string? host, string? app, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "Traffic", request => Period(request, minutes, kind, host, app)));
+
+        workers.MapGet("/traffic/routes", (int? minutes, string? kind, string? host, string? app, string? search, string? sort, int? limit, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "TrafficRoutes", request =>
+            {
+                Period(request, minutes, kind, host, app);
+                if (!string.IsNullOrWhiteSpace(search))
+                    request["Search"] = search;
+                if (!string.IsNullOrEmpty(sort))
+                    request["Sort"] = sort;
+                request["Limit"] = Math.Clamp(limit ?? 100, 1, 500);
+            }));
+
+        workers.MapGet("/traffic/errors", (string? host, string? app, int? limit, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "TrafficErrors", request =>
+            {
+                if (!string.IsNullOrEmpty(host))
+                    request["Host"] = host;
+                if (!string.IsNullOrEmpty(app))
+                    request["App"] = app;
+                request["Limit"] = Math.Clamp(limit ?? 100, 1, 1000);
+            }));
+
         // The micro frontends published on the machine of the Worker Control.
         workers.MapGet("/frontends", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Frontends"));
 

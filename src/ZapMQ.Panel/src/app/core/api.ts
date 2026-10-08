@@ -3,13 +3,24 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
-  HealthSample, InstalledService, ParkMap, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
+  HealthSample, InstalledService, ParkMap, TrafficError, TrafficRoute, TrafficSummary, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
 
 /**
  * The panel API. Every address is relative, so it follows the <base href> the service writes
  * into the page: the panel works at the root of its port and under the path of a reverse proxy.
  */
+export interface TrafficQuery {
+  minutes: number;
+  kind?: string;
+  host?: string;
+  app?: string;
+}
+
+/** Only what has a value goes in the address. */
+const clean = (values: object): Record<string, string | number> =>
+  Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined && value !== null && value !== '')) as Record<string, string | number>;
+
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);
@@ -117,6 +128,18 @@ export class Api {
 
   restartWorker(pid: number): Observable<unknown> {
     return this.http.post(`api/workers/processes/${pid}/restart`, null);
+  }
+
+  traffic(filter: TrafficQuery): Observable<TrafficSummary> {
+    return this.http.get<TrafficSummary>('api/workers/traffic', { params: clean(filter) });
+  }
+
+  trafficRoutes(filter: TrafficQuery & { search?: string; sort?: string; limit?: number }): Observable<{ Routes: TrafficRoute[] }> {
+    return this.http.get<{ Routes: TrafficRoute[] }>('api/workers/traffic/routes', { params: clean(filter) });
+  }
+
+  trafficErrors(filter: { host?: string; app?: string; limit?: number }): Observable<{ Errors: TrafficError[] }> {
+    return this.http.get<{ Errors: TrafficError[] }>('api/workers/traffic/errors', { params: clean(filter) });
   }
 
   frontends(): Observable<{ Frontends: WebApplication[]; Publications: WebPublication[] }> {

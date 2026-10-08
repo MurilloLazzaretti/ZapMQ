@@ -1,3 +1,4 @@
+import { QueueTabs } from '../shared/queue-tabs';
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -21,7 +22,7 @@ const REASONS: Record<DeadReason, { label: string; tone: string; help: string }>
 /** What was not delivered or not confirmed, queue by queue, with what can be done about it. */
 @Component({
   selector: 'zap-dead-letters',
-  imports: [RouterLink, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, NumPipe, WhenPipe],
+  imports: [QueueTabs, RouterLink, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, NumPipe, WhenPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page">
@@ -30,6 +31,8 @@ const REASONS: Record<DeadReason, { label: string; tone: string; help: string }>
           <h1>Mensagens mortas</h1>
           <p class="muted">O que deixou de ser entregue ou confirmado. Nada aqui volta para a fila sozinho.</p>
         </div>
+        <span class="spacer"></span>
+        <zap-queue-tabs />
       </header>
 
       @if (!summary().length) {
@@ -122,6 +125,8 @@ const REASONS: Record<DeadReason, { label: string; tone: string; help: string }>
     </div>
   `,
   styles: `
+    .head { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
+    .head .spacer { flex: 1; }
     .head h1 { margin: 0; font: var(--mat-sys-headline-small); font-weight: 650; letter-spacing: -0.02em; }
     .head p { margin: 2px 0 0; }
     .layout { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: var(--zap-gap); align-items: start; }

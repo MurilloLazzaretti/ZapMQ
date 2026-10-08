@@ -200,6 +200,62 @@ export interface WorkerControlStatus {
   Services?: MonitoredService[];
 }
 
+// ── Traffic ────────────────────────────────────────────────────────────────
+
+/** What is counted of the requests of a route, an application or a stretch of time. */
+export interface TrafficTally {
+  Count: number;
+  S2: number;
+  S3: number;
+  S4: number;
+  S5: number;
+  Bytes: number;
+  /** Milliseconds. Null with no requests. */
+  Average: number | null;
+  P50: number | null;
+  P95: number | null;
+  P99: number | null;
+  /** Different addresses. Null where it is not counted. */
+  Users: number | null;
+}
+
+export interface TrafficSummary {
+  /** False when the Worker Control has no access log to read. */
+  Configured: boolean;
+  Source: { File: string; Found: boolean; Size: number; Pending: number; LastLineAt: string | null; Lines: number; Refused: number; Problem: string | null };
+  From: string;
+  To: string;
+  StepSeconds: number;
+  Totals: TrafficTally;
+  Series: (TrafficTally & { At: string })[];
+  Apps: (TrafficTally & { App: string; Kind: 'api' | 'static' })[];
+  Upstreams: (TrafficTally & { Upstream: string; App: string })[];
+  Hosts: string[];
+}
+
+export interface TrafficRoute extends TrafficTally {
+  Host: string;
+  Method: string;
+  Route: string;
+  Kind: 'api' | 'static';
+  App: string;
+  /** The same stretch of the day before. */
+  PreviousCount: number | null;
+  PreviousP95: number | null;
+}
+
+export interface TrafficError {
+  At: string;
+  Host: string;
+  Method: string;
+  Path: string;
+  Route: string;
+  App: string;
+  Status: number;
+  Upstream: string;
+  Milliseconds: number;
+}
+
 // ── Web application ────────────────────────────────────────────────────────
 
 export interface ModuleVersion {

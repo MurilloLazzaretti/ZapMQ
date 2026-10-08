@@ -1,0 +1,222 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Tráfego</h1>
+      <p class="muted">
+        O que passa pelo proxy reverso, lido do log de acesso.
+        @if (summary()?.Source?.LastLineAt; as last) {
+          Última requisição lida {{ last | ago }}.
+        }
+      </p>
+    </div>
+    <span class="spacer"></span>
+    <mat-button-toggle-group [value]="kind()" (change)="choose(kind, $event.value)" hideSingleSelectionIndicator aria-label="O que contar">
+      <mat-button-toggle value="api" matTooltip="Chamadas às aplicações, sem os arquivos">APIs</mat-button-toggle>
+      <mat-button-toggle value="static" matTooltip="Arquivos servidos: scripts, estilos, imagens">Arquivos</mat-button-toggle>
+      <mat-button-toggle value="">Tudo</mat-button-toggle>
+    </mat-button-toggle-group>
+    <mat-button-toggle-group [value]="minutes()" (change)="choose(minutes, $event.value)" hideSingleSelectionIndicator aria-label="Período">
+      @for (period of periods; track period.minutes) {
+        <mat-button-toggle [value]="period.minutes">{{ period.label }}</mat-button-toggle>
+      }
+    </mat-button-toggle-group>
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Sem resposta do Worker Control</strong>
+      <span>{{ problem() }}</span>
+      <span>Esta tela tenta de novo sozinha.</span>
+    </section>
+  } @else if (outdated()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="info" />
+      <strong>O Worker Control instalado é anterior a este recurso</strong>
+      <span>A medição do tráfego existe a partir da versão 2.4 dele.</span>
+    </section>
+  } @else if (summary() && !summary()!.Configured) {
+    <section class="panel empty">
+      <mat-icon svgIcon="monitoring" />
+      <strong>Nenhum log de acesso configurado</strong>
+      <span>Informe, na seção <code>Traffic</code> do <code>ConfigWorkers.json</code>, o arquivo em que o proxy grava uma linha por requisição.</span>
+    </section>
+  }
+
+  @if (summary(); as data) {
+    @if (data.Configured && (!data.Source.Found || data.Source.Problem)) {
+      <div class="notice danger" role="alert">
+        <mat-icon svgIcon="error" />
+        <div><strong class="mono">{{ data.Source.File }}</strong>: {{ data.Source.Found ? data.Source.Problem : 'o arquivo não existe. O proxy está gravando o log nesse formato?' }}</div>
+      </div>
+    } @else if (data.Source.Pending > 1048576) {
+      <div class="notice" role="status">
+        <mat-icon svgIcon="hourglass_empty" />
+        <div>Ainda lendo o que já estava no log: faltam {{ data.Source.Pending / 1048576 | num: 'decimal' }} MB. Os números mais recentes aparecem quando terminar.</div>
+      </div>
+    }
+
+    @if (app()) {
+      <div class="narrowed">
+        <span class="pill primary"><mat-icon svgIcon="filter_alt" /> {{ app() }}</span>
+        <button mat-button (click)="choose(app, '')">Ver todas as aplicações</button>
+      </div>
+    }
+
+    @if (data.Configured && totals(); as all) {
+      <section class="grid stats" [class.loading]="loading()">
+        <zap-stat label="Requisições" icon="monitoring" tone="info" [value]="all.Count | num: 'compact'" [hint]="rate(perMinute()) + ' por minuto, em média'" />
+        <zap-stat label="Erros do servidor" icon="error" [tone]="all.S5 ? 'danger' : 'ok'" [value]="percent(all.S5, all.Count)" [hint]="(all.S5 | num) + ' respostas 5xx'" />
+        <zap-stat label="Erros do cliente" icon="warning" [tone]="all.S4 > all.Count * 0.05 ? 'warn' : 'neutral'" [value]="percent(all.S4, all.Count)" [hint]="(all.S4 | num) + ' respostas 4xx'" />
+        <zap-stat label="Tempo de resposta" icon="timer" tone="neutral" [value]="ms(all.P50)" [hint]="'mediana · 95% abaixo de ' + ms(all.P95)" />
+        <zap-stat label="Pessoas" icon="group" tone="neutral" [value]="all.Users | num" hint="endereços diferentes" />
+      </section>
+
+      <section class="grid two">
+        <div class="panel">
+          <div class="panel-head"><h2>Requisições</h2><span class="hint">por minuto</span></div>
+          <div class="panel-body"><zap-time-chart [series]="requests()" /></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Tempo de resposta</h2><span class="hint">milissegundos</span></div>
+          <div class="panel-body"><zap-time-chart [series]="latency()" unit=" ms" /></div>
+        </div>
+      </section>
+
+      @if (!app() && apps().length > 1) {
+        <section class="panel">
+          <div class="panel-head"><h2>Por aplicação</h2><span class="hint">clique para ver só uma</span></div>
+          <div class="table-wrap">
+            <table class="data stack">
+              <thead>
+                <tr><th>Aplicação</th><th class="right">Requisições</th><th class="bar-column"></th><th class="right">5xx</th><th class="right">4xx</th><th class="right">Mediana</th><th class="right">P95</th><th class="right">Pessoas</th></tr>
+              </thead>
+              <tbody>
+                @for (item of apps(); track item.App + item.Kind) {
+                  <tr class="clickable" (click)="choose(app, item.App)" tabindex="0" (keydown.enter)="choose(app, item.App)">
+                    <td data-label="Aplicação"><strong>{{ item.App }}</strong> @if (!kind()) { <span class="muted">· {{ item.Kind === 'api' ? 'API' : 'arquivos' }}</span> }</td>
+                    <td class="right num" data-label="Requisições">{{ item.Count | num }}</td>
+                    <td class="bar-column"><span class="bar"><i [style.width.%]="item.share"></i></span></td>
+                    <td class="right num" data-label="5xx"><span [class.bad]="item.S5">{{ item.S5 | num }}</span></td>
+                    <td class="right num" data-label="4xx">{{ item.S4 | num }}</td>
+                    <td class="right num" data-label="Mediana">{{ ms(item.P50) }}</td>
+                    <td class="right num" data-label="P95">{{ ms(item.P95) }}</td>
+                    <td class="right num" data-label="Pessoas">{{ item.Users | num }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Endpoints</h2>
+          <span class="hint">cada rota conta todas as chamadas com identificadores diferentes</span>
+        </div>
+        <div class="tools">
+          <label class="search">
+            <mat-icon svgIcon="search" />
+            <input type="search" placeholder="Buscar rota ou aplicação" [ngModel]="search()" (ngModelChange)="typed($event)" aria-label="Buscar rota" />
+          </label>
+          <span class="spacer"></span>
+          <mat-button-toggle-group [value]="sort()" (change)="choose(sort, $event.value)" hideSingleSelectionIndicator aria-label="Ordem">
+            <mat-button-toggle value="count">Mais chamados</mat-button-toggle>
+            <mat-button-toggle value="slow">Mais lentos</mat-button-toggle>
+            <mat-button-toggle value="errors">Com mais erro</mat-button-toggle>
+            <mat-button-toggle value="worse" matTooltip="Os que ficaram mais lentos em relação ao mesmo horário de ontem">Pioraram</mat-button-toggle>
+          </mat-button-toggle-group>
+        </div>
+        @if (routes().length) {
+          <div class="table-wrap">
+            <table class="data stack">
+              <thead>
+                <tr><th>Rota</th><th class="right">Requisições</th><th class="right">5xx</th><th class="right">4xx</th><th class="right">Mediana</th><th class="right">P95</th><th class="right">P99</th><th>Ontem</th></tr>
+              </thead>
+              <tbody>
+                @for (route of routes(); track route.Host + route.Method + route.Route) {
+                  <tr>
+                    <td class="wide route" data-label="Rota">
+                      <span class="method" [class]="'method ' + route.Method.toLowerCase()">{{ route.Method }}</span>
+                      <span class="mono">{{ route.Route }}</span>
+                      @if (data.Hosts.length > 1) {
+                        <span class="muted host">{{ route.Host }}</span>
+                      }
+                    </td>
+                    <td class="right num" data-label="Requisições">{{ route.Count | num }}</td>
+                    <td class="right num" data-label="5xx"><span [class.bad]="route.S5">{{ route.S5 | num }}</span></td>
+                    <td class="right num" data-label="4xx">{{ route.S4 | num }}</td>
+                    <td class="right num" data-label="Mediana">{{ ms(route.P50) }}</td>
+                    <td class="right num" data-label="P95">{{ ms(route.P95) }}</td>
+                    <td class="right num" data-label="P99">{{ ms(route.P99) }}</td>
+                    <td data-label="Ontem">
+                      @if (change(route); as difference) {
+                        <span class="pill" [class]="'pill ' + difference.tone">{{ difference.text }}</span>
+                      } @else {
+                        <span class="muted">—</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="empty"><span>{{ sort() === 'worse' ? 'Nenhum endpoint com chamadas suficientes hoje e ontem para comparar.' : 'Nenhuma requisição no período com esse filtro.' }}</span></div>
+        }
+      </section>
+
+      <section class="grid two bottom">
+        <div class="panel">
+          <div class="panel-head"><h2>Instâncias</h2><span class="hint">quem atendeu, atrás do proxy</span></div>
+          @if (upstreams().length) {
+            <div class="table-wrap">
+              <table class="data">
+                <thead><tr><th>Aplicação</th><th>Instância</th><th class="right">Parte</th><th class="right">P95</th><th class="right">5xx</th></tr></thead>
+                <tbody>
+                  @for (item of upstreams(); track item.App + item.Upstream) {
+                    <tr [class.first]="item.first">
+                      <td>@if (item.first) { <strong>{{ item.App }}</strong> }</td>
+                      <td class="mono">{{ item.Upstream }}</td>
+                      <td class="right num">
+                        <span [class.uneven]="!item.alone && (item.share < 20 || item.share > 80)" [matTooltip]="(item.Count | num) + ' requisições'">{{ item.share | num: 'decimal' }}%</span>
+                      </td>
+                      <td class="right num">{{ ms(item.P95) }}</td>
+                      <td class="right num"><span [class.bad]="item.S5">{{ item.S5 | num }}</span></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="empty"><span>Nada foi repassado a uma aplicação no período.</span></div>
+          }
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Erros recentes</h2><span class="hint">as últimas respostas 5xx, de qualquer período</span></div>
+          @if (errors().length) {
+            <div class="table-wrap">
+              <table class="data">
+                <thead><tr><th>Quando</th><th>Status</th><th>Requisição</th><th class="right">Tempo</th></tr></thead>
+                <tbody>
+                  @for (error of errors(); track error.At + error.Path + $index) {
+                    <tr>
+                      <td class="nowrap num">{{ error.At | when }}</td>
+                      <td><span class="pill danger">{{ error.Status }}</span></td>
+                      <td class="request"><span class="mono">{{ error.Method }} {{ error.Path }}</span><span class="muted mono">{{ error.Upstream }}</span></td>
+                      <td class="right num nowrap">{{ ms(error.Milliseconds) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="empty"><mat-icon svgIcon="verified" /><span>Nenhum erro de servidor registrado.</span></div>
+          }
+        </div>
+      </section>
+    }
+  }
+</div>
