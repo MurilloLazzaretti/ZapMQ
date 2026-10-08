@@ -377,7 +377,7 @@ Ao parar, o serviço envia `bye` às conexões e espera até 5 segundos pelas co
 | Atraso | Campo `delayMs` no `publish` |
 | Prioridade | Campo `priority` no `publish` e no `bind` |
 | Exchange | Só no servidor: `publish` para um nome declarado como exchange distribui cópias |
-| Trace do Worker Control | Operações novas, especificadas com o Worker Control |
+| Trace do Worker Control | Não precisou de operação nova: são mensagens comuns em filas `zapmq.trace.<pid>`, que o servidor trata como descartáveis. Ver a especificação do Worker Control, seção 11.3 |
 | Autenticação | Campo novo no `hello` |
 
 Um servidor que não conhece um desses campos o ignora; um cliente que precisa do recurso consulta a versão do servidor recebida no `hello`.

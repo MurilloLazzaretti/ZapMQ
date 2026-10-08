@@ -85,6 +85,7 @@
                   <button mat-icon-button class="more" [matMenuTriggerFor]="workerMenu" [attr.aria-label]="'Ações do processo ' + worker.ProcessId"><mat-icon svgIcon="more_vert" /></button>
                   <mat-menu #workerMenu="matMenu" xPosition="before">
                     <button mat-menu-item (click)="health(group, worker)"><mat-icon svgIcon="monitor_heart" /> <span>Saúde</span></button>
+                    <a mat-menu-item [routerLink]="['/workers/trace', worker.ProcessId]" [queryParams]="{ grupo: group.Name }"><mat-icon svgIcon="terminal" /> <span>Trace</span></a>
                     <button mat-menu-item (click)="restartWorker(group, worker)" [disabled]="worker.State !== 'Up' && worker.State !== 'Starting'">
                       <mat-icon svgIcon="restart_alt" /> <span>Reiniciar</span>
                     </button>

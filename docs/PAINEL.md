@@ -1,6 +1,6 @@
 # ZapMQ — Painel de administração
 
-Situação: aprovada em 2026-10-07. Etapas A, B e C implementadas.
+Situação: aprovada em 2026-10-07. Etapas A, B e C e o trace implementados; falta a etapa D (exchange).
 Última revisão: 2026-10-08.
 
 Este documento especifica o painel web do ZapMQ (versão 2.2), que inclui a seção do Worker Control. Corresponde à fase 6 do [plano](PLANO-2.0.md) e à etapa 4 da [especificação do Worker Control 2.0](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md).
@@ -125,7 +125,13 @@ Declarar um exchange e as filas que recebem cópia do que é publicado nele. Ent
 
 ### 4.8 Trace
 
-Acompanhar ao vivo o `Trace()` de um worker. Especificado com a etapa do trace pelo ZapMQ.
+Acompanhar ao vivo o `Trace()` de um worker, a partir do menu do processo na tela do Worker Control. O contrato com os workers está na [especificação do Worker Control](https://github.com/MurilloLazzaretti/Worker-Control/blob/main/docs/ESPECIFICACAO-2.0.md), seção 11.3.
+
+- **Só enquanto alguém assiste.** Abrir a tela é o que liga o trace no processo; o serviço renova o pedido a cada 10 segundos enquanto houver alguém assistindo, e ao sair o último o trace é desligado. Se o painel ou o ZapMQ caírem, o processo desliga sozinho em 30 segundos.
+- **Descartável.** As linhas trafegam em filas `zapmq.trace.<pid>`, que o broker trata como descartáveis: não geram mensagens mortas, e o que ninguém consome some em 15 segundos. Um navegador que não acompanha o volume perde as linhas mais antigas que ainda não leu.
+- **Histórico curto.** O serviço guarda as últimas 2.000 linhas de cada processo, por até 5 minutos depois de o último sair; quem chega depois as vê.
+- **Na tela:** filtro por texto, pausa (as linhas continuam chegando e são contadas), quebra de linha, limpar e salvar em arquivo. Quando o processo descarta linhas por excesso de volume, a tela diz quantas.
+- **Processos com o trace antigo** (Delphi, ou wrapper .NET anterior ao 2.0): o serviço pede ao Worker Control, que abre o socket na máquina do processo e publica o que chega. A tela avisa que o trace está sendo repassado. Sem o Worker Control 2.1 no ar, a tela explica por que não há trace.
 
 ## 5. O que o servidor ganha
 

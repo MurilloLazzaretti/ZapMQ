@@ -356,6 +356,9 @@ public sealed class Broker
 
     private QueueSettings Resolve(string queue)
     {
+        if (_options.DisposablePrefixes.Exists(prefix => queue.StartsWith(prefix, StringComparison.Ordinal)))
+            return new QueueSettings(_options.DisposableRetention, _options.EmptyQueueLifetime, DeadLetterLimit: 0, TimeSpan.Zero, RedeliverUnconfirmed: false, Paused: false);
+
         var own = _queueOptions.GetValueOrDefault(queue);
         return new QueueSettings(
             own?.Retention ?? _options.Retention,

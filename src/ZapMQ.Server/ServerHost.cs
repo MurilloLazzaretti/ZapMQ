@@ -59,6 +59,8 @@ public static class ServerHost
                 DeadLetterLimit = options.DeadLetters.MaxMessagesPerQueue,
                 DeadLetterMaxAge = TimeSpan.FromHours(options.DeadLetters.MaxAgeHours)
             };
+            // The trace of the supervised processes is only worth having while it is watched.
+            brokerOptions.DisposablePrefixes.Add(TraceHub.LinesPrefix);
             foreach (var (queue, settings) in options.Queues)
                 brokerOptions.Queues[queue] = QueueSettingsMapping.ToCore(settings);
 
@@ -72,6 +74,7 @@ public static class ServerHost
             Path = Path.GetFullPath(options.QueueDefinitionsFile, AppContext.BaseDirectory)
         });
         builder.Services.AddSingleton<WorkerControlClient>();
+        builder.Services.AddSingleton<TraceHub>();
         builder.Services.AddSingleton<MetricsSampler>();
         builder.Services.AddHostedService(services => services.GetRequiredService<MetricsSampler>());
 

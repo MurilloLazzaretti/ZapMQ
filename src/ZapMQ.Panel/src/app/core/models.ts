@@ -304,3 +304,18 @@ export interface ParkMap {
   queues: MapQueue[];
   links: MapLink[];
 }
+
+// ── Trace ──────────────────────────────────────────────────────────────────
+
+export interface TraceLine {
+  n: number;
+  at: string;
+  text: string;
+  /** Above zero: lines the process threw away before this point; the text is empty. */
+  dropped: number;
+}
+
+export interface TraceState {
+  state: 'starting' | 'on' | 'unsupported' | 'unreachable' | 'ended';
+  message: string | null;
+}

@@ -1,0 +1,73 @@
+<div class="page">
+  <header class="head">
+    <a mat-icon-button routerLink="/workers" aria-label="Voltar ao Worker Control"><mat-icon svgIcon="arrow_back" /></a>
+    <div>
+      <h1>Trace <span class="mono">{{ pid() }}</span></h1>
+      <p class="muted">
+        @if (grupo()) {
+          {{ grupo() }} ·
+        }
+        O processo só envia o trace enquanto esta tela está aberta.
+      </p>
+    </div>
+    <span class="spacer"></span>
+    <span class="pill" [class]="'pill ' + label().tone"><span class="dot" [class]="'dot ' + label().tone"></span> {{ label().label }}</span>
+  </header>
+
+  @if (message(); as text) {
+    <div class="notice" [class]="'notice ' + label().tone" role="status">
+      <mat-icon svgIcon="info" />
+      <div>
+        {{ text }}
+        @if (state() === 'unsupported') {
+          Atualize a <code>WorkerCSharpWrapper.dll</code> da aplicação para acompanhar o trace por aqui.
+        }
+      </div>
+    </div>
+  }
+
+  <section class="panel console">
+    <div class="tools">
+      <label class="search">
+        <mat-icon svgIcon="search" />
+        <input type="search" placeholder="Filtrar as linhas" [ngModel]="search()" (ngModelChange)="search.set($event)" aria-label="Filtrar as linhas" />
+      </label>
+      <span class="count muted num">
+        {{ visible().length | num }} {{ search() ? 'de ' + (lines().length | num) : '' }} linhas
+      </span>
+      <span class="spacer"></span>
+      <button mat-icon-button (click)="togglePause()" [matTooltip]="paused() ? 'Continuar' : 'Pausar a tela'" [attr.aria-pressed]="paused()">
+        <mat-icon [svgIcon]="paused() ? 'play_arrow' : 'pause'" />
+      </button>
+      <button mat-icon-button (click)="wrap.set(!wrap())" matTooltip="Quebrar linhas longas" [class.on]="wrap()" [attr.aria-pressed]="wrap()"><mat-icon svgIcon="wrap_text" /></button>
+      <button mat-icon-button (click)="clear()" matTooltip="Limpar a tela"><mat-icon svgIcon="delete_sweep" /></button>
+      <button mat-icon-button (click)="export()" matTooltip="Salvar em arquivo" [disabled]="!visible().length"><mat-icon svgIcon="download" /></button>
+    </div>
+
+    <div class="output mono" #output [class.wrap]="wrap()" (scroll)="scrolled()" tabindex="0" role="log" aria-label="Linhas do trace">
+      @for (line of visible(); track line.n) {
+        @if (line.dropped) {
+          <div class="gap">{{ line.dropped | num }} linhas descartadas pelo processo: o trace estava mais rápido do que dava para enviar</div>
+        } @else {
+          <div class="line"><time>{{ clock(line) }}</time><span>{{ line.text }}</span></div>
+        }
+      } @empty {
+        <div class="nothing">
+          @if (search()) {
+            Nenhuma linha com esse texto.
+          } @else if (state() === 'on') {
+            Esperando o processo escrever alguma coisa…
+          } @else {
+            Nada para mostrar.
+          }
+        </div>
+      }
+    </div>
+
+    @if (paused()) {
+      <button class="float" mat-flat-button (click)="togglePause()"><mat-icon svgIcon="play_arrow" /> Continuar · {{ waiting() | num }} linhas novas</button>
+    } @else if (!follow()) {
+      <button class="float" mat-flat-button (click)="resume()"><mat-icon svgIcon="vertical_align_bottom" /> Ir para o fim</button>
+    }
+  </section>
+</div>

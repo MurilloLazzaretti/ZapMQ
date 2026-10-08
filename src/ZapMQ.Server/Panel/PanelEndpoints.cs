@@ -254,6 +254,57 @@ public static class PanelEndpoints
         workers.MapPost("/detach", (WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
             Forward(client, context, "DetachAndStop", null, loggers, "Worker Control: asked to stop leaving the workers running"));
 
+        // ── Trace ───────────────────────────────────────────────────────────
+
+        // Server-sent events: the state of the trace of one process ("state") and its lines
+        // ("lines"), for as long as the request stays open. Watching is what turns the trace on.
+        api.MapGet("/trace/{pid:int}", async (int pid, HttpContext context, TraceHub hub, IHostApplicationLifetime lifetime, ILoggerFactory loggers) =>
+        {
+            context.Response.Headers.ContentType = "text/event-stream";
+            context.Response.Headers.CacheControl = "no-cache";
+            context.Response.Headers["X-Accel-Buffering"] = "no";
+            Audit(loggers, context, "Trace of process {ProcessId} watched", pid);
+
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, lifetime.ApplicationStopping);
+            using var subscription = hub.Subscribe(pid);
+            try
+            {
+                while (true)
+                {
+                    // Something goes out now and then even when the process is silent, so that
+                    // nothing between here and the browser closes the connection as idle.
+                    using var quiet = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+                    quiet.CancelAfter(TimeSpan.FromSeconds(15));
+                    bool more;
+                    try
+                    {
+                        more = await subscription.Events.WaitToReadAsync(quiet.Token);
+                    }
+                    catch (OperationCanceledException) when (!stop.IsCancellationRequested)
+                    {
+                        await context.Response.WriteAsync(": idle\n\n", stop.Token);
+                        await context.Response.Body.FlushAsync(stop.Token);
+                        continue;
+                    }
+                    if (!more)
+                        break;
+
+                    while (subscription.Events.TryRead(out var item))
+                    {
+                        if (item.State is not null)
+                            await context.Response.WriteAsync($"event: state\ndata: {JsonSerializer.Serialize(item.State, Web)}\n\n", stop.Token);
+                        if (item.Lines is { Count: > 0 })
+                            await context.Response.WriteAsync($"event: lines\ndata: {JsonSerializer.Serialize(item.Lines, Web)}\n\n", stop.Token);
+                    }
+                    await context.Response.Body.FlushAsync(stop.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // The browser went away or the service is stopping.
+            }
+        });
+
         // ── The map ─────────────────────────────────────────────────────────
 
         api.MapGet("/map", (int? minutes, Broker broker, V2Connections connections) =>

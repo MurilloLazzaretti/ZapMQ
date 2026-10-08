@@ -23,6 +23,18 @@ public sealed class BrokerOptions
     public TimeSpan DeadLetterMaxAge { get; set; } = TimeSpan.FromDays(7);
 
     /// <summary>
+    /// Queues whose name starts with one of these carry what is only worth having while
+    /// somebody is taking it: a message nobody takes is thrown away shortly, and nothing of
+    /// them is ever kept as a dead letter.
+    /// </summary>
+    public List<string> DisposablePrefixes { get; } = [];
+
+    /// <summary>
+    /// How long a message waits in a disposable queue.
+    /// </summary>
+    public TimeSpan DisposableRetention { get; set; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>
     /// Settings of individual queues, by name. A queue that is not here uses the values above.
     /// </summary>
     public Dictionary<string, QueueOptions> Queues { get; } = new(StringComparer.Ordinal);

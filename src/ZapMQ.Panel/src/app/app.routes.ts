@@ -16,6 +16,7 @@ export const routes: Routes = [
       { path: 'workers', title: 'Worker Control · ZapMQ', loadComponent: () => import('./pages/workers').then((m) => m.WorkersPage) },
       { path: 'workers/eventos', title: 'Histórico · Worker Control', loadComponent: () => import('./pages/worker-events').then((m) => m.WorkerEventsPage) },
       { path: 'workers/configuracao', title: 'Configuração · Worker Control', loadComponent: () => import('./pages/worker-config').then((m) => m.WorkerConfigPage) },
+      { path: 'workers/trace/:pid', title: 'Trace · Worker Control', loadComponent: () => import('./pages/trace').then((m) => m.TracePage) },
       { path: 'aplicacoes', title: 'Aplicações · ZapMQ', loadComponent: () => import('./pages/connections').then((m) => m.ConnectionsPage) },
     ],
   },

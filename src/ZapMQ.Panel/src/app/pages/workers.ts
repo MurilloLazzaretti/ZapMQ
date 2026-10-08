@@ -7,6 +7,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { RouterLink } from '@angular/router';
 import { Observable, firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { NumPipe, SincePipe } from '../core/format';
@@ -26,7 +27,7 @@ const STATES: Record<string, { label: string; tone: string }> = {
 /** The groups the Worker Control keeps running, and their processes, as they are right now. */
 @Component({
   selector: 'zap-workers',
-  imports: [MatButtonModule, MatIconModule, MatMenuModule, MatSlideToggleModule, MatTooltipModule, Stat, WorkerTabs, NumPipe, SincePipe],
+  imports: [RouterLink, MatButtonModule, MatIconModule, MatMenuModule, MatSlideToggleModule, MatTooltipModule, Stat, WorkerTabs, NumPipe, SincePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './workers.html',
   styleUrl: './workers.scss',
