@@ -10,6 +10,7 @@ import { alertText, size } from '../core/database';
 import { AgoPipe, NumPipe, SincePipe, span } from '../core/format';
 import { DatabaseActivity, DatabaseAlert, DatabasePoint, DatabaseQuery, DatabaseState } from '../core/models';
 import { Series, TimeChart } from '../shared/chart';
+import { DatabaseTabs } from '../shared/database-tabs';
 import { Stat } from '../shared/stat';
 
 type Cost = 'cpu' | 'time' | 'reads';
@@ -45,7 +46,7 @@ const WHOLE = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
  */
 @Component({
   selector: 'zap-database',
-  imports: [MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, Stat, TimeChart, NumPipe, AgoPipe, SincePipe],
+  imports: [MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, DatabaseTabs, Stat, TimeChart, NumPipe, AgoPipe, SincePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './database.html',
   styleUrl: './database.scss',

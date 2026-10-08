@@ -392,6 +392,27 @@ public static class PanelEndpoints
             Forward(client, context, "DatabaseHistory", request => request["Minutes"] = Math.Clamp(minutes ?? 60, 1, 60 * 24 * 366)));
         workers.MapGet("/database/queries", (WorkerControlClient client, HttpContext context) => Forward(client, context, "DatabaseQueries"));
 
+        // What is defined in a database the Worker Control watches, and what creates each object.
+        workers.MapGet("/database/objects", (string? database, string? kind, string? schema, string? search, string? sort, int? limit, int? offset, bool? fresh, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "DatabaseObjects", request =>
+            {
+                foreach (var (name, value) in new[] { ("Database", database), ("Kind", kind), ("Schema", schema), ("Search", search), ("Sort", sort) })
+                    if (!string.IsNullOrWhiteSpace(value))
+                        request[name] = value;
+                request["Limit"] = Math.Clamp(limit ?? 100, 1, 500);
+                request["Offset"] = Math.Max(0, offset ?? 0);
+                if (fresh == true)
+                    request["Fresh"] = true;
+            }));
+
+        workers.MapGet("/database/object", (string? database, string? kind, string? schema, string? name, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "DatabaseObject", request =>
+            {
+                foreach (var (field, value) in new[] { ("Database", database), ("Kind", kind), ("Schema", schema), ("Name", name) })
+                    if (!string.IsNullOrWhiteSpace(value))
+                        request[field] = value;
+            }));
+
         // The micro frontends published on the machine of the Worker Control.
         workers.MapGet("/frontends", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Frontends"));
 

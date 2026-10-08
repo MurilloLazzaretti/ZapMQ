@@ -1,0 +1,115 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Banco de dados</h1>
+      <p class="muted">
+        @if (page(); as now) {
+          O que está definido em <strong>{{ now.Database }}</strong>. Lido {{ now.ReadAt | ago }}.
+        } @else {
+          Tabelas, views, procedures, functions e types dos bancos acompanhados.
+        }
+      </p>
+    </div>
+    <span class="spacer"></span>
+    <zap-database-tabs />
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Não foi possível ler os objetos</strong>
+      <span>{{ problem() }}</span>
+      <button mat-button (click)="refresh()">Tentar de novo</button>
+    </section>
+  } @else if (outdated()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="info" />
+      <strong>O Worker Control instalado é anterior a este recurso</strong>
+      <span>A lista de objetos do banco existe a partir da versão 2.8 dele.</span>
+    </section>
+  } @else if (unset()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="database" />
+      <strong>Nenhum banco para listar</strong>
+      <span>Informe os bancos em <code>Databases</code>, na seção <code>Database</code> do <code>ConfigWorkers.json</code>.</span>
+    </section>
+  } @else {
+    <section class="panel">
+      <div class="tools">
+        <label class="search">
+          <mat-icon svgIcon="search" />
+          <input type="search" placeholder="Buscar por nome" [ngModel]="search()" (ngModelChange)="typed($event)" aria-label="Buscar objeto" />
+        </label>
+        @if (databases().length > 1) {
+          <select class="pick" [ngModel]="database() || page()?.Database" (ngModelChange)="choose(database, $event)" aria-label="Banco">
+            @for (name of databases(); track name) {
+              <option [value]="name">{{ name }}</option>
+            }
+          </select>
+        }
+        @if ((page()?.Schemas?.length ?? 0) > 1 || schema()) {
+          <select class="pick" [ngModel]="schema()" (ngModelChange)="choose(schema, $event)" aria-label="Schema">
+            <option value="">Todos os schemas</option>
+            @for (item of page()?.Schemas ?? []; track item.Schema) {
+              <option [value]="item.Schema">{{ item.Schema }} ({{ item.Count }})</option>
+            }
+          </select>
+        }
+        <span class="spacer"></span>
+        <mat-button-toggle-group [value]="sort()" (change)="choose(sort, $event.value)" hideSingleSelectionIndicator aria-label="Ordem">
+          <mat-button-toggle value="name">Nome</mat-button-toggle>
+          <mat-button-toggle value="modified">Alterados</mat-button-toggle>
+          <mat-button-toggle value="size" matTooltip="As maiores tabelas primeiro">Maiores</mat-button-toggle>
+        </mat-button-toggle-group>
+        <button mat-icon-button (click)="refresh(true)" [disabled]="loading()" matTooltip="Ler o banco de novo" aria-label="Ler o banco de novo"><mat-icon svgIcon="refresh" /></button>
+      </div>
+
+      <div class="kinds" role="tablist" aria-label="Tipo de objeto">
+        <button type="button" [class.on]="!kind()" (click)="choose(kind, '')">Todos</button>
+        @for (item of page()?.Kinds ?? []; track item.Kind) {
+          <button type="button" [class.on]="kind() === item.Kind" [disabled]="!item.Count && kind() !== item.Kind" (click)="choose(kind, item.Kind)">
+            <mat-icon [svgIcon]="kindIcon(item.Kind)" /> {{ kindName(item.Kind, true) }} <span class="count">{{ item.Count | num }}</span>
+          </button>
+        }
+      </div>
+
+      @if (page(); as now) {
+        @if (now.Objects.length) {
+          <div class="table-wrap" [class.loading]="loading()">
+            <table class="data stack">
+              <thead>
+                <tr><th>Objeto</th><th>Tipo</th><th class="right">Alterado</th><th class="right">Linhas</th><th class="right">Tamanho</th></tr>
+              </thead>
+              <tbody>
+                @for (item of now.Objects; track item.Kind + item.Schema + item.Name) {
+                  <tr>
+                    <td class="wide" data-label="Objeto">
+                      <a class="object" [routerLink]="link(item)"><mat-icon [svgIcon]="kindIcon(item.Kind)" /><span><span class="muted">{{ item.Schema }}.</span><strong>{{ item.Name }}</strong></span></a>
+                    </td>
+                    <td data-label="Tipo">{{ kindName(item.Kind) }}@if (variety(item)) { <span class="muted sub">{{ variety(item) }}</span> }</td>
+                    <td class="right" data-label="Alterado" [matTooltip]="item.ModifiedAt | when">{{ item.ModifiedAt | ago }}</td>
+                    <td class="right num" data-label="Linhas">{{ item.Rows === null ? '—' : (item.Rows | num) }}</td>
+                    <td class="right num" data-label="Tamanho">{{ item.SizeKb === null ? '—' : size(item.SizeKb) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="foot">
+            <span class="muted">{{ now.Objects.length | num }} de {{ now.Total | num }}</span>
+            @if (now.Objects.length < now.Total) {
+              <button mat-button (click)="more()" [disabled]="loading()">Mostrar mais</button>
+            }
+          </div>
+        } @else {
+          <div class="empty">
+            <mat-icon svgIcon="search" />
+            <strong>Nenhum objeto com esse filtro</strong>
+          </div>
+        }
+      } @else {
+        <div class="empty"><span>Lendo o banco…</span></div>
+      }
+    </section>
+  }
+</div>

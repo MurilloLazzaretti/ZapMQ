@@ -94,17 +94,37 @@ backup completo atrasado ou inexistente, job habilitado que falhou na última ex
 ## 4. Etapa 2: objetos
 
 Para cada banco de `Databases`: tabelas, views, procedures, functions e types definidos pelo
-usuário, com busca e filtro por tipo e schema. Ao abrir um objeto:
+usuário. A lista tem busca por nome, filtro por tipo e por schema e ordem por nome, por data de
+alteração ou por tamanho. Ao abrir um objeto:
 
 - tabelas: colunas (tipo, tamanho, precisão, nulo, identity, default, calculada), chave primária,
-  índices, chaves estrangeiras, checks, triggers, linhas e tamanho (de estatísticas, sem ler a tabela);
+  índices, chaves estrangeiras, checks, triggers, linhas e tamanho (do que a instância conta
+  sozinha, sem ler a tabela);
 - views: colunas e script;
-- procedures e functions: parâmetros (tipo, tamanho, saída, default), retorno e script;
+- procedures e functions: parâmetros (tipo, tamanho, saída, valor padrão), retorno e script;
 - types: tipo base, ou as colunas quando for tipo de tabela;
-- em todos: criado em, alterado em, e as dependências nos dois sentidos.
+- em todos: criado em, alterado em, o que ele usa e quem o usa.
 
-O script de views, procedures e functions é o que a instância guarda. O de tabelas e types é
-montado pelo agente a partir do catálogo: equivalente, mas não idêntico ao de outras ferramentas.
+**Script.** O de views, procedures, functions e triggers é o texto que a instância guarda, sem
+nenhuma alteração. O de tabelas e types é montado pelo agente a partir do catálogo: equivalente,
+mas não idêntico ao de outras ferramentas. Em uma tabela ele traz, nesta ordem, colunas, chave
+primária e únicas, checks, chaves estrangeiras, índices e triggers. Um default cujo nome foi
+gerado pela instância sai sem nome, porque esse nome muda de um ambiente para outro. Opções de
+armazenamento (filegroup, compressão, fill factor, partição) não entram.
+
+**Valor padrão de parâmetro.** O catálogo não o guarda; ele é lido do cabeçalho do texto do
+objeto. O que não puder ser lido com certeza fica em branco.
+
+**Impressão digital.** Cada objeto vem com o SHA-256 do seu script, calculado sem considerar fim
+de linha e espaços no fim das linhas. É a identidade de versão que a etapa 3 e o transporte usam.
+
+**Só os bancos da configuração.** O agente recusa qualquer banco fora de `Databases`, mesmo que o
+usuário da conexão o alcance.
+
+**Contrato de administração:** `DatabaseObjects` (`Database`, `Kind`, `Schema`, `Search`, `Sort`,
+`Limit`, `Offset`, `Fresh`) e `DatabaseObject` (`Database`, `Kind`, `Schema`, `Name`). A lista de
+um banco fica um minuto em memória no agente. No painel: `GET api/workers/database/objects` e
+`/database/object`; telas em `/banco/objetos`.
 
 ## 5. Etapa 3: histórico de objetos
 

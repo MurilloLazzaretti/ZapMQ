@@ -1,0 +1,233 @@
+<div class="page">
+  <header class="head">
+    <a mat-icon-button routerLink="/banco/objetos" queryParamsHandling="preserve" [queryParams]="{ banco: wanted().database }" matTooltip="Voltar aos objetos" aria-label="Voltar aos objetos"><mat-icon svgIcon="arrow_back" /></a>
+    <div class="title">
+      <h1><span class="muted">{{ wanted().schema }}.</span>{{ wanted().name }}</h1>
+      <p class="muted">
+        <mat-icon [svgIcon]="kindIcon(wanted().kind)" /> {{ kindName(wanted().kind) }}
+        @if (detail(); as now) {
+          @if (variety(now.Object)) { {{ variety(now.Object) }} }
+          · {{ now.Database }}
+          @if (now.Object.ModifiedAt) { · <span [matTooltip]="now.Object.ModifiedAt | when">alterado {{ now.Object.ModifiedAt | ago }}</span> }
+          @if (now.Object.CreatedAt) { · criado em {{ now.Object.CreatedAt | when }} }
+          @if (now.Object.Rows !== null) { · {{ now.Object.Rows | num }} linhas }
+          @if (now.Object.SizeKb !== null) { · {{ size(now.Object.SizeKb) }} }
+        }
+      </p>
+    </div>
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Não foi possível ler o objeto</strong>
+      <span>{{ problem() }}</span>
+    </section>
+  } @else if (missing()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="search" />
+      <strong>Este objeto não existe mais neste banco</strong>
+      <a mat-button routerLink="/banco/objetos">Ver os objetos</a>
+    </section>
+  } @else if (detail(); as now) {
+    @if (unread().length) {
+      <div class="notice" role="status">
+        <mat-icon svgIcon="lock" />
+        <div>
+          <strong>Não foi possível ler:</strong>
+          @for (item of unread(); track item.part) {
+            {{ item.part }} <span class="detail">({{ item.message }})</span>{{ $last ? '.' : ';' }}
+          }
+        </div>
+      </div>
+    }
+
+    @if (now.BaseType) {
+      <section class="panel"><div class="panel-body line">Feito a partir de <code>{{ now.BaseType }}</code></div></section>
+    }
+
+    @if (now.Parameters.length || now.Returns) {
+      <section class="panel">
+        <div class="panel-head"><h2>Parâmetros</h2><span class="hint">{{ now.Parameters.length | num }}</span>@if (now.Returns) {<span class="spacer"></span><span class="hint">devolve <code>{{ now.Returns }}</code></span>}</div>
+        @if (now.Parameters.length) {
+          <div class="table-wrap">
+            <table class="data stack">
+              <thead><tr><th>Nome</th><th>Tipo</th><th>Direção</th><th>Valor padrão</th></tr></thead>
+              <tbody>
+                @for (parameter of now.Parameters; track parameter.Name) {
+                  <tr>
+                    <td data-label="Nome"><strong class="mono">{{ parameter.Name }}</strong></td>
+                    <td class="mono" data-label="Tipo">{{ parameter.Type }}</td>
+                    <td data-label="Direção">{{ parameter.Output ? 'saída' : parameter.ReadOnly ? 'entrada, somente leitura' : 'entrada' }}</td>
+                    <td class="mono" data-label="Valor padrão">{{ parameter.Default ?? '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
+
+    @if (now.Columns.length) {
+      <section class="panel">
+        <div class="panel-head"><h2>{{ now.Object.Kind === 'Function' ? 'Colunas devolvidas' : 'Colunas' }}</h2><span class="hint">{{ now.Columns.length | num }}</span></div>
+        <div class="table-wrap">
+          <table class="data stack">
+            <thead><tr><th>Nome</th><th>Tipo</th><th>Nulo</th><th>Mais</th></tr></thead>
+            <tbody>
+              @for (column of now.Columns; track column.Name) {
+                <tr>
+                  <td data-label="Nome">
+                    <strong class="mono">{{ column.Name }}</strong>
+                    @if (keys().has(column.Name)) { <mat-icon class="key" svgIcon="key" matTooltip="Faz parte da chave primária" /> }
+                  </td>
+                  <td class="mono" data-label="Tipo">{{ column.Computed ? '—' : column.Type }}</td>
+                  <td data-label="Nulo">{{ column.Nullable ? 'sim' : 'não' }}</td>
+                  <td class="mono wide more" data-label="Mais">{{ extra(column) || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @if (now.Indexes.length) {
+      <section class="panel">
+        <div class="panel-head"><h2>Índices</h2><span class="hint">{{ now.Indexes.length | num }}</span></div>
+        <div class="table-wrap">
+          <table class="data stack">
+            <thead><tr><th>Nome</th><th>Tipo</th><th>Colunas</th><th>Incluídas</th></tr></thead>
+            <tbody>
+              @for (index of now.Indexes; track index.Name) {
+                <tr>
+                  <td data-label="Nome"><strong class="mono">{{ index.Name }}</strong>@if (index.Disabled) { <span class="pill warn">desligado</span> }</td>
+                  <td data-label="Tipo">
+                    @if (index.PrimaryKey) { <span class="pill primary">chave primária</span> } @else if (index.Unique) { <span class="pill info">único</span> }
+                    <span class="muted">{{ index.Variety.toLowerCase() }}</span>
+                  </td>
+                  <td class="mono wide" data-label="Colunas">
+                    @for (column of index.Columns; track column.Name) { @if (!column.Included) { <span class="chip">{{ column.Name }}{{ column.Descending ? ' ↓' : '' }}</span> } }
+                    @if (index.Filter) { <div class="muted">onde {{ index.Filter }}</div> }
+                  </td>
+                  <td class="mono wide" data-label="Incluídas">@for (column of index.Columns; track column.Name) { @if (column.Included) { <span class="chip">{{ column.Name }}</span> } }</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @if (now.ForeignKeys.length || now.Checks.length || now.Triggers.length) {
+      <section class="panel">
+        <div class="panel-head"><h2>Restrições e triggers</h2></div>
+        <div class="table-wrap">
+          <table class="data stack">
+            <thead><tr><th>Nome</th><th>O que é</th><th>Definição</th></tr></thead>
+            <tbody>
+              @for (key of now.ForeignKeys; track key.Name) {
+                <tr>
+                  <td data-label="Nome"><strong class="mono">{{ key.Name }}</strong>@if (key.Disabled) { <span class="pill warn">desligada</span> }</td>
+                  <td data-label="O que é">chave estrangeira</td>
+                  <td class="mono wide" data-label="Definição">
+                    ({{ key.Columns.join(', ') }}) →
+                    <a [routerLink]="['/banco/objetos', now.Database, 'Table', key.ReferencedSchema, key.ReferencedTable]">{{ key.ReferencedSchema }}.{{ key.ReferencedTable }}</a>
+                    ({{ key.ReferencedColumns.join(', ') }})
+                    @if (action(key.OnDelete)) { <span class="muted">· ao apagar: {{ action(key.OnDelete) }}</span> }
+                    @if (action(key.OnUpdate)) { <span class="muted">· ao alterar: {{ action(key.OnUpdate) }}</span> }
+                  </td>
+                </tr>
+              }
+              @for (check of now.Checks; track check.Name) {
+                <tr>
+                  <td data-label="Nome"><strong class="mono">{{ check.Name }}</strong>@if (check.Disabled) { <span class="pill warn">desligada</span> }</td>
+                  <td data-label="O que é">check</td>
+                  <td class="mono wide" data-label="Definição">{{ check.Definition }}</td>
+                </tr>
+              }
+              @for (trigger of now.Triggers; track trigger.Name) {
+                <tr>
+                  <td data-label="Nome"><strong class="mono">{{ trigger.Name }}</strong>@if (trigger.Disabled) { <span class="pill warn">desligado</span> }</td>
+                  <td data-label="O que é">trigger{{ trigger.InsteadOf ? ' (instead of)' : '' }}</td>
+                  <td class="muted" data-label="Definição">{{ trigger.Definition ? 'no fim do script' : 'criptografado' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @if (now.Uses.length || now.UsedBy.length) {
+      <section class="grid two bottom">
+        @if (now.Object.Kind !== 'Table' && now.Object.Kind !== 'Type') {
+          <div class="panel">
+            <div class="panel-head"><h2>Usa</h2><span class="hint">{{ now.Uses.length | num }}</span></div>
+            <ul class="references">
+              @for (reference of now.Uses; track reference.Schema + reference.Name + reference.Database) {
+                <li>
+                  <mat-icon [svgIcon]="kindIcon(reference.Kind)" />
+                  @if (link(reference); as target) {
+                    <a [routerLink]="target">{{ reference.Schema }}.{{ reference.Name }}</a><span class="muted">{{ kindName(reference.Kind) }}</span>
+                  } @else {
+                    <span>{{ reference.Database ? reference.Database + '.' : '' }}{{ reference.Schema ? reference.Schema + '.' : '' }}{{ reference.Name }}</span>
+                    <span class="muted">{{ reference.Database ? 'em outro banco' : 'não encontrado neste banco' }}</span>
+                  }
+                </li>
+              } @empty {
+                <li class="muted">Nada.</li>
+              }
+            </ul>
+          </div>
+        }
+        <div class="panel">
+          <div class="panel-head"><h2>É usado por</h2><span class="hint">{{ now.UsedBy.length | num }}</span></div>
+          <ul class="references">
+            @for (reference of now.UsedBy; track reference.Schema + reference.Name) {
+              <li>
+                <mat-icon [svgIcon]="kindIcon(reference.Kind)" />
+                @if (link(reference); as target) {
+                  <a [routerLink]="target">{{ reference.Schema }}.{{ reference.Name }}</a><span class="muted">{{ kindName(reference.Kind) }}</span>
+                } @else {
+                  <span>{{ reference.Name }}</span>
+                }
+              </li>
+            } @empty {
+              <li class="muted">Nada que o banco saiba.</li>
+            }
+          </ul>
+        </div>
+      </section>
+    }
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Script</h2>
+        <span class="hint">
+          @switch (now.ScriptSource) {
+            @case ('instance') { como o banco guarda · {{ lines() | num }} linhas }
+            @case ('generated') { montado a partir do catálogo · {{ lines() | num }} linhas }
+            @default { criptografado no banco }
+          }
+        </span>
+        <span class="spacer"></span>
+        @if (now.Fingerprint) {
+          <span class="mono muted print" matTooltip="Impressão digital do script: muda quando o objeto muda">{{ now.Fingerprint.slice(0, 12) }}</span>
+        }
+        @if (now.Script) {
+          <button mat-button (click)="copy()"><mat-icon [svgIcon]="copied() ? 'check_circle' : 'content_copy'" /> {{ copied() ? 'Copiado' : 'Copiar' }}</button>
+          <button mat-icon-button (click)="download()" matTooltip="Baixar como arquivo .sql" aria-label="Baixar o script"><mat-icon svgIcon="download" /></button>
+        }
+      </div>
+      @if (now.Script) {
+        <pre class="script"><code>@for (piece of pieces(); track $index) {<span [class]="piece.kind">{{ piece.text }}</span>}</code></pre>
+      } @else {
+        <div class="empty"><mat-icon svgIcon="lock" /><strong>O banco guarda este objeto criptografado</strong><span>Não há texto para mostrar.</span></div>
+      }
+    </section>
+  } @else {
+    <section class="panel empty"><span>Lendo…</span></section>
+  }
+</div>

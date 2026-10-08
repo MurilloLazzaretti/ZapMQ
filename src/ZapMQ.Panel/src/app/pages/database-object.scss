@@ -1,0 +1,73 @@
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+
+  .title { min-width: 0; }
+  h1 { margin: 4px 0 0; font: var(--mat-sys-headline-small); font-weight: 650; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+  p { display: flex; align-items: center; gap: 4px 6px; flex-wrap: wrap; margin: 4px 0 0; }
+  p mat-icon { width: 18px; height: 18px; }
+}
+
+.notice {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--zap-info-container);
+  color: var(--zap-info);
+
+  mat-icon { flex: none; }
+  div { min-width: 0; overflow-wrap: anywhere; }
+  .detail { opacity: 0.8; font-size: 12.5px; }
+}
+
+.line { padding: 14px 20px; }
+.bottom { align-items: start; }
+.panel-head .spacer { flex: 1; }
+.print { font-size: 12px; }
+
+td.more { overflow-wrap: anywhere; font-size: 12.5px; }
+td .pill { margin: 0 6px 0 0; }
+td strong + .pill { margin-left: 8px; }
+.key { width: 16px; height: 16px; margin-left: 4px; vertical-align: -3px; color: var(--zap-warn); }
+
+.chip {
+  display: inline-block;
+  margin: 1px 4px 1px 0;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--mat-sys-surface-container-high);
+}
+
+.references {
+  list-style: none;
+  margin: 0;
+  padding: 6px 20px 14px;
+  max-height: 320px;
+  overflow-y: auto;
+
+  li { display: flex; align-items: center; gap: 8px; padding: 6px 0; overflow-wrap: anywhere; }
+  mat-icon { width: 16px; height: 16px; flex: none; color: var(--mat-sys-on-surface-variant); }
+  .muted { font-size: 12.5px; }
+}
+
+.script {
+  margin: 0;
+  padding: 16px 20px 20px;
+  max-height: 70vh;
+  overflow: auto;
+  border-top: 1px solid var(--zap-border);
+  font-family: var(--zap-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  tab-size: 4;
+  white-space: pre;
+
+  code { font: inherit; background: none; padding: 0; }
+  .keyword { color: light-dark(#6d3df5, #b39dff); font-weight: 600; }
+  .string { color: light-dark(#c2410c, #fdba74); }
+  .comment { color: light-dark(#2e8b57, #6ee7a0); font-style: italic; }
+  .number { color: light-dark(#0e7490, #67e8f9); }
+  .variable { color: light-dark(#b45309, #fcd34d); }
+}

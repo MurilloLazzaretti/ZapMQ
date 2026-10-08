@@ -1,4 +1,4 @@
-import { DatabaseAlert } from './models';
+import { CatalogObject, DatabaseAlert } from './models';
 
 const DECIMAL = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
@@ -31,4 +31,37 @@ export function size(kilobytes: number | null | undefined): string {
     return `${DECIMAL.format(kilobytes / 1024 / 1024)} GB`;
   }
   return kilobytes >= 1024 ? `${DECIMAL.format(kilobytes / 1024)} MB` : `${DECIMAL.format(kilobytes)} KB`;
+}
+
+const KINDS: Record<string, { one: string; many: string; icon: string }> = {
+  Table: { one: 'Tabela', many: 'Tabelas', icon: 'table' },
+  View: { one: 'View', many: 'Views', icon: 'visibility' },
+  Procedure: { one: 'Procedure', many: 'Procedures', icon: 'terminal' },
+  Function: { one: 'Function', many: 'Functions', icon: 'code' },
+  Type: { one: 'Type', many: 'Types', icon: 'data_object' },
+};
+
+export function kindName(kind: string | null, many = false): string {
+  const known = kind ? KINDS[kind] : undefined;
+  return known ? (many ? known.many : known.one) : (kind ?? '');
+}
+
+export function kindIcon(kind: string | null): string {
+  return (kind && KINDS[kind]?.icon) || 'data_object';
+}
+
+/** What sets an object apart within its kind: a function that gives a table, a type that is one. */
+export function variety(item: Pick<CatalogObject, 'Variety'>): string {
+  switch (item.Variety) {
+    case 'FN':
+      return 'escalar';
+    case 'IF':
+      return 'de tabela, em linha';
+    case 'TF':
+      return 'de tabela';
+    case 'TT':
+      return 'de tabela';
+    default:
+      return '';
+  }
 }

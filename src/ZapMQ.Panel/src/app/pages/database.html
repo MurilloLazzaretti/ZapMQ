@@ -19,6 +19,7 @@
     </div>
     <span class="spacer"></span>
     @if (state()?.Configured) {
+      <zap-database-tabs />
       <mat-button-toggle-group [value]="minutes()" (change)="period($event.value)" hideSingleSelectionIndicator aria-label="Período dos gráficos">
         @for (item of periods; track item.minutes) {
           <mat-button-toggle [value]="item.minutes">{{ item.label }}</mat-button-toggle>

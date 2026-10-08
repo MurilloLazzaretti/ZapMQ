@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult, TapEvent,
-  DatabasePoint, DatabaseQuery, DatabaseState,
+  CatalogDetail, CatalogPage, DatabasePoint, DatabaseQuery, DatabaseState,
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
@@ -182,6 +182,14 @@ export class Api {
 
   databaseQueries(): Observable<{ Queries: DatabaseQuery[] }> {
     return this.http.get<{ Queries: DatabaseQuery[] }>('api/workers/database/queries');
+  }
+
+  databaseObjects(filter: { database?: string; kind?: string; schema?: string; search?: string; sort?: string; limit?: number; fresh?: boolean }): Observable<CatalogPage> {
+    return this.http.get<CatalogPage>('api/workers/database/objects', { params: clean(filter) });
+  }
+
+  databaseObject(database: string, kind: string, schema: string, name: string): Observable<CatalogDetail> {
+    return this.http.get<CatalogDetail>('api/workers/database/object', { params: { database, kind, schema, name } });
   }
 
   frontends(): Observable<{ Frontends: WebApplication[]; Publications: WebPublication[] }> {

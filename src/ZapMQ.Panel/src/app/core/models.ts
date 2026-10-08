@@ -657,3 +657,69 @@ export interface DatabaseQuery {
   TopReads: boolean;
   Text: string;
 }
+
+export type CatalogKind = 'Table' | 'View' | 'Procedure' | 'Function' | 'Type';
+
+/** Something defined in a database. */
+export interface CatalogObject {
+  Id: number;
+  Kind: CatalogKind;
+  Schema: string;
+  Name: string;
+  /** As the instance tells them apart: U, V, P, FN, IF, TF, T, TT. */
+  Variety: string;
+  CreatedAt: string | null;
+  ModifiedAt: string | null;
+  Rows: number | null;
+  SizeKb: number | null;
+}
+
+export interface CatalogPage {
+  Database: string;
+  ReadAt: string;
+  Total: number;
+  Objects: CatalogObject[];
+  Kinds: { Kind: CatalogKind; Count: number }[];
+  Schemas: { Schema: string; Count: number }[];
+}
+
+export interface CatalogColumn {
+  Name: string;
+  Type: string;
+  Nullable: boolean;
+  Identity: boolean;
+  Seed: string | null;
+  Increment: string | null;
+  DefaultName: string | null;
+  Default: string | null;
+  Computed: string | null;
+  Persisted: boolean;
+  Collation: string | null;
+}
+
+export interface CatalogReference {
+  Schema: string | null;
+  Name: string;
+  /** Null for what is not in this database. */
+  Kind: CatalogKind | null;
+  Database: string | null;
+}
+
+export interface CatalogDetail {
+  Database: string;
+  Object: CatalogObject;
+  Columns: CatalogColumn[];
+  Parameters: { Name: string; Type: string; Output: boolean; ReadOnly: boolean; Default: string | null }[];
+  Returns: string | null;
+  BaseType: string | null;
+  Indexes: { Name: string; Variety: string; Unique: boolean; PrimaryKey: boolean; UniqueConstraint: boolean; Disabled: boolean; Filter: string | null; Columns: { Name: string; Descending: boolean; Included: boolean }[] }[];
+  ForeignKeys: { Name: string; Columns: string[]; ReferencedSchema: string; ReferencedTable: string; ReferencedColumns: string[]; OnDelete: string; OnUpdate: string; Disabled: boolean }[];
+  Checks: { Name: string; Definition: string; Disabled: boolean }[];
+  Triggers: { Name: string; Disabled: boolean; InsteadOf: boolean; Definition: string | null }[];
+  Uses: CatalogReference[];
+  UsedBy: CatalogReference[];
+  Script: string | null;
+  ScriptSource: 'instance' | 'generated' | 'encrypted';
+  Fingerprint: string | null;
+  Problems: Record<string, string>;
+}
