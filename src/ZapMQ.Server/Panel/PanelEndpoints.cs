@@ -628,6 +628,7 @@ public static class PanelEndpoints
         var queues = broker.GetQueues();
         var dead = broker.GetDeadLetterSummary();
         var latest = sampler.Latest;
+        var asking = Asking(broker);
         return new
         {
             version = ServerHost.Version,
@@ -643,7 +644,7 @@ public static class PanelEndpoints
             pending = queues.Sum(queue => queue.Pending),
             processing = queues.Sum(queue => queue.Processing),
             paused = queues.Count(queue => queue.Paused),
-            withoutConsumer = queues.Count(queue => queue.Pending > 0 && queue.Consumers == 0),
+            withoutConsumer = queues.Count(queue => queue.Pending > 0 && queue.Consumers == 0 && !asking.ContainsKey(queue.Name)),
             deadLetters = new
             {
                 expired = dead.Sum(item => item.Expired),
@@ -656,12 +657,22 @@ public static class PanelEndpoints
         };
     }
 
+    /// <summary>
+    /// How many 1.x clients came asking for messages of each queue in the last minute: that
+    /// is how they consume, and there is no connection to count them by.
+    /// </summary>
+    private static Dictionary<string, int> Asking(Broker broker) =>
+        broker.GetActivity(TimeSpan.FromSeconds(60))
+            .Where(activity => activity.Askers.Count > 0)
+            .ToDictionary(activity => activity.Queue, activity => activity.Askers.Count, StringComparer.Ordinal);
+
     private static List<object> Queues(Broker broker)
     {
         var dead = broker.GetDeadLetterSummary().ToDictionary(item => item.Queue, StringComparer.Ordinal);
         var definitions = broker.GetAllQueueOptions();
         var listed = new List<object>();
         var live = new HashSet<string>(StringComparer.Ordinal);
+        var asking = Asking(broker);
 
         foreach (var queue in broker.GetQueues())
         {
@@ -676,7 +687,8 @@ public static class PanelEndpoints
                 queue.Pending,
                 queue.Processing,
                 queue.AwaitingResponse,
-                queue.Consumers,
+                // Whoever listens the 1.x way, by coming to ask, is a consumer too.
+                Consumers = queue.Consumers + asking.GetValueOrDefault(queue.Name),
                 queue.Published,
                 queue.Delivered,
                 queue.Confirmed,
