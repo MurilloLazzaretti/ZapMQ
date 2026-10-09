@@ -43,15 +43,25 @@
                         @if (target.Problem) { <span class="bad" [matTooltip]="target.Problem">sem pasta conhecida</span> }
                       </span>
                       <span class="muted mono path">{{ target.Paths[0] }}@if (target.Paths.length > 1) { <span> (+{{ target.Paths.length - 1 }})</span> }</span>
+                      @if (target.Incoming; as left) {
+                        <button mat-flat-button (click)="incoming(target)" [disabled]="busy()" [matTooltip]="'Deixada na pasta de entrada ' + (left.At | ago) + (left.Files ? ', ' + left.Files + ' arquivos' : '')">Versão nova na entrada</button>
+                      } @else {
+                        <span></span>
+                      }
                       <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" matTooltip="Empacota o que está nesta máquina agora, sem a configuração">O que está rodando</button>
-                      <button mat-button (click)="zip.click()" [disabled]="busy()" matTooltip="O zip da pasta publicada">Enviar .zip</button>
-                      <input #zip type="file" accept=".zip" hidden (change)="upload(target, $event)" />
                     </li>
                   }
                 </ul>
               }
             }
             @if (!targets()!.length) { <p class="muted">O Worker Control não conhece nada que possa ser substituído nesta máquina.</p> }
+            @if (unmatched().length) {
+              <p class="note bad">Na pasta de entrada há o que não corresponde a nenhuma aplicação desta máquina (confira o nome): <span class="mono">{{ unmatched().join(', ') }}</span></p>
+            }
+            <p class="muted note">
+              <strong>Versão nova:</strong> copie a pasta publicada para <span class="mono">{{ inbox() }}\tipo\nome</span> no servidor, com o tipo (<code>api</code>, <code>worker</code>, <code>service</code> ou <code>frontend</code>)
+              e o nome exatamente como aparece nesta lista. Ela aparece aqui para ser levada à área.
+            </p>
             <p class="muted note">Arquivos de configuração (<code>appsettings*.json</code>, <code>web.config</code>, bancos locais e logs) nunca entram no pacote nem são substituídos no destino.</p>
           }
         </div>

@@ -47,6 +47,9 @@ export class TransportAreaPage implements OnInit {
   protected readonly choosing = signal(false);
   protected readonly targets = signal<TransportTarget[] | null>(null);
   protected readonly targetsProblem = signal('');
+  /** Where, on the machine, a new version is left to be taken; and what was left there under no known name. */
+  protected readonly inbox = signal('');
+  protected readonly unmatched = signal<string[]>([]);
   protected readonly targetKinds = TARGET_KINDS;
   protected readonly targetName = targetName;
   protected readonly targetIcon = targetIcon;
@@ -86,12 +89,17 @@ export class TransportAreaPage implements OnInit {
 
   protected choose(): void {
     this.choosing.set(!this.choosing());
-    if (!this.choosing()) {
-      return;
+    if (this.choosing()) {
+      this.loadTargets();
     }
+  }
+
+  private loadTargets(): void {
     this.api.transportTargets().subscribe({
       next: (answer) => {
         this.targets.set(answer.Targets);
+        this.inbox.set(answer.Inbox ?? '');
+        this.unmatched.set(answer.Unmatched ?? []);
         this.targetsProblem.set('');
       },
       error: (failure: HttpErrorResponse) =>
@@ -108,14 +116,10 @@ export class TransportAreaPage implements OnInit {
     await this.place(this.api.addRunning(target.Kind, target.Name), `${target.Name}: o que está rodando foi para a área`);
   }
 
-  /** A zip of the published folder, chosen from the machine of whoever is at the panel. */
-  protected async upload(target: TransportTarget, event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (file) {
-      await this.place(this.api.addFiles(target.Kind, target.Name, file), `${target.Name}: ${file.name} foi para a área`);
-    }
+  /** The new version that was left for the target in the inbox goes into the area, and leaves the inbox. */
+  protected async incoming(target: TransportTarget): Promise<void> {
+    await this.place(this.api.addIncoming(target.Kind, target.Name), `${target.Name}: a versão nova foi para a área`);
+    this.loadTargets();
   }
 
   private async place(request: ReturnType<Api['addRunning']>, done: string): Promise<void> {

@@ -242,18 +242,18 @@ export class Api {
     return this.http.post<AreaItem>('api/transport/area/scripts', script);
   }
 
-  transportTargets(): Observable<{ Targets: TransportTarget[] }> {
-    return this.http.get<{ Targets: TransportTarget[] }>('api/transport/targets');
+  transportTargets(): Observable<{ Inbox: string; Targets: TransportTarget[]; Unmatched: string[] }> {
+    return this.http.get<{ Inbox: string; Targets: TransportTarget[]; Unmatched: string[] }>('api/transport/targets');
+  }
+
+  /** The new version somebody left for a target in the inbox of the machine. */
+  addIncoming(kind: string, name: string): Observable<AreaItem> {
+    return this.http.post<AreaItem>('api/transport/area/incoming', { kind, name });
   }
 
   /** What a target is running right now, packed by the Worker Control. */
   addRunning(kind: string, name: string): Observable<AreaItem> {
     return this.http.post<AreaItem>('api/transport/area/running', { kind, name });
-  }
-
-  /** The zip of a published folder. */
-  addFiles(kind: string, name: string, file: Blob): Observable<AreaItem> {
-    return this.http.post<AreaItem>('api/transport/area/upload', file, { params: { kind, name }, headers: { 'Content-Type': 'application/octet-stream' } });
   }
 
   removeFromArea(id: string): Observable<void> {

@@ -251,7 +251,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
         this.detail.set(detail);
         this.problem.set('');
         // Against what is here, while there is still a decision to take; and once more when it is over.
-        if (detail.package.received && (first || (before !== detail.package.status && !['Approved', 'Applying'].includes(detail.package.status)))) {
+        if (first || (before !== detail.package.status && !['Approved', 'Applying'].includes(detail.package.status))) {
           this.check();
           this.transport.refresh();
         }

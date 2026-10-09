@@ -31,6 +31,11 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         /// </summary>
         public Dictionary<string, Dictionary<string, string>> Targets { get; } = [];
         public string? TargetProblem { get; set; }
+
+        /// <summary>
+        /// What was left in the inbox of the machine for a target, as "kind:name".
+        /// </summary>
+        public Dictionary<string, Dictionary<string, string>> Incoming { get; } = [];
         public Dictionary<string, string>? Deployed { get; private set; }
 
         public static string Sha(string text) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
@@ -91,7 +96,7 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                         : new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "not-found", ["Message"] = "no such target" } };
                 case "TransportCapture":
                 {
-                    var running = Targets[$"{request["Kind"]}:{request["Name"]}"];
+                    var running = (bool?)request["Incoming"] == true ? Incoming[$"{request["Kind"]}:{request["Name"]}"] : Targets[$"{request["Kind"]}:{request["Name"]}"];
                     var file = Path.Combine(Path.GetTempPath(), "zapmq-capture-" + Guid.NewGuid().ToString("N") + ".zip");
                     File.WriteAllBytes(file, Zipped(running));
                     return new JObject { ["Ok"] = true, ["File"] = file, ["Target"] = new JObject { ["Kind"] = request["Kind"], ["Name"] = request["Name"], ["Version"] = "2.0" } };
@@ -101,6 +106,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                         Applied.Add(request);
                     // The files are there to be read while the answer is being made, and not after.
                     Deployed = Unzipped(File.ReadAllBytes((string)request["File"]!));
+                    if (OnApply is null)
+                        Targets[$"{request["Kind"]}:{request["Name"]}"] = Deployed;
                     return OnApply?.Invoke(request) ?? new JObject { ["Ok"] = true, ["Applied"] = true, ["Did"] = "replaced", ["Backup"] = "/backup/there", ["Messages"] = new JArray("stopped", "replaced", "started") };
                 case "DatabaseApply":
                     lock (Applied)
@@ -241,8 +248,7 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
             Assert.Equal(7, zip.Entries.Count);
             Assert.NotNull(zip.GetEntry("items/02/script.sql"));
         }
-        // Where it was made it is neither approved nor taken in again.
-        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }), HttpStatusCode.Conflict);
+        // Where it was made it is not taken in again.
         await Import(file, HttpStatusCode.Conflict);
         Assert.True(JObject.Parse(await Api.GetStringAsync("api/transport/packaged")).ContainsKey("procedure|dbo|spclose"));
     }
@@ -597,5 +603,39 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         Assert.Equal(("failed", "/backup/x"), ((string?)ended["results"]!.Single()["status"], (string?)ended["results"]![0]!["backup"]));
         lock (here.Applied)
             Assert.Single(here.Applied);
+    }
+
+    [Fact]
+    public async Task A_new_version_left_in_the_inbox_is_applied_where_the_package_was_made_and_then_goes_on()
+    {
+        var dev = new PretendDatabase();
+        dev.Targets["api:Orders"] = new() { ["Orders.Api.dll"] = "v1", ["old.css"] = "x" };
+        dev.Incoming["api:Orders"] = new() { ["Orders.Api.dll"] = "v2", ["new.js"] = "n", ["appsettings.json"] = "{of the developer}" };
+        await using var _ = await Serve(dev);
+        await ClearArea();
+
+        var placed = await Json(await Api.PostAsJsonAsync("api/transport/area/incoming", new { kind = "api", name = "Orders" }), HttpStatusCode.Created);
+        Assert.Equal(["new.js", "Orders.Api.dll"], placed["files"]!.Select(file => (string?)file["path"]));
+        var id = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Orders 2" }), HttpStatusCode.Created))["package"]!["id"]!;
+
+        // Made here, it is compared with what runs here and applied here like anywhere else.
+        var check = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!;
+        Assert.Equal(("changes", 1, 1, 1), ((string?)check["state"], (int)check["added"]!, (int)check["changed"]!, (int)check["removed"]!));
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/reject", new { }), HttpStatusCode.Conflict);
+        // For later, and taken back: it is closed again, not waiting as one that arrived would be.
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { at = DateTimeOffset.UtcNow.AddHours(2) }));
+        Assert.Equal("Closed", (string?)(await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/reject", new { })))["package"]!["status"]);
+
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
+        var applied = await WaitFor(id, "Applied", "Partial", "Failed");
+
+        Assert.Equal("Applied", (string?)applied["package"]!["status"]);
+        Assert.Equal(new Dictionary<string, string> { ["Orders.Api.dll"] = "v2", ["new.js"] = "n" }, dev.Deployed);
+        Assert.Equal(["closed", "approved", "cancelled", "approved", "applying", "applied"], applied["history"]!.Select(entry => (string?)entry["what"]));
+        // Applied, it stays as the record of what was done, and is still the file that goes on.
+        Assert.Equal(HttpStatusCode.Conflict, (await Api.DeleteAsync($"api/transport/packages/{id}")).StatusCode);
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }), HttpStatusCode.Conflict);
+        Assert.NotEmpty(await Api.GetByteArrayAsync($"api/transport/packages/{id}/download"));
+        Assert.Equal("same", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!["state"]);
     }
 }

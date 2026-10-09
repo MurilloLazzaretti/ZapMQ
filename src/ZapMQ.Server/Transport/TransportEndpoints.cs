@@ -102,7 +102,11 @@ public static class TransportEndpoints
 
         // What a target is running right now, packed and put in the area.
         api.MapPost("/area/running", (AddTargetRequest request, TransportService transport, HttpContext context) => Guarded(async () =>
-            Results.Json(await transport.AddRunning(request.Kind, request.Name, User(context), context.RequestAborted), statusCode: StatusCodes.Status201Created)));
+            Results.Json(await transport.AddRunning(request.Kind, request.Name, incoming: false, User(context), context.RequestAborted), statusCode: StatusCodes.Status201Created)));
+
+        // The new version somebody left for a target in the inbox of the machine.
+        api.MapPost("/area/incoming", (AddTargetRequest request, TransportService transport, HttpContext context) => Guarded(async () =>
+            Results.Json(await transport.AddRunning(request.Kind, request.Name, incoming: true, User(context), context.RequestAborted), statusCode: StatusCodes.Status201Created)));
 
         // The zip of a published folder, brought by somebody.
         api.MapPost("/area/upload", (string? kind, string? name, string? version, HttpContext context, TransportService transport) => Guarded(async () =>

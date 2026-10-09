@@ -30,15 +30,41 @@
             @if (now.package.deliveries.length) {
               <span class="muted">@for (delivery of now.package.deliveries; track $index) { Entregue a <strong>{{ delivery.to }}</strong> em {{ delivery.at | when }}, por {{ delivery.by }}. } Um pacote entregue não é mais excluído aqui.</span>
             } @else {
-              <span class="muted">Leve o arquivo ao ambiente seguinte e importe-o lá, em Transporte → Pacotes. É lá que ele é aprovado e aplicado.</span>
+              <span class="muted">Para levá-lo adiante, baixe o arquivo e importe-o no ambiente seguinte, em Transporte → Pacotes.</span>
             }
           </div>
           <span class="spacer"></span>
           @if (!now.package.deliveries.length) {
             <button mat-button (click)="remove()" [disabled]="busy()"><mat-icon svgIcon="delete" /> Excluir</button>
           }
-          <button mat-flat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button>
+          <button mat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button>
         </section>
+        <!-- It can also be applied right here, where it was made: a new version that starts its way in this environment. -->
+        <section class="panel decide" [class.warned]="warnings().blocked || warnings().conflicts || warnings().missing">
+          <div>
+            <strong>Aplicar em {{ now.environment }}?</strong>
+            @if (checkProblem()) {
+              <span class="bad">Não foi possível comparar com este ambiente: {{ checkProblem() }}</span>
+            } @else if (!checks()) {
+              <span class="muted">Comparando com o que existe aqui…</span>
+            } @else if (warnings().blocked) {
+              <span class="muted"><b class="bad">{{ warnings().blocked }} item(ns) não podem ser aplicados aqui</b> (tabela ou type que já existe, ou aplicação que este ambiente não tem).</span>
+            } @else {
+              <span class="muted">Cada item abaixo mostra o que mudaria aqui. Aplicado neste ambiente, o mesmo pacote segue depois para o próximo.</span>
+            }
+          </div>
+          <span class="spacer"></span>
+          <button mat-button (click)="scheduling.set(!scheduling())" [disabled]="busy() || !!warnings().blocked"><mat-icon svgIcon="event" /> Agendar</button>
+          <button mat-flat-button (click)="approve(false)" [disabled]="busy() || !!warnings().blocked"><mat-icon svgIcon="task_alt" /> Aplicar neste ambiente</button>
+        </section>
+        @if (scheduling()) {
+          <section class="panel form">
+            <label>Aplicar em <input type="datetime-local" [(ngModel)]="when" /></label>
+            <span class="spacer"></span>
+            <button mat-button (click)="scheduling.set(false)">Cancelar</button>
+            <button mat-flat-button (click)="approve(true)" [disabled]="busy() || !when">Agendar</button>
+          </section>
+        }
       }
       @case ('Pending') {
         <section class="panel decide" [class.warned]="warnings().blocked || warnings().conflicts || warnings().missing">
@@ -95,7 +121,7 @@
         <section class="panel decide"><div><strong>Aplicando…</strong><span class="muted">{{ now.results.length }} de {{ now.items.length }} itens.</span></div></section>
       }
       @case ('Applied') {
-        <section class="panel decide done"><div><strong>Aplicado em {{ now.environment }}.</strong><span class="muted">Todos os {{ now.items.length }} itens. O mesmo arquivo pode seguir para o próximo ambiente.</span></div><span class="spacer"></span><button mat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button></section>
+        <section class="panel decide done"><div><strong>Aplicado em {{ now.environment }}.</strong><span class="muted">{{ now.items.length === 1 ? 'O item foi aplicado.' : 'Todos os ' + now.items.length + ' itens foram aplicados.' }} O mesmo arquivo pode seguir para o próximo ambiente.</span></div><span class="spacer"></span><button mat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button></section>
       }
       @case ('Partial') {
         <section class="panel decide warned"><div><strong class="bad">Aplicado em parte.</strong><span class="muted">A aplicação parou no primeiro item que falhou. O que foi aplicado antes continua aplicado; nada foi desfeito.</span></div></section>

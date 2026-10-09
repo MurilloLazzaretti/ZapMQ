@@ -218,13 +218,16 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// <summary>
     /// Puts in the area what a target is running right now, packed by the Worker Control.
     /// </summary>
-    public async Task<AreaItem> AddRunning(string? kind, string? name, string by, CancellationToken cancellation)
+    public async Task<AreaItem> AddRunning(string? kind, string? name, bool incoming, string by, CancellationToken cancellation)
     {
         RequireFileKind(kind, name);
+        // Either what the target is running, or the new version somebody left for it in the inbox of the machine.
         var body = await Ask("TransportCapture", by, request =>
         {
             request["Kind"] = kind;
             request["Name"] = name;
+            if (incoming)
+                request["Incoming"] = true;
         }, cancellation);
         // Left by the Worker Control where the panel, on the same machine, picks it up.
         var file = body["File"]?.GetValue<string>();
@@ -552,7 +555,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     public async Task<PackageRecord> Approve(string id, DateTimeOffset? at, string by, CancellationToken cancellation)
     {
         var waiting = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
-        var checks = waiting.Status == "Pending" ? await Check(waiting, by, cancellation) : [];
+        var checks = Waits(waiting) ? await Check(waiting, by, cancellation) : [];
         if (checks.FirstOrDefault(check => check.State == "missing") is { } absent)
         {
             var item = waiting.Manifest.Items.First(candidate => candidate.Number == absent.Number);
@@ -566,6 +569,12 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
         return Approve(id, at, by);
     }
 
+    /// <summary>
+    /// True while the package can still be approved here: one that arrived and waits, or one
+    /// that was made here and was not applied here yet.
+    /// </summary>
+    private static bool Waits(PackageRecord record) => record.Status == "Pending" || (record.Status == "Closed" && !record.Received);
+
     private PackageRecord Approve(string id, DateTimeOffset? at, string by)
     {
         var now = time.GetUtcNow();
@@ -573,8 +582,8 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             throw new TransportRefused("O horário escolhido já passou");
         return Change(id, record =>
         {
-            if (record.Status != "Pending")
-                throw new TransportRefused(record.Received ? "Este pacote não está mais aguardando aprovação" : "Um pacote só é aprovado no ambiente em que chegou, não onde foi montado", StatusCodes.Status409Conflict);
+            if (!Waits(record))
+                throw new TransportRefused("Este pacote não está mais aguardando aprovação neste ambiente", StatusCodes.Status409Conflict);
             record.Status = "Approved";
             record.ApprovedBy = by;
             record.ApplyAt = at ?? now;
@@ -584,13 +593,14 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
 
     public PackageRecord Reject(string id, string? reason, string by) => Change(id, record =>
     {
-        if (!record.Received)
+        // What was made here is not refused, only deleted; but an approval of it can be taken back like any other.
+        if (!record.Received && record.Status != "Approved")
             throw new TransportRefused("Um pacote montado aqui não é recusado: ele pode ser excluído", StatusCodes.Status409Conflict);
         if (record.Status is not ("Pending" or "Approved"))
             throw new TransportRefused("Este pacote não está aguardando aprovação nem aplicação", StatusCodes.Status409Conflict);
         record.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = by, What = record.Status == "Approved" ? "cancelled" : "rejected", Detail = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim() });
         // An approval that was taken back leaves the package waiting again; a refusal ends it.
-        record.Status = record.Status == "Approved" ? "Pending" : "Rejected";
+        record.Status = record.Status != "Approved" ? "Rejected" : record.Received ? "Pending" : "Closed";
         record.ApplyAt = null;
         record.ApprovedBy = null;
     });

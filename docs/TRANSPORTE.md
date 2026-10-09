@@ -328,10 +328,24 @@ Sites que servem a mesma aplicação viram um alvo só, com todas as pastas, e t
 Um serviço executado por um empacotador (`nssm`) não diz onde está o programa: a pasta é informada
 em `Transport.Targets`, que também serve para corrigir ou acrescentar qualquer alvo.
 
-**Entrada.** Em Transporte → Área → *Aplicações*, para cada alvo: *O que está rodando* (o agente
-empacota a pasta como está agora) ou *Enviar .zip* (a pasta publicada, com ou sem a pasta de
-fora). Nos dois casos o que é do ambiente fica de fora: `appsettings*.json`, `web.config`,
+**Entrada.** Em Transporte → Área → *Aplicações*, para cada alvo:
+
+- *O que está rodando*: o agente empacota a pasta como está agora.
+- *Versão nova na entrada*: aparece quando alguém deixou uma versão nova para aquele alvo na
+  **pasta de entrada** do servidor. É o começo do caminho de uma versão: o programador copia a
+  pasta publicada para `transport\inbox\{tipo}\{nome}` (ao lado do agente; `Transport.Inbox` muda
+  o lugar), com o tipo `api`, `worker`, `service` ou `frontend` e o nome como aparece na lista.
+  Um `.zip` com o nome do alvo também serve. Levada à área, a versão sai da pasta de entrada. O
+  que foi deixado com um nome que não é de nenhum alvo é apontado; o que ainda está sendo
+  copiado (mexido há menos de 5 segundos) não é pego.
+
+Nos dois casos o que é do ambiente fica de fora: `appsettings*.json`, `web.config`,
 `ConfigWorkers.json`, bancos locais (`*.db`) e `logs/`.
+
+**Aplicar onde o pacote foi montado.** Um pacote fechado pode ser aplicado no próprio ambiente,
+com a mesma comparação e a mesma aprovação (agora ou agendada). É assim que a versão deixada na
+pasta de entrada passa a rodar no primeiro ambiente; o mesmo pacote segue depois para o próximo.
+Aplicado, o pacote não é mais excluído: fica como registro do que foi feito.
 
 **Comparação no destino.** Arquivo por arquivo, pelo conteúdo: novo, alterado, removido ou igual.
 Um alvo que o destino não tem aparece como *não existe aqui* e **impede a aprovação**: instalar o
@@ -359,7 +373,8 @@ escrita. O agente não substitui a si mesmo.
 um agente em outra máquina não é atendido.
 
 **Comandos do agente:** `TransportTargets`, `TransportTarget`, `TransportCapture` e
-`TransportDeploy`. **Rotas novas:** `targets`, `area/running` e `area/upload`.
+`TransportDeploy`. **Rotas novas:** `targets`, `area/running` e `area/incoming`. (`area/upload`,
+que recebe o zip pelo navegador, existe na API e não está em nenhuma tela.)
 
 **Ainda não feito na etapa 2:**
 

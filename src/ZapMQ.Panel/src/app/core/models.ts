@@ -803,6 +803,8 @@ export interface TransportTarget {
   Service: string | null;
   Sites: string[];
   Problem: string | null;
+  /** A new version somebody left for it in the inbox of the machine. */
+  Incoming?: { Path: string; At: string; Files: number | null } | null;
 }
 
 export type PackageStatus = 'Closed' | 'Pending' | 'Rejected' | 'Approved' | 'Applying' | 'Applied' | 'Partial' | 'Failed';

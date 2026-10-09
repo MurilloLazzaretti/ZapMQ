@@ -47,6 +47,7 @@ a.object[href]:hover strong { text-decoration: underline; }
   h3 mat-icon { width: 18px; height: 18px; }
   ul { list-style: none; margin: 0; padding: 0; }
   li { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr) auto auto; align-items: center; gap: 4px 12px; padding: 4px 0; }
+  .note.bad { font-size: 12.5px; }
   .who { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; overflow-wrap: anywhere; }
   .path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
   .bad { color: var(--zap-danger); font-size: 12.5px; }

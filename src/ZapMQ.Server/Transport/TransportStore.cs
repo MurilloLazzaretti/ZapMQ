@@ -297,6 +297,8 @@ public sealed class TransportStore
                 throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
             if (record.Received)
                 throw new TransportRefused("Um pacote que chegou de outro ambiente não é excluído: ele pode ser recusado, e o que trouxe continua registrado", StatusCodes.Status409Conflict);
+            if (record.Status != "Closed")
+                throw new TransportRefused("Este pacote já foi aplicado neste ambiente, ou está para ser, e fica como registro do que foi feito", StatusCodes.Status409Conflict);
             if (record.Deliveries.Count > 0)
                 throw new TransportRefused($"Este pacote já foi entregue a {string.Join(", ", record.Deliveries.Select(delivery => delivery.To).Distinct())} e não pode mais ser excluído aqui", StatusCodes.Status409Conflict);
 
