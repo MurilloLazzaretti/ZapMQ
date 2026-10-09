@@ -737,7 +737,22 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         Assert.Equal("Failed", (string?)ended["package"]!["status"]);
         Assert.Equal(("failed", "/backup/x"), ((string?)ended["results"]!.Single()["status"], (string?)ended["results"]![0]!["backup"]));
         lock (here.Applied)
-            Assert.Single(here.Applied);
+        {
+            Assert.False((bool)here.Applied.Single()["Force"]!);
+            here.Applied.Clear();
+        }
+
+        // Nothing of it was applied: somebody may ask again, this time for what does not stop to be ended.
+        here.OnApply = null;
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{failing}/approve", new { force = true }));
+        var again = await WaitFor(failing, "Applied", "Partial", "Failed");
+        Assert.Equal(("Applied", true), ((string?)again["package"]!["status"], (bool)again["package"]!["force"]!));
+        lock (here.Applied)
+            Assert.All(here.Applied, request => Assert.True((bool)request["Force"]!));
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{failing}/revert", new { force = true }));
+        await WaitFor(failing, "Reverted");
+        lock (here.Reverted)
+            Assert.All(here.Reverted, request => Assert.True((bool)request["Force"]!));
     }
 
     [Fact]

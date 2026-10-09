@@ -32,6 +32,8 @@ const STATES: Record<string, { text: string; tone: string; hint: string }> = {
   missing: { text: 'não existe aqui', tone: 'danger', hint: 'Este ambiente não tem esse alvo. Instalar o que ainda não existe não é feito pelo transporte, por ora.' },
 };
 
+const FORCING = 'O que não parar no tempo de espera terá o processo encerrado à força: o que ele estiver fazendo nesse momento é interrompido.';
+
 /**
  * One package: what it carries, how it stands against this environment, the decision to be
  * taken about it and what happened when it was applied.
@@ -65,6 +67,8 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected readonly scheduling = signal(false);
   protected readonly refusing = signal(false);
   protected when = '';
+  /** What does not stop in time is ended by force, instead of the item failing. */
+  protected force = false;
   protected reason = '';
 
   protected readonly kindName = kindName;
@@ -79,6 +83,16 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected readonly targetIcon = targetIcon;
 
   protected readonly status = computed(() => this.detail()?.package.status ?? null);
+
+  /** True where forcing has a meaning: something that runs is stopped, and there is still something to ask for. */
+  protected readonly forcible = computed(() => {
+    const detail = this.detail();
+    return !!detail && detail.items.some((item) => ['worker', 'service', 'api'].includes(item.kind))
+      && ['Closed', 'Pending', 'Failed', 'Reverted', 'Applied', 'Partial', 'RevertedPartly'].includes(detail.package.status);
+  });
+
+  /** A package of which nothing was applied, for sure, can be asked for again. */
+  protected readonly retriable = computed(() => this.detail()?.results.every((result) => result.status === 'failed') ?? false);
 
   /** What somebody should know before approving: conflicts, what cannot be applied, what is missing. */
   protected readonly warnings = computed(() => {
@@ -188,14 +202,18 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     const sure = await confirm(this.dialog, {
       title: scheduled ? 'Agendar a aplicação?' : 'Aplicar agora?',
       message: `${this.detail()!.items.length} item(ns) serão aplicados no banco de ${this.detail()!.environment}${scheduled ? ' em ' + at!.toLocaleString('pt-BR') : ''}. Se um item falhar, a aplicação para ali e nada é desfeito sozinho.`,
-      warning: notes.length ? notes.join('; ') + '.' : undefined,
+      warning: [...notes.map((note) => note + '.'), this.forcing() ? FORCING : ''].filter(Boolean).join(' ') || undefined,
       action: scheduled ? 'Agendar' : 'Aplicar',
-      danger: notes.length > 0,
+      danger: notes.length > 0 || this.forcing(),
     });
     if (sure) {
-      await this.act(this.api.approvePackage(this.id, at ? at.toISOString() : null));
+      await this.act(this.api.approvePackage(this.id, at ? at.toISOString() : null, this.forcing()));
       this.scheduling.set(false);
     }
+  }
+
+  private forcing(): boolean {
+    return this.force && this.forcible();
   }
 
   /** Puts back what the package did here, after saying what goes back and what does not. */
@@ -222,6 +240,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
       return;
     }
     const notes = [
+      ...(this.forcing() ? [FORCING] : []),
       ...changed.map((step) => `Item ${name(step.number)}: ${step.reason}.`),
       ...staying.map((step) => `Item ${name(step.number)} não volta: ${step.reason}.`),
     ];
@@ -233,7 +252,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
       danger: true,
     });
     if (sure) {
-      await this.act(this.api.revertPackage(this.id));
+      await this.act(this.api.revertPackage(this.id, this.forcing()));
     }
   }
 

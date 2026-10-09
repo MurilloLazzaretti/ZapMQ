@@ -143,11 +143,23 @@
         <section class="panel decide warned"><div><strong class="bad">Revertido em parte.</strong><span class="muted">Parte do que este pacote fez continua em {{ now.environment }}: veja em cada item. O que não volta pelo painel precisa ser desfeito por outro pacote.</span></div><span class="spacer"></span><button mat-button (click)="revert()" [disabled]="busy()"><mat-icon svgIcon="history" /> Reverter o que falta</button></section>
       }
       @case ('Failed') {
-        <section class="panel decide warned"><div><strong class="bad">Nenhum item foi aplicado.</strong><span class="muted">Veja o motivo no primeiro item.</span></div></section>
+        <section class="panel decide warned">
+          <div><strong class="bad">Nenhum item foi aplicado.</strong><span class="muted">Veja o motivo no primeiro item.@if (retriable()) { Nada foi alterado: resolvido o motivo, o pacote pode ser aplicado de novo. }</span></div>
+          <span class="spacer"></span>
+          @if (retriable()) {
+            <button mat-button (click)="approve(false)" [disabled]="busy() || !!warnings().blocked"><mat-icon svgIcon="task_alt" /> Aplicar de novo</button>
+          }
+        </section>
       }
       @case ('Rejected') {
         <section class="panel decide"><div><strong>Recusado em {{ now.environment }}.</strong><span class="muted">Não pode mais ser aplicado aqui. O que ele trazia continua registrado abaixo; a correção vem em outro pacote.</span></div></section>
       }
+    }
+
+    @if (forcible()) {
+      <label class="force" matTooltip="Sem isso, quando algo não para no tempo de espera o item falha e nada é alterado. Com isso, o processo que não parou é encerrado à força e a troca segue.">
+        <input type="checkbox" [(ngModel)]="force" /> Forçar o encerramento do que não parar no tempo de espera
+      </label>
     }
 
     <section class="panel">

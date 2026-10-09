@@ -827,6 +827,8 @@ export interface PackageSummary {
   applyAt: string | null;
   approvedBy: string | null;
   revertBy: string | null;
+  /** Whoever approved or reverted it asked for what does not stop in time to be ended by force. */
+  force: boolean;
   size: number;
   changedAt: string;
 }

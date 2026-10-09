@@ -119,3 +119,15 @@
 @media (max-width: 720px) {
   .kept { margin-left: 20px; }
 }
+
+.force {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 4px 12px;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 13px;
+  cursor: pointer;
+
+  input { accent-color: var(--zap-danger); }
+}

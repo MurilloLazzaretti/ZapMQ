@@ -349,16 +349,16 @@ export class Api {
     return this.http.get<PackageItemDetail>(`api/transport/packages/${id}/items/${number}`);
   }
 
-  approvePackage(id: string, at: string | null): Observable<PackageDetail> {
-    return this.http.post<PackageDetail>(`api/transport/packages/${id}/approve`, { at });
+  approvePackage(id: string, at: string | null, force = false): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/approve`, { at, force });
   }
 
   revertPlan(id: string): Observable<{ steps: RevertStep[] }> {
     return this.http.get<{ steps: RevertStep[] }>(`api/transport/packages/${id}/revert`);
   }
 
-  revertPackage(id: string): Observable<PackageDetail> {
-    return this.http.post<PackageDetail>(`api/transport/packages/${id}/revert`, null);
+  revertPackage(id: string, force = false): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/revert`, { force });
   }
 
   rejectPackage(id: string, reason: string): Observable<PackageDetail> {

@@ -196,6 +196,14 @@ O agente aplica os itens na ordem do pacote:
 No primeiro item que falhar a aplicação para. O pacote fica **aplicado em parte**, com o que deu
 certo, o que falhou e a mensagem. Nada é desfeito sozinho.
 
+**O que não para.** Antes de trocar arquivos, o que roda da pasta é parado e esperado por
+`Transport.StopSeconds` (padrão: 90 s): os processos do grupo, o serviço, ou os processos do
+servidor web que atendiam a aplicação. Se algo continuar de pé, o item falha, nada é alterado e a
+mensagem diz qual processo ficou. Quem aprova (ou reverte) pode marcar **Forçar o encerramento do
+que não parar**: nesse caso, passado o tempo, o processo é encerrado à força e a troca segue. O
+que ele estiver fazendo naquele momento é interrompido, por isso a opção vem desligada e é
+escolhida a cada vez. Um pacote que falhou sem aplicar nada pode ser aplicado de novo.
+
 ### 5.6 Reverter
 
 Um pacote aplicado, ou aplicado em parte, pode ser revertido por decisão de alguém, no botão

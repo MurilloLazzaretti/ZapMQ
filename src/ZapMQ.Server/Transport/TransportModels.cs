@@ -186,6 +186,12 @@ public sealed class PackageRecord
     public DateTimeOffset? ApplyAt { get; set; }
     public string? ApprovedBy { get; set; }
     public string? RevertBy { get; set; }
+
+    /// <summary>
+    /// Whoever approved it, or asked for it to be put back, also asked for what does not stop
+    /// in time to be ended by force.
+    /// </summary>
+    public bool Force { get; set; }
     public List<HistoryEntry> History { get; set; } = [];
     public List<ItemResult> Results { get; set; } = [];
 

@@ -558,7 +558,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// Approves a package to be applied now or at a given time. One that brings a table or a
     /// type this environment already has is not approved: applying it is sure to fail there.
     /// </summary>
-    public async Task<PackageRecord> Approve(string id, DateTimeOffset? at, string by, CancellationToken cancellation)
+    public async Task<PackageRecord> Approve(string id, DateTimeOffset? at, bool force, string by, CancellationToken cancellation)
     {
         var waiting = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
         var checks = Waits(waiting) ? await Check(waiting, by, cancellation) : [];
@@ -572,16 +572,19 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             var item = waiting.Manifest.Items.First(candidate => candidate.Number == blocked.Number);
             throw new TransportRefused($"O item {item.Number} ({item.Schema}.{item.Name}) é uma tabela ou um type que já existe neste ambiente e não pode ser recriado. A mudança precisa vir como um script de alteração, em outro pacote.", StatusCodes.Status409Conflict);
         }
-        return Approve(id, at, by);
+        return Approve(id, at, force, by);
     }
 
     /// <summary>
     /// True while the package can still be approved here: one that arrived and waits, or one
     /// that was made here and was not applied here yet.
     /// </summary>
-    private static bool Waits(PackageRecord record) => record.Status is "Pending" or "Reverted" || (record.Status == "Closed" && !record.Received);
+    private static bool Waits(PackageRecord record) =>
+        record.Status is "Pending" or "Reverted" || (record.Status == "Closed" && !record.Received)
+        // Nothing of it was applied, and that is known for sure: somebody may ask for it again.
+        || (record.Status == "Failed" && record.Results.All(result => result.Status == "failed"));
 
-    private PackageRecord Approve(string id, DateTimeOffset? at, string by)
+    private PackageRecord Approve(string id, DateTimeOffset? at, bool force, string by)
     {
         var now = time.GetUtcNow();
         if (at is { } when && when < now.AddMinutes(-1))
@@ -593,7 +596,8 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             record.Status = "Approved";
             record.ApprovedBy = by;
             record.ApplyAt = at ?? now;
-            record.History.Add(new HistoryEntry { At = now, By = by, What = "approved", Detail = at is null ? "para aplicar agora" : $"para aplicar em {at.Value.ToLocalTime():dd/MM/yyyy HH:mm}" });
+            record.Force = force;
+            record.History.Add(new HistoryEntry { At = now, By = by, What = "approved", Detail = (at is null ? "para aplicar agora" : $"para aplicar em {at.Value.ToLocalTime():dd/MM/yyyy HH:mm}") + (force ? ", forçando o encerramento do que não parar" : "") });
         });
     }
 
@@ -729,7 +733,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// Asks for what a package did here to be put back. It is done by the runner, one item at a
     /// time, the last applied first.
     /// </summary>
-    public async Task<PackageRecord> Revert(string id, string by, CancellationToken cancellation)
+    public async Task<PackageRecord> Revert(string id, bool force, string by, CancellationToken cancellation)
     {
         var record = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
         if (record.Status is not ("Applied" or "Partial" or "RevertedPartly"))
@@ -742,7 +746,8 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
                 throw new TransportRefused("Só o que foi aplicado neste ambiente pode ser revertido", StatusCodes.Status409Conflict);
             reverting.Status = "Reverting";
             reverting.RevertBy = by;
-            reverting.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = by, What = "reverting" });
+            reverting.Force = force;
+            reverting.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = by, What = "reverting", Detail = force ? "forçando o encerramento do que não parar" : null });
         });
     }
 
@@ -804,6 +809,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
                         request["Kind"] = item.Kind;
                         request["Name"] = item.Name;
                         request["Backup"] = record.Results.First(result => result.Number == step.Number).Backup;
+                        request["Force"] = record.Force;
                     }, cancellation));
                 else
                 {
@@ -884,7 +890,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// Hands the files of an item to the Worker Control, which stops the target, keeps a copy,
     /// replaces the files and starts it again.
     /// </summary>
-    private async Task Replace(string id, PackageItem item, ItemResult result, string by, CancellationToken cancellation)
+    private async Task Replace(string id, PackageItem item, ItemResult result, bool force, string by, CancellationToken cancellation)
     {
         var files = store.Content(id, item.Number) ?? throw new TransportRefused("O conteúdo do item não está mais no arquivo do pacote");
         var work = store.WorkFile($"{id}-{item.Number:00}.zip");
@@ -899,6 +905,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
                 request["Kind"] = item.Kind;
                 request["Name"] = item.Name;
                 request["File"] = work;
+                request["Force"] = force;
             }, cancellation);
 
             if (!answer.Reached)
@@ -949,7 +956,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             {
                 if (item.Kind != "database")
                 {
-                    await Replace(id, item, result, by, cancellation);
+                    await Replace(id, item, result, record.Force, by, cancellation);
                     result.At = time.GetUtcNow();
                     store.Update(id, applying => applying.Results.Add(result));
                     if (result.Status != "applied")
