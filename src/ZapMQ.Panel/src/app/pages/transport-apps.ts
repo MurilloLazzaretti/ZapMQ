@@ -63,12 +63,12 @@ export class TransportAppsPage implements OnInit {
 
   /** What the application is running right now goes into the area. */
   protected running(target: TransportTarget): Promise<void> {
-    return this.place(this.api.addRunning(target.Kind, target.Name), `${target.Name}: a versão que está rodando foi para a área`);
+    return this.place(this.api.addRunning(target.Kind, target.Name), `${target.Name}: a versão que está rodando foi para a expedição`);
   }
 
   /** The new version that was left for it in the inbox goes into the area, and leaves the inbox. */
   protected incoming(target: TransportTarget): Promise<void> {
-    return this.place(this.api.addIncoming(target.Kind, target.Name), `${target.Name}: a versão nova foi para a área`);
+    return this.place(this.api.addIncoming(target.Kind, target.Name), `${target.Name}: a versão nova foi para a expedição`);
   }
 
   /** A zip of the published folder, chosen on the machine of whoever is at the panel. */
@@ -77,7 +77,7 @@ export class TransportAppsPage implements OnInit {
     const file = input.files?.[0];
     input.value = '';
     if (file) {
-      await this.place(this.api.addFiles(target.Kind, target.Name, file), `${target.Name}: ${file.name} foi para a área`);
+      await this.place(this.api.addFiles(target.Kind, target.Name, file), `${target.Name}: ${file.name} foi para a expedição`);
     }
   }
 
@@ -85,7 +85,7 @@ export class TransportAppsPage implements OnInit {
     this.busy.set(true);
     try {
       await firstValueFrom(request);
-      this.snack.open(done, 'Ver a área', { duration: 5000 }).onAction().subscribe(() => void this.router.navigate(['/transporte']));
+      this.snack.open(done, 'Ver a expedição', { duration: 5000 }).onAction().subscribe(() => void this.router.navigate(['/transporte']));
       this.transport.refresh();
       this.load();
     } catch (failure) {

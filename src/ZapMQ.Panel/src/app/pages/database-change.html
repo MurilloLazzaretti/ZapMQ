@@ -8,6 +8,11 @@
           <mat-icon [svgIcon]="kindIcon(now.Kind)" /> {{ kindName(now.Kind) }} · {{ now.Database }} · {{ now.ModifiedAt ?? now.At | when }}
           @if (who()) { · por {{ who() }} }
           @if (now.OldName) { · antes se chamava {{ now.OldName }} }
+          @if (now.Package; as brought) {
+            · veio no pacote <a [routerLink]="['/transporte/pacotes', brought]">{{ transport.names()[brought] || brought.slice(0, 8) }}</a>
+          } @else {
+            · feita direto no banco
+          }
         </p>
       </div>
       <span class="spacer"></span>

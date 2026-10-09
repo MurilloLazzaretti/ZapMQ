@@ -4,7 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { Api } from '../core/api';
 import { catchError, forkJoin, of } from 'rxjs';
-import { AgoPipe, NumPipe, SincePipe } from '../core/format';
+import { NumPipe, SincePipe } from '../core/format';
 import { Live } from '../core/live';
 import { alertText } from '../core/database';
 import { DatabaseState, MetricsPoint, TrafficSummary, WebApplication, WebPublication, WorkerControlStatus } from '../core/models';
@@ -25,7 +25,7 @@ const DECIMAL = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 /** Where things stand right now, and how the last hour or day went. */
 @Component({
   selector: 'zap-overview',
-  imports: [RouterLink, MatIconModule, MatButtonToggleModule, Stat, TimeChart, NumPipe, SincePipe, AgoPipe],
+  imports: [RouterLink, MatIconModule, MatButtonToggleModule, Stat, TimeChart, NumPipe, SincePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page">
@@ -88,7 +88,7 @@ const DECIMAL = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
             @if (now.modules) {
               <span class="figures">
                 <span><b class="num" [class.bad]="now.up < now.modules">{{ now.up }}<small>de {{ now.modules }}</small></b> módulos no ar</span>
-                <span><b>{{ now.latest ? (now.latest | ago) : '—' }}</b> última publicação</span>
+                <span><b>{{ brief(now.latest) }}</b> última publicação</span>
                 <span><b class="num">{{ now.published }}</b> publicações em 7 dias</span>
               </span>
             } @else {
@@ -222,8 +222,8 @@ const DECIMAL = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
     .block .name small { font: var(--mat-sys-body-small); }
     .block .go { margin-left: auto; color: var(--mat-sys-on-surface-variant); }
     .block .figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-    .block .figures span { display: grid; gap: 2px; color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-body-small); }
-    .block .figures b { color: var(--mat-sys-on-surface); font: var(--mat-sys-title-large); font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; }
+    .block .figures span { display: grid; gap: 2px; min-width: 0; color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-body-small); }
+    .block .figures b { color: var(--mat-sys-on-surface); font: var(--mat-sys-title-large); font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .block .figures b small { margin-left: 4px; color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-label-medium); letter-spacing: 0; }
     .block .figures b.bad { color: var(--zap-danger); }
     .block .none { font: var(--mat-sys-body-medium); }
@@ -360,6 +360,15 @@ export class OverviewPage implements OnInit, OnDestroy {
     }
     return concerns.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === 'danger' ? -1 : 1));
   });
+
+  /** How long ago in one unit only, to fit beside other figures: "5 min", "3 h", "12 d". */
+  protected brief(moment: string | null): string {
+    if (!moment) {
+      return '—';
+    }
+    const minutes = Math.max(0, Math.round((Date.now() - Date.parse(moment)) / 60000));
+    return minutes < 1 ? 'agora' : minutes < 60 ? `${minutes} min` : minutes < 48 * 60 ? `${Math.round(minutes / 60)} h` : `${Math.round(minutes / 1440)} d`;
+  }
 
   protected ms(value: number | null): string {
     return value === null ? '—' : value >= 1000 ? `${DECIMAL.format(value / 1000)} s` : `${Math.round(value)} ms`;

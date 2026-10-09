@@ -11,7 +11,7 @@ import { Transport } from '../core/transport';
   template: `
     <nav aria-label="Transporte">
       <a routerLink="/transporte" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
-        <mat-icon svgIcon="playlist_add" /> Área
+        <mat-icon svgIcon="playlist_add" /> Expedição
         @if (transport.summary()?.area; as count) { <span class="count">{{ count }}</span> }
       </a>
       <a routerLink="/transporte/pacotes" routerLinkActive="active">

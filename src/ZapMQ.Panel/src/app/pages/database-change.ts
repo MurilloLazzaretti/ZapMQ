@@ -8,6 +8,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api } from '../core/api';
 import { actionName, actionTone, kindIcon, kindName } from '../core/database';
 import { diff } from '../core/diff';
+import { Transport } from '../core/transport';
 import { NumPipe, WhenPipe } from '../core/format';
 import { ObjectChange } from '../core/models';
 import { DiffView } from '../shared/diff-view';
@@ -23,6 +24,7 @@ import { DiffView } from '../shared/diff-view';
 export class DatabaseChangePage implements OnInit {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
+  protected readonly transport = inject(Transport);
 
   protected readonly change = signal<ObjectChange | null>(null);
   protected readonly problem = signal('');
@@ -54,6 +56,7 @@ export class DatabaseChangePage implements OnInit {
   });
 
   ngOnInit(): void {
+    this.transport.loadNames();
     this.api.databaseChange(Number(this.route.snapshot.paramMap.get('id'))).subscribe({
       next: (answer) => this.change.set(answer.Change),
       error: (failure: HttpErrorResponse) => {

@@ -126,6 +126,17 @@ usuário da conexão o alcance.
 um banco fica um minuto em memória no agente. No painel: `GET api/workers/database/objects` e
 `/database/object`; telas em `/banco/objetos`.
 
+**Busca no texto dos scripts.** A lista de objetos busca também *dentro* dos scripts: um nome de
+coluna, de tabela, um trecho de comando. Responde com os objetos que têm o texto, quantas vezes e
+as primeiras linhas. A busca é feita nos scripts que o agente guarda (seção 5), como estavam na
+última conferência, e por isso só existe depois da primeira leitura do banco. Na tela do objeto, o
+script tem a sua própria busca, que marca e percorre as ocorrências.
+
+**Quem usa quem, entre procedures.** Uma procedure chamada só pelo nome (`EXEC spOutra`, sem o
+schema) é resolvida pelo SQL Server apenas na hora de rodar, e o catálogo guarda o nome, não o
+objeto. O agente procura esse nome no schema de quem chama e depois no `dbo`, nos dois sentidos:
+em *Usa* e em *É usado por*.
+
 ## 5. Etapa 3: histórico de objetos
 
 De tempos em tempos (`ObjectScanMinutes`, padrão 10; zero desliga) o agente confere os objetos de
@@ -152,6 +163,11 @@ aconteceu, as duas impressões digitais e os dois scripts. As alterações ficam
 objetos (o *default trace*). O agente procura nele o login, a máquina e a aplicação. É o que der:
 o usuário da conexão pode não ter permissão de ler o rastro, a instância pode tê-lo desligado, e
 o que já saiu do arquivo em uso não é mais encontrado. Nesses casos a alteração fica sem autor.
+
+**Direto no banco ou por pacote.** Cada alteração diz como foi feita: com um script aplicado direto
+no banco, ou trazida por um pacote de transporte, e nesse caso qual. O agente anota o que cada
+pacote aplica; a conferência seguinte atribui a ele as alterações que encontrar naqueles objetos.
+Um script livre não diz o que toca: o que mudar junto com ele é tido como obra dele.
 
 **Limites.** O que acontece entre duas conferências vira uma alteração só: um objeto alterado
 três vezes em dez minutos aparece uma vez, do primeiro estado ao último; um criado e apagado

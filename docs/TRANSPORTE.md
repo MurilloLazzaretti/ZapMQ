@@ -266,7 +266,7 @@ No painel:
 
 **Telas.** Item **Transporte** no menu, com um aviso de quantos pacotes esperam por alguém.
 
-- **Área** (`/transporte`): o que espera para entrar em um pacote. Objetos entram pelo botão
+- **Expedição** (`/transporte`): o que espera para entrar em um pacote. Objetos entram pelo botão
   *Transportar* das telas Objetos e Alterações do banco (esta marca cada alteração como ainda
   não transportada, ou já em pacote); um script é escrito ali ou importado de um `.sql`. Fechar o
   pacote pede um nome e a descrição.
@@ -336,7 +336,7 @@ Transporte → *Configuração* guarda as pastas de entrada.
 **Entrada.** Em Transporte → *Aplicações*, para cada alvo:
 
 - *Empacotar*: o agente empacota a versão que está rodando, a pasta como está agora.
-- *Enviar versão*: o `.zip` da pasta publicada, escolhido na máquina de quem está no painel, com
+- *Upload versão*: o `.zip` da pasta publicada, escolhido na máquina de quem está no painel, com
   ou sem a pasta de fora.
 - *Versão nova na entrada*: aparece quando alguém deixou uma versão nova para aquele alvo na
   **pasta de entrada** do servidor. É o começo do caminho de uma versão: o programador copia a

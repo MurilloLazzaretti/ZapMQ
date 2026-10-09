@@ -69,7 +69,7 @@
           <div class="table-wrap">
             <table class="data stack">
               <thead>
-                <tr><th>Quando</th><th>O que houve</th><th>Objeto</th><th>Quem</th><th></th></tr>
+                <tr><th>Quando</th><th>O que houve</th><th>Objeto</th><th>Como</th><th>Quem</th><th></th></tr>
               </thead>
               <tbody>
                 @for (change of list; track change.Id) {
@@ -81,10 +81,17 @@
                       @if (change.OldName) { <div class="muted was">antes {{ change.OldName }}</div> }
                       @if (tracking().length > 1) { <span class="muted sub">· {{ change.Database }}</span> }
                     </td>
+                    <td data-label="Como">
+                      @if (change.Package; as brought) {
+                        <a class="pill primary how" [routerLink]="['/transporte/pacotes', brought]" (click)="$event.stopPropagation()" matTooltip="Veio em um pacote de transporte"><mat-icon svgIcon="inventory_2" /> {{ transport.names()[brought] || 'pacote ' + brought.slice(0, 8) }}</a>
+                      } @else {
+                        <span class="muted how" matTooltip="Feita com um script aplicado direto neste banco">direto no banco</span>
+                      }
+                    </td>
                     <td data-label="Quem">{{ who(change) || '—' }}</td>
                     <td class="actions">
                       @if (pending(change)) {
-                        <button mat-button (click)="carry(change, $event)" matTooltip="Ainda não foi em nenhum pacote. Incluir na área de transporte"><mat-icon svgIcon="local_shipping" /> Transportar</button>
+                        <button mat-button (click)="carry(change, $event)" matTooltip="Ainda não foi em nenhum pacote. Incluir na expedição"><mat-icon svgIcon="local_shipping" /> Transportar</button>
                       } @else {
                         <span class="muted carried" matTooltip="Já foi em um pacote montado depois desta alteração"><mat-icon svgIcon="task_alt" /> em pacote</span>
                       }

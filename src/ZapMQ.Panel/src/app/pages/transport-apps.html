@@ -37,7 +37,7 @@
       @for (section of sections(); track section.kind) {
         <div class="section">
           <h2><mat-icon [svgIcon]="targetIcon(section.kind)" /> {{ targetName(section.kind, true) }} <span class="muted">{{ section.items.length }}</span></h2>
-          <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Enviar versão</em>. <em>Empacotar</em> leva a versão que está rodando agora.</p>
+          <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Upload versão</em>. <em>Empacotar</em> leva a versão que está rodando agora.</p>
           <ul>
             @for (target of section.items; track target.Name) {
               <li>
@@ -51,9 +51,9 @@
                   @if (target.Incoming; as left) {
                     <button mat-flat-button (click)="incoming(target)" [disabled]="busy()" [matTooltip]="'Deixada na pasta de entrada ' + (left.At | ago)">Versão nova na entrada</button>
                   }
-                  <button mat-button (click)="zip.click()" [disabled]="busy()" matTooltip="Envia o .zip da pasta publicada e coloca na área">Enviar versão</button>
+                  <button mat-button (click)="zip.click()" [disabled]="busy()" matTooltip="Faz o upload do .zip da pasta publicada e coloca na expedição">Upload versão</button>
                   <input #zip type="file" accept=".zip" hidden (change)="upload(target, $event)" />
-                  <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" matTooltip="Empacota a versão que está rodando nesta máquina agora e coloca na área">Empacotar</button>
+                  <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" matTooltip="Empacota a versão que está rodando nesta máquina agora e coloca na expedição">Empacotar</button>
                 </span>
               </li>
             }

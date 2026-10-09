@@ -17,6 +17,7 @@ export const routes: Routes = [
       { path: 'workers', title: 'Processos e serviços · ZapMQ', loadComponent: () => import('./pages/workers').then((m) => m.WorkersPage) },
       { path: 'workers/aplicacoes', title: 'Aplicações · ZapMQ', loadComponent: () => import('./pages/apps').then((m) => m.AppsPage) },
       { path: 'workers/aplicacoes/:kind/:name', title: 'Aplicação · ZapMQ', loadComponent: () => import('./pages/transport-app').then((m) => m.TransportAppPage) },
+      { path: 'workers/proxy', title: 'Proxy · ZapMQ', loadComponent: () => import('./pages/proxy').then((m) => m.ProxyPage) },
       { path: 'workers/eventos', title: 'Histórico · Worker Control', loadComponent: () => import('./pages/worker-events').then((m) => m.WorkerEventsPage) },
       { path: 'workers/configuracao', title: 'Configuração · Worker Control', loadComponent: () => import('./pages/worker-config').then((m) => m.WorkerConfigPage) },
       { path: 'workers/trace-grupo/:grupo', title: 'Trace do grupo · Worker Control', loadComponent: () => import('./pages/trace').then((m) => m.TracePage) },

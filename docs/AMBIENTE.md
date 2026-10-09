@@ -189,6 +189,25 @@ Um serviço Windows acompanhado é reconhecido como aplicação pelos números d
 
 O painel "Atenção" do mapa passa a existir também na Visão geral, e inclui serviço parado, verificação falhando, instância de upstream sem resposta e módulo fora do ar.
 
+## 7.2 O proxy, visto e alterado pelo painel
+
+Em Processos e serviços → *Proxy*: o arquivo principal do NGINX e os `.conf` que ele inclui,
+lidos e editados no painel.
+
+- **Onde está o proxy.** Pela seção `Proxy` do `ConfigWorkers.json` (`Config`, `Executable`,
+  `Service`); sem ela, pela pasta do log de acesso de `Traffic`, que fica ao lado da pasta de
+  configuração.
+- **Salvar** grava o arquivo e pergunta ao próprio proxy se a configuração inteira continua
+  válida (`nginx -t`). Se ele recusar, o arquivo volta ao que era e o que ele disse é mostrado. A
+  versão anterior fica em `transport\backup\proxy\{data}`.
+- **Salvar não põe em vigor.** Para isso, *Recarregar* (`nginx -s reload`), que testa antes e
+  não derruba quem está conectado. *Reiniciar serviço* para e inicia o serviço do Windows, e
+  também testa antes.
+- Só os arquivos de configuração são alcançados: nada fora deles, nem as listas de tipos.
+
+Comandos do agente: `Proxy`, `ProxyFile`, `SetProxyFile`, `ProxyTest`, `ProxyReload` e
+`ProxyRestart`.
+
 ## 8. Contrato de administração
 
 Comandos novos na fila `WorkerControlAdmin`. A versão do contrato passa a 2; os comandos da versão 1 não mudam. Um agente anterior responde `unknown-command`, e o painel diz que a versão instalada não tem o recurso.

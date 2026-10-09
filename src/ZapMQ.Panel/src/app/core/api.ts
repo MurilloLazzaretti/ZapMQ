@@ -4,8 +4,8 @@ import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult, TapEvent,
   PanelUser,
-  AreaItem, ItemCheck, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
-  CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, DatabasePoint, DatabaseQuery, DatabaseState,
+  AreaItem, ItemCheck, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
+  CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
@@ -214,6 +214,11 @@ export class Api {
     return this.http.get<CatalogPage>('api/workers/database/objects', { params: clean(filter) });
   }
 
+  /** The objects whose script has a text in it, as the scripts were last seen. */
+  databaseSearch(database: string, text: string): Observable<{ Database: string; Text: string; Ready: boolean; Objects: ScriptHit[] }> {
+    return this.http.get<{ Database: string; Text: string; Ready: boolean; Objects: ScriptHit[] }>('api/workers/database/search', { params: clean({ database, text }) });
+  }
+
   databaseObject(database: string, kind: string, schema: string, name: string): Observable<CatalogDetail> {
     return this.http.get<CatalogDetail>('api/workers/database/object', { params: { database, kind, schema, name } });
   }
@@ -267,6 +272,31 @@ export class Api {
 
   setInboxes(inboxes: Record<string, string>): Observable<unknown> {
     return this.http.put('api/transport/settings/inboxes', inboxes);
+  }
+
+  proxy(): Observable<ProxyState> {
+    return this.http.get<ProxyState>('api/workers/proxy');
+  }
+
+  proxyFile(path: string): Observable<{ Content: string; Sha256: string }> {
+    return this.http.get<{ Content: string; Sha256: string }>('api/workers/proxy/file', { params: { path } });
+  }
+
+  /** Written only if the proxy says the whole configuration is still good; otherwise what it said comes back. */
+  writeProxyFile(path: string, content: string, sha256: string): Observable<{ Saved: boolean; Output: string; Sha256?: string }> {
+    return this.http.put<{ Saved: boolean; Output: string; Sha256?: string }>('api/workers/proxy/file', { path, content, sha256 });
+  }
+
+  proxyTest(): Observable<{ Valid: boolean; Output: string }> {
+    return this.http.post<{ Valid: boolean; Output: string }>('api/workers/proxy/test', null);
+  }
+
+  proxyReload(): Observable<{ Reloaded: boolean; Output: string }> {
+    return this.http.post<{ Reloaded: boolean; Output: string }>('api/workers/proxy/reload', null);
+  }
+
+  proxyRestart(): Observable<{ Restarted: boolean; Output: string }> {
+    return this.http.post<{ Restarted: boolean; Output: string }>('api/workers/proxy/restart', null);
   }
 
   /** The files of an application that belong to the environment. */

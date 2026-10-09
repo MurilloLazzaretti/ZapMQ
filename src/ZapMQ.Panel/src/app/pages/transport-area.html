@@ -9,11 +9,11 @@
   </header>
 
   @if (problem()) {
-    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível ler a área</strong><span>{{ problem() }}</span></section>
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível ler a expedição</strong><span>{{ problem() }}</span></section>
   } @else if (items(); as list) {
     <section class="panel">
       <div class="panel-head">
-        <h2>Área</h2>
+        <h2>Expedição</h2>
         <span class="hint">{{ list.length }} {{ list.length === 1 ? 'item' : 'itens' }}</span>
         <span class="spacer"></span>
         <a mat-button routerLink="/banco/alteracoes"><mat-icon svgIcon="history" /> Alterações do banco</a>
@@ -37,7 +37,7 @@
           </mat-form-field>
           <div class="buttons">
             <button mat-button type="button" (click)="writing.set(false)">Cancelar</button>
-            <button mat-flat-button type="submit" [disabled]="busy() || !title.trim() || !script.trim()">Incluir na área</button>
+            <button mat-flat-button type="submit" [disabled]="busy() || !title.trim() || !script.trim()">Incluir na expedição</button>
           </div>
         </form>
       }
@@ -63,7 +63,7 @@
                   </td>
                   <td data-label="O que fazer no destino"><span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span></td>
                   <td data-label="Incluído">{{ item.addedAt | ago }} <span class="muted">por {{ item.addedBy }}</span></td>
-                  <td class="actions"><button mat-icon-button (click)="remove(item)" matTooltip="Tirar da área" [attr.aria-label]="'Tirar da área'"><mat-icon svgIcon="close" /></button></td>
+                  <td class="actions"><button mat-icon-button (click)="remove(item)" matTooltip="Tirar da expedição" [attr.aria-label]="'Tirar da expedição'"><mat-icon svgIcon="close" /></button></td>
                 </tr>
               }
             </tbody>
@@ -72,7 +72,7 @@
       } @else if (!writing()) {
         <div class="empty">
           <mat-icon svgIcon="playlist_add" />
-          <strong>A área está vazia</strong>
+          <strong>A expedição está vazia</strong>
           <span>Inclua objetos pelas telas <a routerLink="/banco/alteracoes">Alterações</a> e <a routerLink="/banco/objetos">Objetos</a> do banco, escreva um script, ou escolha uma <a routerLink="/transporte/aplicacoes">aplicação</a>.</span>
         </div>
       }
@@ -80,7 +80,7 @@
 
     @if (list.length) {
       <section class="panel">
-        <div class="panel-head"><h2>Fechar pacote</h2><span class="hint">com tudo o que está na área</span></div>
+        <div class="panel-head"><h2>Fechar pacote</h2><span class="hint">com tudo o que está na expedição</span></div>
         <form class="close" (ngSubmit)="close()">
           <mat-form-field subscriptSizing="dynamic">
             <mat-label>Nome do pacote</mat-label>

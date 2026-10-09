@@ -9,7 +9,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../core/api';
 import { kindIcon, kindName, size, variety } from '../core/database';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
-import { CatalogObject, CatalogPage } from '../core/models';
+import { CatalogObject, CatalogPage, ScriptHit } from '../core/models';
 import { Transport } from '../core/transport';
 import { DatabaseTabs } from '../shared/database-tabs';
 
@@ -40,6 +40,11 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
   protected readonly kind = signal('');
   protected readonly schema = signal('');
   protected readonly search = signal('');
+  /** Where the text is looked for: in the names of the objects, or inside their scripts. */
+  protected readonly where = signal<'name' | 'script'>('name');
+  protected readonly hits = signal<ScriptHit[] | null>(null);
+  /** The scripts are only there to be searched after the database was read once. */
+  protected readonly hitsReady = signal(true);
   protected readonly sort = signal('name');
   protected readonly limit = signal(PAGE);
   protected readonly page = signal<CatalogPage | null>(null);
@@ -61,6 +66,7 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
     this.kind.set(query.get('tipo') ?? '');
     this.schema.set(query.get('schema') ?? '');
     this.search.set(query.get('busca') ?? '');
+    this.where.set(query.get('onde') === 'script' ? 'script' : 'name');
     this.sort.set(query.get('ordem') ?? 'name');
     this.api.database().subscribe({ next: (state) => this.databases.set(state.Databases), error: () => undefined });
     this.refresh();
@@ -87,6 +93,43 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
     this.typing = setTimeout(() => this.refresh(), 300);
   }
 
+  protected look(where: 'name' | 'script'): void {
+    this.where.set(where);
+    this.limit.set(PAGE);
+    this.refresh();
+  }
+
+  /** The object, opened with what was searched for already being looked for in its script. */
+  protected hitLink(hit: ScriptHit): string[] {
+    return ['/banco/objetos', this.page()?.Database ?? this.database(), hit.Kind, hit.Schema, hit.Name];
+  }
+
+  private searchScripts(mine: number): void {
+    const text = this.search().trim();
+    if (text.length < 2) {
+      this.hits.set(null);
+      this.loading.set(false);
+      return;
+    }
+    this.api.databaseSearch(this.database() || this.page()?.Database || '', text).subscribe({
+      next: (answer) => {
+        if (mine !== this.asked) {
+          return;
+        }
+        this.hits.set(answer.Objects);
+        this.hitsReady.set(answer.Ready);
+        this.loading.set(false);
+      },
+      error: (failure: HttpErrorResponse) => {
+        if (mine === this.asked) {
+          this.loading.set(false);
+          this.hits.set([]);
+          this.problem.set(failure.status === 501 ? 'A busca nos scripts existe a partir da versão 2.14 do Worker Control.' : (failure.error?.error ?? 'Não foi possível buscar nos scripts.'));
+        }
+      },
+    });
+  }
+
   protected more(): void {
     this.limit.update((limit) => limit + PAGE);
     this.refresh();
@@ -100,11 +143,18 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
     const mine = ++this.asked;
     this.loading.set(true);
     this.router.navigate([], {
-      queryParams: { banco: this.database() || null, tipo: this.kind() || null, schema: this.schema() || null, busca: this.search() || null, ordem: this.sort() === 'name' ? null : this.sort() },
+      queryParams: { banco: this.database() || null, tipo: this.kind() || null, schema: this.schema() || null, busca: this.search() || null, ordem: this.sort() === 'name' ? null : this.sort(), onde: this.where() === 'script' ? 'script' : null },
       replaceUrl: true,
     });
+    if (this.where() === 'script') {
+      this.searchScripts(mine);
+      if (this.page()) {
+        return;
+      }
+    }
+    const byName = this.where() === 'name';
     this.api
-      .databaseObjects({ database: this.database(), kind: this.kind(), schema: this.schema(), search: this.search(), sort: this.sort(), limit: this.limit(), fresh })
+      .databaseObjects({ database: this.database(), kind: byName ? this.kind() : '', schema: byName ? this.schema() : '', search: byName ? this.search() : '', sort: this.sort(), limit: this.limit(), fresh })
       .subscribe({
         next: (page) => {
           if (mine !== this.asked) {

@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -33,7 +34,7 @@ const PARTS: Record<string, string> = {
  */
 @Component({
   selector: 'zap-database-object',
-  imports: [RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, NumPipe, AgoPipe, WhenPipe],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, NumPipe, AgoPipe, WhenPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './database-object.html',
   styleUrl: './database-object.scss',
@@ -61,13 +62,58 @@ export class DatabaseObjectPage implements OnInit, OnDestroy {
   protected readonly size = size;
 
   protected readonly pieces = computed(() => colour(this.detail()?.Script ?? ''));
+
+  /** What is being looked for in the script, and which of the places it was found in is the one being shown. */
+  protected readonly find = signal('');
+  protected readonly at = signal(0);
+  private readonly found = viewChild<ElementRef<HTMLElement>>('found');
+
+  /** Where the text is in the script, whatever the case of the letters. */
+  protected readonly hits = computed(() => {
+    const script = (this.detail()?.Script ?? '').toLowerCase();
+    const wanted = this.find().trim().toLowerCase();
+    const places: number[] = [];
+    if (wanted.length > 1) {
+      for (let index = script.indexOf(wanted); index >= 0; index = script.indexOf(wanted, index + wanted.length)) {
+        places.push(index);
+      }
+    }
+    return places;
+  });
+
+  /** The script cut where the text was found, each of those pieces with its number. */
+  protected readonly marked = computed(() => {
+    const script = this.detail()?.Script ?? '';
+    const length = this.find().trim().length;
+    const parts: { text: string; hit: number | null }[] = [];
+    let last = 0;
+    this.hits().forEach((place, number) => {
+      parts.push({ text: script.slice(last, place), hit: null }, { text: script.slice(place, place + length), hit: number });
+      last = place + length;
+    });
+    parts.push({ text: script.slice(last), hit: null });
+    return parts;
+  });
   protected readonly lines = computed(() => (this.detail()?.Script ?? '').replace(/\n$/, '').split('\n').length);
   protected readonly unread = computed(() => Object.entries(this.detail()?.Problems ?? {}).map(([part, message]) => ({ part: PARTS[part] ?? part, message })));
 
   /** The columns that are part of the primary key. */
   protected readonly keys = computed(() => new Set((this.detail()?.Indexes ?? []).filter((index) => index.PrimaryKey).flatMap((index) => index.Columns.map((column) => column.Name))));
 
+  /** Goes to the next place the text was found in, or back to the one before, round and round. */
+  protected next(step: number): void {
+    const total = this.hits().length;
+    if (!total) {
+      return;
+    }
+    this.at.set((this.at() + step + total) % total);
+    setTimeout(() => this.found()?.nativeElement.querySelector(`mark[data-hit="${this.at()}"]`)?.scrollIntoView({ block: 'center' }));
+  }
+
   ngOnInit(): void {
+    this.transport.loadNames();
+    // Coming from a search in the scripts, what was searched for is looked for here too.
+    this.find.set(this.route.snapshot.queryParamMap.get('texto') ?? '');
     this.watching = this.route.paramMap.subscribe((parameters) => {
       this.wanted.set({ database: parameters.get('database') ?? '', kind: parameters.get('kind') ?? '', schema: parameters.get('schema') ?? '', name: parameters.get('name') ?? '' });
       this.load();

@@ -201,7 +201,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected async remove(): Promise<void> {
     const sure = await confirm(this.dialog, {
       title: 'Excluir o pacote?',
-      message: `"${this.detail()!.package.name}" é apagado deste ambiente, com o arquivo. Os itens que ele levava voltam para a área.`,
+      message: `"${this.detail()!.package.name}" é apagado deste ambiente, com o arquivo. Os itens que ele levava voltam para a expedição.`,
       warning: 'Se o arquivo já foi levado a outro ambiente, lá ele continua existindo.',
       action: 'Excluir',
       danger: true,

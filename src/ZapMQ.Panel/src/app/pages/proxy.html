@@ -1,0 +1,83 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Proxy</h1>
+      <p class="muted">O proxy reverso (NGINX) na frente das aplicações: a configuração dele e o pedido para que a leia de novo.</p>
+    </div>
+    <span class="spacer"></span>
+    <zap-worker-tabs />
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível ler o proxy</strong><span>{{ problem() }}</span></section>
+  } @else if (state(); as now) {
+    @if (!now.Configured) {
+      <section class="panel empty">
+        <mat-icon svgIcon="dns" />
+        <strong>Não se sabe onde está o proxy nesta máquina</strong>
+        <span>Ele é encontrado pelo log de acesso configurado em <code>Traffic</code>, ou pela seção <code>Proxy</code> do <code>ConfigWorkers.json</code> (<code>Config</code>, <code>Executable</code>, <code>Service</code>).</span>
+      </section>
+    } @else {
+      @if (now.Problem) {
+        <div class="notice danger" role="alert"><mat-icon svgIcon="error" /><div>{{ now.Problem }}</div></div>
+      }
+
+      <section class="panel">
+        <div class="state">
+          <div class="where">
+            <span><strong class="mono">{{ now.Config }}</strong></span>
+            <span class="muted">
+              @if (now.Service; as service) {
+                Serviço {{ service.Name }}:
+                <span class="pill" [class.ok]="service.State === 'Running'" [class.danger]="service.State !== 'Running'">{{ service.State === 'Running' ? 'rodando' : service.State === 'Missing' ? 'não instalado' : 'parado' }}</span>
+              } @else {
+                Serviço do Windows não identificado.
+              }
+              @if (unread()) { <span class="pending">Há mudança salva que o proxy ainda não leu.</span> }
+            </span>
+          </div>
+          <button mat-button (click)="test()" [disabled]="busy()" matTooltip="Pergunta ao proxy se a configuração que está em disco é válida">Testar</button>
+          <button mat-flat-button (click)="reload()" [disabled]="busy()" matTooltip="O proxy lê a configuração de novo, sem derrubar quem está conectado"><mat-icon svgIcon="refresh" /> Recarregar</button>
+          <button mat-button (click)="restart()" [disabled]="busy() || !now.Service" matTooltip="Para e inicia o serviço do Windows"><mat-icon svgIcon="restart_alt" /> Reiniciar serviço</button>
+        </div>
+        @if (said(); as answer) {
+          <pre class="said mono" [class.ok]="answer.ok" [class.bad]="!answer.ok">{{ answer.text }}</pre>
+        }
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>Configuração</h2><span class="hint">o arquivo principal e os que ele inclui</span></div>
+        <div class="editor">
+          <ul class="files" role="listbox" aria-label="Arquivos de configuração do proxy">
+            @for (file of now.Files ?? []; track file.Path) {
+              <li>
+                <button type="button" [class.on]="open() === file.Path" (click)="select(file.Path)">
+                  <mat-icon svgIcon="data_object" />
+                  <span class="what"><strong class="mono">{{ file.Path }}</strong><span class="muted">{{ file.Main ? 'principal · ' : '' }}{{ size(file.Size / 1024) }} · alterado {{ file.ModifiedAt | ago }}</span></span>
+                </button>
+              </li>
+            }
+          </ul>
+          <div class="pane">
+            @if (open(); as path) {
+              @if (loaded()) {
+                <textarea class="mono" [ngModel]="text" (ngModelChange)="typed($event)" spellcheck="false" [attr.aria-label]="'Conteúdo de ' + path"></textarea>
+                <div class="bar">
+                  <span class="spacer"></span>
+                  <button mat-button (click)="discard()" [disabled]="busy() || !edited()">Desfazer</button>
+                  <button mat-flat-button (click)="save()" [disabled]="busy() || !edited()" matTooltip="O proxy testa a configuração inteira; se recusar, o arquivo volta ao que era"><mat-icon svgIcon="save" /> Salvar</button>
+                </div>
+              } @else {
+                <p class="muted hint-pane">Lendo {{ path }}…</p>
+              }
+            } @else {
+              <p class="muted hint-pane">Escolha um arquivo para ver e editar. Salvar não põe a mudança em vigor: para isso, <strong>Recarregar</strong>.</p>
+            }
+          </div>
+        </div>
+      </section>
+    }
+  } @else {
+    <section class="panel empty"><span>Lendo…</span></section>
+  }
+</div>

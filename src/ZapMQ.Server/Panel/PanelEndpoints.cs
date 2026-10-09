@@ -507,6 +507,16 @@ public static class PanelEndpoints
                         request[field] = value;
             }));
 
+        // The objects whose script has a text in it.
+        workers.MapGet("/database/search", (string? database, string? text, int? limit, WorkerControlClient client, HttpContext context) =>
+            Forward(client, context, "DatabaseSearch", request =>
+            {
+                if (!string.IsNullOrWhiteSpace(database))
+                    request["Database"] = database;
+                request["Text"] = text ?? "";
+                request["Limit"] = Math.Clamp(limit ?? 200, 1, 500);
+            }));
+
         // What changed in the objects of the databases, as the Worker Control noticed it.
         workers.MapGet("/database/changes", (string? database, string? kind, string? schema, string? name, string? search, int? days, int? limit, WorkerControlClient client, HttpContext context) =>
             Forward(client, context, "DatabaseChanges", request =>
@@ -521,6 +531,22 @@ public static class PanelEndpoints
 
         workers.MapGet("/database/changes/{id:long}", (long id, WorkerControlClient client, HttpContext context) =>
             Forward(client, context, "DatabaseChange", request => request["Id"] = id));
+
+        // The reverse proxy in front of the applications: its configuration, seen and changed from here.
+        workers.MapGet("/proxy", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Proxy"));
+        workers.MapGet("/proxy/file", (string? path, WorkerControlClient client, HttpContext context) => Forward(client, context, "ProxyFile", request => request["Path"] = path));
+        workers.MapPut("/proxy/file", (ProxyFileBody body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "SetProxyFile", request =>
+            {
+                request["Path"] = body.Path;
+                request["Content"] = body.Content;
+                request["Sha256"] = body.Sha256;
+            }, loggers, $"Proxy: file {body.Path} written", TimeSpan.FromSeconds(45)));
+        workers.MapPost("/proxy/test", (WorkerControlClient client, HttpContext context) => Forward(client, context, "ProxyTest", patience: TimeSpan.FromSeconds(45)));
+        workers.MapPost("/proxy/reload", (WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "ProxyReload", null, loggers, "Proxy: asked to read its configuration again", TimeSpan.FromSeconds(60)));
+        workers.MapPost("/proxy/restart", (WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "ProxyRestart", null, loggers, "Proxy: service restarted", TimeSpan.FromMinutes(3)));
 
         // The micro frontends published on the machine of the Worker Control.
         workers.MapGet("/frontends", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Frontends"));
@@ -701,6 +727,8 @@ public static class PanelEndpoints
 
     public sealed record LoginRequest(string? User, string? Password);
 
+    public sealed record ProxyFileBody(string? Path, string? Content, string? Sha256);
+
     public sealed record PasswordRequest(string? Current, string? Password);
 
     public sealed record NewUserRequest(string? Login, string? Name, string? Password);
@@ -749,9 +777,11 @@ public static class PanelEndpoints
     /// request was wrong (4xx) or the Worker Control could not be reached (503).
     /// </summary>
     private static async Task<IResult> Forward(WorkerControlClient client, HttpContext context, string command,
-        Action<System.Text.Json.Nodes.JsonObject>? more = null, ILoggerFactory? loggers = null, string? audit = null)
+        Action<System.Text.Json.Nodes.JsonObject>? more = null, ILoggerFactory? loggers = null, string? audit = null, TimeSpan? patience = null)
     {
-        var answer = await client.AskAsync(command, context.Items[PanelHost.UserItem] as string, more, context.RequestAborted);
+        var answer = patience is { } wait
+            ? await client.AskAsync(command, context.Items[PanelHost.UserItem] as string, wait, more, context.RequestAborted)
+            : await client.AskAsync(command, context.Items[PanelHost.UserItem] as string, more, context.RequestAborted);
         if (!answer.Reached)
             return Results.Json(new { error = answer.Problem, code = "unreachable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
 

@@ -17,7 +17,7 @@
     </div>
     <span class="spacer"></span>
     @if (detail(); as now) {
-      <button mat-button (click)="transport.add({ database: now.Database, kind: now.Object.Kind, schema: now.Object.Schema, name: now.Object.Name })" matTooltip="Incluir na área de transporte, para ir em um pacote">
+      <button mat-button (click)="transport.add({ database: now.Database, kind: now.Object.Kind, schema: now.Object.Schema, name: now.Object.Name })" matTooltip="Incluir na expedição, para ir em um pacote">
         <mat-icon svgIcon="local_shipping" /> Transportar
       </button>
     }
@@ -218,6 +218,11 @@
               <a [routerLink]="['/banco/alteracoes', change.Id]">{{ change.ModifiedAt ?? change.At | when }}</a>
               @if (who(change)) { <span class="muted">por {{ who(change) }}</span> }
               @if (change.OldName) { <span class="muted">antes {{ change.OldName }}</span> }
+              @if (change.Package; as brought) {
+                <a class="pill primary" [routerLink]="['/transporte/pacotes', brought]" matTooltip="Veio em um pacote de transporte">{{ transport.names()[brought] || 'pacote ' + brought.slice(0, 8) }}</a>
+              } @else {
+                <span class="muted">direto no banco</span>
+              }
             </li>
           }
         </ul>
@@ -239,12 +244,26 @@
           <span class="mono muted print" matTooltip="Impressão digital do script: muda quando o objeto muda">{{ now.Fingerprint.slice(0, 12) }}</span>
         }
         @if (now.Script) {
+          <label class="find">
+            <mat-icon svgIcon="search" />
+            <input type="search" placeholder="Buscar no script" [ngModel]="find()" (ngModelChange)="find.set($event); at.set(0)" (keydown.enter)="next(1)" aria-label="Buscar no script" />
+            @if (find().trim().length > 1) {
+              <span class="muted num">{{ hits().length ? at() + 1 + ' de ' + hits().length : 'nada' }}</span>
+              <button type="button" (click)="next(-1)" [disabled]="!hits().length" aria-label="Anterior"><mat-icon svgIcon="arrow_upward" /></button>
+              <button type="button" (click)="next(1)" [disabled]="!hits().length" aria-label="Próxima"><mat-icon svgIcon="arrow_downward" /></button>
+            }
+          </label>
           <button mat-button (click)="copy()"><mat-icon [svgIcon]="copied() ? 'check_circle' : 'content_copy'" /> {{ copied() ? 'Copiado' : 'Copiar' }}</button>
           <button mat-icon-button (click)="download()" matTooltip="Baixar como arquivo .sql" aria-label="Baixar o script"><mat-icon svgIcon="download" /></button>
         }
       </div>
       @if (now.Script) {
-        <pre class="script"><code>@for (piece of pieces(); track $index) {<span [class]="piece.kind">{{ piece.text }}</span>}</code></pre>
+        @if (find().trim().length > 1) {
+          <!-- While something is being looked for, the script is shown plain, with what was found marked. -->
+          <pre class="script" #found><code>@for (part of marked(); track $index) {@if (part.hit !== null) {<mark [class.here]="part.hit === at()" [attr.data-hit]="part.hit">{{ part.text }}</mark>} @else {{{ part.text }}}}</code></pre>
+        } @else {
+          <pre class="script"><code>@for (piece of pieces(); track $index) {<span [class]="piece.kind">{{ piece.text }}</span>}</code></pre>
+        }
       } @else {
         <div class="empty"><mat-icon svgIcon="lock" /><strong>O banco guarda este objeto criptografado</strong><span>Não há texto para mostrar.</span></div>
       }

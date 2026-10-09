@@ -305,9 +305,9 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
         if (string.IsNullOrWhiteSpace(name))
             throw new TransportRefused("Dê um nome ao pacote");
         var area = store.Area();
-        var chosen = ids is { Count: > 0 } ? ids.Select(id => area.FirstOrDefault(item => item.Id == id) ?? throw new TransportRefused("Um dos itens escolhidos não está mais na área")).ToList() : area;
+        var chosen = ids is { Count: > 0 } ? ids.Select(id => area.FirstOrDefault(item => item.Id == id) ?? throw new TransportRefused("Um dos itens escolhidos não está mais na expedição")).ToList() : area;
         if (chosen.Count == 0)
-            throw new TransportRefused("A área está vazia: não há o que fechar");
+            throw new TransportRefused("A expedição está vazia: não há o que fechar");
 
         var now = time.GetUtcNow();
         var packaged = LastPackaged();
@@ -322,7 +322,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             {
                 // What is made of files goes as it was packed when it came into the area.
                 if (!File.Exists(store.AreaFile(area_.Id)))
-                    throw new TransportRefused($"Os arquivos de {area_.Name} não estão mais na área. Tire o item e inclua de novo.");
+                    throw new TransportRefused($"Os arquivos de {area_.Name} não estão mais na expedição. Tire o item e inclua de novo.");
                 item.Action = "Replace";
                 item.Fingerprint = area_.Fingerprint;
                 item.Version = area_.Version;
@@ -339,7 +339,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             else
             {
                 var found = await Read(area_.Database, area_.ObjectKind, area_.Schema, area_.Name, by, cancellation)
-                    ?? throw new TransportRefused($"{area_.Schema}.{area_.Name} não existe mais neste banco. Tire-o da área, ou inclua-o como exclusão.");
+                    ?? throw new TransportRefused($"{area_.Schema}.{area_.Name} não existe mais neste banco. Tire-o da expedição, ou inclua-o como exclusão.");
                 script = found.Script;
                 item.Fingerprint = found.Fingerprint;
                 item.Variety = found.Variety;

@@ -86,12 +86,19 @@ export class Transport {
   private readonly snack = inject(MatSnackBar);
 
   readonly summary = signal<TransportSummary | null>(null);
+  /** The names of the packages this environment knows, by their identity. */
+  readonly names = signal<Record<string, string>>({});
   /** What asks for somebody: packages waiting to be approved and the ones that went wrong. */
   readonly waiting = signal(0);
 
   constructor() {
     this.refresh();
     setInterval(() => this.refresh(), 30000);
+  }
+
+  /** Reads the names of the packages again; whoever shows what a package brought asks for it. */
+  loadNames(): void {
+    this.api.packages().subscribe({ next: (answer) => this.names.set(Object.fromEntries(answer.packages.map((item) => [item.id, item.name]))), error: () => undefined });
   }
 
   refresh(): void {
@@ -108,11 +115,11 @@ export class Transport {
   async add(item: { database?: string; kind: string; schema: string; name: string; drop?: boolean }): Promise<boolean> {
     try {
       await firstValueFrom(this.api.addToArea(item));
-      this.snack.open(`${item.schema}.${item.name} está na área de transporte${item.drop ? ', como exclusão' : ''}`, undefined, { duration: 3000 });
+      this.snack.open(`${item.schema}.${item.name} está na expedição${item.drop ? ', como exclusão' : ''}`, undefined, { duration: 3000 });
       this.refresh();
       return true;
     } catch (failure) {
-      this.snack.open((failure as HttpErrorResponse).error?.error ?? 'Não foi possível incluir na área de transporte', 'Fechar', { duration: 7000 });
+      this.snack.open((failure as HttpErrorResponse).error?.error ?? 'Não foi possível incluir na expedição', 'Fechar', { duration: 7000 });
       return false;
     }
   }

@@ -76,3 +76,6 @@ td:first-child { white-space: nowrap; }
 .actions { white-space: nowrap; text-align: right; padding-top: 0; padding-bottom: 0; }
 .carried { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .carried mat-icon { width: 16px; height: 16px; }
+
+.how { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; text-decoration: none; font-size: 12.5px; }
+.how mat-icon { width: 14px; height: 14px; }

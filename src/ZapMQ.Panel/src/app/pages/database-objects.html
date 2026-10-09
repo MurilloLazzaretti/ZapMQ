@@ -38,8 +38,12 @@
       <div class="tools">
         <label class="search">
           <mat-icon svgIcon="search" />
-          <input type="search" placeholder="Buscar por nome" [ngModel]="search()" (ngModelChange)="typed($event)" aria-label="Buscar objeto" />
+          <input type="search" [placeholder]="where() === 'script' ? 'Buscar um texto dentro dos scripts' : 'Buscar por nome'" [ngModel]="search()" (ngModelChange)="typed($event)" aria-label="Buscar objeto" />
         </label>
+        <mat-button-toggle-group [value]="where()" (change)="look($event.value)" hideSingleSelectionIndicator aria-label="Onde buscar">
+          <mat-button-toggle value="name">No nome</mat-button-toggle>
+          <mat-button-toggle value="script" matTooltip="Procura o texto dentro do script de cada objeto">No script</mat-button-toggle>
+        </mat-button-toggle-group>
         @if (databases().length > 1) {
           <select class="pick" [ngModel]="database() || page()?.Database" (ngModelChange)="choose(database, $event)" aria-label="Banco">
             @for (name of databases(); track name) {
@@ -64,6 +68,36 @@
         <button mat-icon-button (click)="refresh(true)" [disabled]="loading()" matTooltip="Ler o banco de novo" aria-label="Ler o banco de novo"><mat-icon svgIcon="refresh" /></button>
       </div>
 
+      @if (where() === 'script') {
+        @if (search().trim().length < 2) {
+          <div class="empty"><mat-icon svgIcon="search" /><strong>Digite o texto a procurar</strong><span>Um nome de coluna, de tabela, um trecho de comando. A busca olha dentro do script de todos os objetos.</span></div>
+        } @else if (hits(); as found) {
+          @if (!hitsReady()) {
+            <div class="empty"><mat-icon svgIcon="hourglass_empty" /><strong>O banco ainda está sendo lido pela primeira vez</strong><span>A busca nos scripts fica disponível quando essa leitura terminar. Veja o andamento na aba Alterações.</span></div>
+          } @else if (found.length) {
+            <ul class="hits" [class.loading]="loading()">
+              @for (hit of found; track hit.Kind + hit.Schema + hit.Name) {
+                <li>
+                  <a class="object" [routerLink]="hitLink(hit)" [queryParams]="{ texto: search().trim() }">
+                    <mat-icon [svgIcon]="kindIcon(hit.Kind)" [matTooltip]="kindName(hit.Kind)" /><span><span class="muted">{{ hit.Schema }}.</span><strong>{{ hit.Name }}</strong></span>
+                  </a>
+                  <span class="pill">{{ hit.Matches }} {{ hit.Matches === 1 ? 'vez' : 'vezes' }}</span>
+                  <div class="lines">
+                    @for (line of hit.Lines; track line.Number) {
+                      <div><span class="number">{{ line.Number }}</span><span class="mono">{{ line.Text }}</span></div>
+                    }
+                  </div>
+                </li>
+              }
+            </ul>
+            <div class="foot"><span class="muted">{{ found.length | num }} {{ found.length === 1 ? 'objeto' : 'objetos' }} com esse texto, nos scripts como estavam na última conferência do banco.</span></div>
+          } @else {
+            <div class="empty"><mat-icon svgIcon="search" /><strong>Nenhum script tem esse texto</strong></div>
+          }
+        } @else {
+          <div class="empty"><span>Procurando…</span></div>
+        }
+      } @else {
       <div class="kinds" role="tablist" aria-label="Tipo de objeto">
         <button type="button" [class.on]="!kind()" (click)="choose(kind, '')">Todos</button>
         @for (item of page()?.Kinds ?? []; track item.Kind) {
@@ -90,7 +124,7 @@
                     <td class="right" data-label="Alterado" [matTooltip]="item.ModifiedAt | when">{{ item.ModifiedAt | ago }}</td>
                     <td class="right num" data-label="Linhas">{{ item.Rows === null ? '—' : (item.Rows | num) }}</td>
                     <td class="right num" data-label="Tamanho">{{ item.SizeKb === null ? '—' : size(item.SizeKb) }}</td>
-                    <td class="actions"><button mat-icon-button (click)="transport.add({ database: now.Database, kind: item.Kind, schema: item.Schema, name: item.Name })" matTooltip="Incluir na área de transporte" aria-label="Incluir na área de transporte"><mat-icon svgIcon="local_shipping" /></button></td>
+                    <td class="actions"><button mat-icon-button (click)="transport.add({ database: now.Database, kind: item.Kind, schema: item.Schema, name: item.Name })" matTooltip="Incluir na expedição" aria-label="Incluir na expedição"><mat-icon svgIcon="local_shipping" /></button></td>
                   </tr>
                 }
               </tbody>
@@ -110,6 +144,7 @@
         }
       } @else {
         <div class="empty"><span>Lendo o banco…</span></div>
+      }
       }
     </section>
   }

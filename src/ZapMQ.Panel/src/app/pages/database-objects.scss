@@ -96,3 +96,18 @@ td.right, td.num { white-space: nowrap; }
 .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 20px 14px; }
 
 .actions { width: 48px; padding-top: 0; padding-bottom: 0; text-align: right; }
+
+.hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--zap-border);
+  transition: opacity 0.15s;
+
+  &.loading { opacity: 0.6; }
+  li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 10px 20px; }
+  li + li { border-top: 1px solid var(--zap-border); }
+  .lines { grid-column: 1 / -1; display: grid; gap: 2px; padding-left: 28px; font-size: 12.5px; overflow-wrap: anywhere; }
+  .lines div { display: flex; gap: 10px; }
+  .number { flex: none; min-width: 4ch; text-align: right; color: var(--mat-sys-on-surface-variant); opacity: 0.7; }
+}

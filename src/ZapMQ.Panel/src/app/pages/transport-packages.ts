@@ -62,7 +62,7 @@ import { TransportTabs } from '../shared/transport-tabs';
             <div class="empty">
               <mat-icon svgIcon="inventory_2" />
               <strong>Nenhum pacote ainda</strong>
-              <span>Monte um na <a routerLink="/transporte">área</a>, ou importe o arquivo de um pacote feito em outro ambiente.</span>
+              <span>Monte um na <a routerLink="/transporte">expedição</a>, ou importe o arquivo de um pacote feito em outro ambiente.</span>
             </div>
           }
         </section>

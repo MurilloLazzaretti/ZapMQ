@@ -75,3 +75,26 @@ td strong + .pill { margin-left: 8px; }
 
 .changes { max-height: 220px; }
 .changes li { gap: 10px; flex-wrap: wrap; }
+
+.find {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 6px 0 12px;
+  border-radius: 999px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+
+  > mat-icon { width: 18px; height: 18px; flex: none; }
+  input { width: 170px; min-width: 0; border: none; outline: none; background: transparent; color: var(--mat-sys-on-surface); font: var(--mat-sys-body-medium); }
+  .num { font-size: 12px; white-space: nowrap; }
+  button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: none; border-radius: 50%; background: none; color: inherit; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--mat-sys-surface-container-highest); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button mat-icon { width: 18px; height: 18px; }
+  &:focus-within { outline: 2px solid var(--mat-sys-primary); }
+}
+
+.script mark { border-radius: 3px; background: color-mix(in srgb, var(--zap-warn) 35%, transparent); color: inherit; }
+.script mark.here { background: var(--zap-warn); color: var(--mat-sys-surface); }

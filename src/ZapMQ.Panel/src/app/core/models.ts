@@ -758,6 +758,8 @@ export interface ObjectChange {
   Login: string | null;
   Host: string | null;
   Application: string | null;
+  /** The package of changes that brought it; null when it was done straight on the database. */
+  Package: string | null;
   OldScript: string | null;
   NewScript: string | null;
 }
@@ -917,4 +919,24 @@ export interface TransportSettings {
   Inboxes: Record<string, { Path: string; Exists: boolean; Said: boolean }>;
   Keep: string[];
   KeepVersions: number;
+}
+
+/** An object whose script has the text that was searched for. */
+export interface ScriptHit {
+  Kind: CatalogKind;
+  Schema: string;
+  Name: string;
+  Matches: number;
+  Lines: { Number: number; Text: string }[];
+}
+
+/** The reverse proxy in front of the applications, as the Worker Control finds it on the machine. */
+export interface ProxyState {
+  Configured: boolean;
+  Root?: string;
+  Config?: string;
+  Executable?: string | null;
+  Service?: { Name: string; State: string } | null;
+  Problem?: string | null;
+  Files?: { Path: string; Size: number; ModifiedAt: string; Main: boolean }[];
 }

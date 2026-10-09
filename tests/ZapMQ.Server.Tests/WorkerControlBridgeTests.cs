@@ -213,4 +213,27 @@ public class WorkerControlBridgeTests(ServerFixture server) : IClassFixture<Serv
             Assert.Equal(1440, (int)asked[1]["Minutes"]!);
         }
     }
+
+    [Fact]
+    public async Task The_proxy_and_the_search_in_the_scripts_are_asked_of_the_worker_control()
+    {
+        var (worker, asked) = await Pretend(_ => new JObject { ["Ok"] = true });
+        await using var __ = worker;
+
+        await Api.GetStringAsync("api/workers/proxy");
+        await Api.GetStringAsync("api/workers/proxy/file?path=sites%2Forders.conf");
+        Assert.Equal(HttpStatusCode.OK, (await Api.PutAsJsonAsync("api/workers/proxy/file", new { path = "nginx.conf", content = "http { }", sha256 = "abc" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Api.PostAsync("api/workers/proxy/test", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Api.PostAsync("api/workers/proxy/reload", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Api.PostAsync("api/workers/proxy/restart", null)).StatusCode);
+        await Api.GetStringAsync("api/workers/database/search?text=Canal&limit=10");
+
+        lock (asked)
+        {
+            Assert.Equal(["Proxy", "ProxyFile", "SetProxyFile", "ProxyTest", "ProxyReload", "ProxyRestart", "DatabaseSearch"], asked.Select(request => (string?)request["Command"]));
+            Assert.Equal("sites/orders.conf", (string?)asked[1]["Path"]);
+            Assert.Equal(("nginx.conf", "http { }", "abc", "admin"), ((string?)asked[2]["Path"], (string?)asked[2]["Content"], (string?)asked[2]["Sha256"], (string?)asked[2]["By"]));
+            Assert.Equal(("Canal", 10), ((string?)asked[6]["Text"], (int)asked[6]["Limit"]!));
+        }
+    }
 }

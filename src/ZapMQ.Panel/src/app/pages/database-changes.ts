@@ -36,7 +36,7 @@ export class DatabaseChangesPage implements OnInit, OnDestroy {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly transport = inject(Transport);
+  protected readonly transport = inject(Transport);
   /** When each object last went into a package made here. */
   private readonly packaged = signal<Record<string, string>>({});
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -64,6 +64,7 @@ export class DatabaseChangesPage implements OnInit, OnDestroy {
     this.days.set(Number(query.get('dias')) || 30);
     this.kind.set(query.get('tipo') ?? '');
     this.search.set(query.get('busca') ?? '');
+    this.transport.loadNames();
     this.refresh();
     this.timer = setInterval(() => this.refresh(), 30000);
   }
