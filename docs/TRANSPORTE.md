@@ -195,11 +195,33 @@ O agente aplica os itens na ordem do pacote:
 No primeiro item que falhar a aplicação para. O pacote fica **aplicado em parte**, com o que deu
 certo, o que falhou e a mensagem. Nada é desfeito sozinho.
 
-### 5.6 Desfazer
+### 5.6 Reverter
 
-Por item, por decisão de alguém: reaplicar o script guardado, ou devolver a pasta guardada. Um
-script livre só é desfeito se o pacote trouxe o `undo.sql`. São guardadas as últimas versões de
-cada alvo (padrão: 3).
+Um pacote aplicado, ou aplicado em parte, pode ser revertido por decisão de alguém, no botão
+**Reverter** da tela do pacote. Antes de confirmar, o painel diz, item por item, o que volta e o
+que não volta. A reversão anda do último item aplicado para o primeiro e para no primeiro que
+falhar; nada é tentado de novo sozinho.
+
+| Item | Como volta |
+|---|---|
+| Aplicação (micro serviço, API, serviço, módulo web) | O alvo é parado, a pasta como o pacote deixou é guardada em outra cópia, os arquivos voltam da cópia feita na aplicação e o alvo é iniciado. Os arquivos de configuração do ambiente ficam como estão **agora** |
+| Objeto alterado pelo pacote | O script que havia antes é reaplicado |
+| Objeto criado pelo pacote | É apagado |
+| Objeto apagado pelo pacote | É recriado com o script que havia antes |
+| Tabela | Não volta pelo painel, por causa dos dados |
+| Script livre | Não volta sozinho: o contrário dele vem em outro pacote |
+
+O que impede ou merece aviso:
+
+- **Outro pacote aplicado depois sobre o mesmo item** impede a reversão daquele item: reverta
+  antes o mais novo.
+- **Mudança feita depois do pacote** (objeto alterado direto no banco, arquivos trocados) não
+  impede, mas é avisada: ela se perde no banco; nos arquivos, fica na cópia guardada.
+- **Cópia que já não existe**: só as últimas versões de cada alvo são guardadas (padrão: 3).
+
+O pacote termina **revertido** (tudo voltou; pode ser aplicado de novo), **revertido em parte**
+(algo ficou como o pacote deixou) ou, se nada chegou a voltar, continua como estava, com o motivo
+no histórico.
 
 ### 5.7 Promoção
 
@@ -209,7 +231,8 @@ Um pacote aplicado pode ser enviado ao ambiente seguinte, onde passa por tudo de
 
 Em cada ambiente um pacote está em um destes: **em montagem**, **fechado**, **enviado** (com o
 destino e a hora da entrega), **pendente**, **recusado**, **aprovado** (agora ou agendado),
-**aplicando**, **aplicado**, **aplicado em parte**, **falhou**. Toda passagem de um para outro
+**aplicando**, **aplicado**, **aplicado em parte**, **falhou**, **revertendo**, **revertido**,
+**revertido em parte**. Toda passagem de um para outro
 fica no histórico do pacote, com o usuário e a hora.
 
 ## 7. A garantia de leitura do banco

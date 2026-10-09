@@ -147,6 +147,21 @@ public sealed class ItemResult
     /// Where, on the machine, the folder that was replaced is kept as it was.
     /// </summary>
     public string? Backup { get; set; }
+
+    /// <summary>
+    /// How putting it back went, when somebody asked for that: reverting, reverted, failed, or
+    /// unknown when the answer never came. Null while nobody asked.
+    /// </summary>
+    public string? Reverted { get; set; }
+    public string? RevertProblem { get; set; }
+    public DateTimeOffset? RevertedAt { get; set; }
+    public List<string> RevertMessages { get; set; } = [];
+
+    /// <summary>
+    /// What the package had left there, kept before it was put back as it was.
+    /// </summary>
+    public string? RevertReplaced { get; set; }
+    public string? RevertBackup { get; set; }
 }
 
 /// <summary>
@@ -157,7 +172,8 @@ public sealed class PackageRecord
     public PackageManifest Manifest { get; set; } = new();
 
     /// <summary>
-    /// Closed (made here), Pending, Rejected, Approved, Applying, Applied, Partial or Failed.
+    /// Closed (made here), Pending, Rejected, Approved, Applying, Applied, Partial or Failed;
+    /// and, when what it did was put back, Reverting, Reverted or RevertedPartly.
     /// </summary>
     public string Status { get; set; } = "Closed";
 
@@ -169,6 +185,7 @@ public sealed class PackageRecord
     public long Size { get; set; }
     public DateTimeOffset? ApplyAt { get; set; }
     public string? ApprovedBy { get; set; }
+    public string? RevertBy { get; set; }
     public List<HistoryEntry> History { get; set; } = [];
     public List<ItemResult> Results { get; set; } = [];
 

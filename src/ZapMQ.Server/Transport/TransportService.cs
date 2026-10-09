@@ -17,6 +17,12 @@ public sealed record ItemCheck(int Number, string State, string? CurrentFingerpr
 }
 
 /// <summary>
+/// What putting back one applied item would take. State: can, changed (it can, but what is
+/// there is not what the package left any more), or cannot. How: files, previous, drop or recreate.
+/// </summary>
+public sealed record RevertStep(int Number, string State, string? How, string? Reason);
+
+/// <summary>
 /// What an item does to one file of its target: added, changed, removed or the same.
 /// </summary>
 public sealed record FileChange(string Path, string State, long Size);
@@ -573,7 +579,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// True while the package can still be approved here: one that arrived and waits, or one
     /// that was made here and was not applied here yet.
     /// </summary>
-    private static bool Waits(PackageRecord record) => record.Status == "Pending" || (record.Status == "Closed" && !record.Received);
+    private static bool Waits(PackageRecord record) => record.Status is "Pending" or "Reverted" || (record.Status == "Closed" && !record.Received);
 
     private PackageRecord Approve(string id, DateTimeOffset? at, string by)
     {
@@ -620,6 +626,241 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
                 stuck.Status = stuck.Results.Any(result => result.Status == "applied") ? "Partial" : "Failed";
                 stuck.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = "ZapMQ", What = "interrupted", Detail = "o serviço parou durante a aplicação" });
             });
+        foreach (var record in store.Packages().Where(record => record.Status == "Reverting"))
+            store.Update(record.Manifest.Id, stuck =>
+            {
+                // The item that was being put back may or may not have been: nobody tries it again alone.
+                foreach (var result in stuck.Results.Where(result => result.Reverted == "reverting"))
+                {
+                    result.Reverted = "unknown";
+                    result.RevertProblem = "O serviço parou enquanto este item era revertido";
+                }
+                stuck.Status = AfterReverting(stuck);
+                stuck.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = "ZapMQ", What = "revert-interrupted", Detail = "o serviço parou durante a reversão" });
+            });
+    }
+
+    // ---------------------------------------------------------------- putting back
+
+    private static bool Stands(ItemResult result) => result.Status == "applied" && result.Reverted != "reverted";
+
+    private static string AfterReverting(PackageRecord record) =>
+        !record.Results.Any(Stands) ? "Reverted"
+        : record.Results.Any(result => result.Reverted is "reverted" or "unknown") ? "RevertedPartly"
+        : record.Results.Count(result => result.Status == "applied") == record.Manifest.Items.Count ? "Applied" : "Partial";
+
+    private static bool SameTarget(PackageItem one, PackageItem other) =>
+        one.Kind == other.Kind && (one.Kind != "database"
+            ? string.Equals(one.Name, other.Name, StringComparison.OrdinalIgnoreCase)
+            : one.Action != "Script" && other.Action != "Script" && string.Equals(one.ObjectKind, other.ObjectKind, StringComparison.OrdinalIgnoreCase)
+              && string.Equals(one.Schema, other.Schema, StringComparison.OrdinalIgnoreCase) && string.Equals(one.Name, other.Name, StringComparison.OrdinalIgnoreCase)
+              && string.Equals(one.Database ?? "", other.Database ?? "", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The package that was applied over the same thing after this one, and still stands.
+    /// </summary>
+    private string? Later(PackageRecord record, PackageItem item, ItemResult result) =>
+        store.Packages()
+            .Where(other => other.Manifest.Id != record.Manifest.Id)
+            .FirstOrDefault(other => other.Results.Any(applied => Stands(applied) && applied.At > result.At
+                && other.Manifest.Items.FirstOrDefault(candidate => candidate.Number == applied.Number) is { } touched && SameTarget(touched, item)))
+            ?.Manifest.Name;
+
+    /// <summary>
+    /// What putting a package back would do, item by item, the last applied first. Nothing is changed.
+    /// </summary>
+    public async Task<List<RevertStep>> RevertPlan(PackageRecord record, string by, CancellationToken cancellation)
+    {
+        var steps = new List<RevertStep>();
+        foreach (var result in record.Results.Where(Stands).OrderByDescending(result => result.Number))
+        {
+            var item = record.Manifest.Items.First(candidate => candidate.Number == result.Number);
+            if (Later(record, item, result) is { } later)
+            {
+                steps.Add(new RevertStep(item.Number, "cannot", null, $"O pacote \"{later}\" foi aplicado depois sobre o mesmo item. Reverta-o antes."));
+                continue;
+            }
+
+            if (item.Kind != "database")
+            {
+                if (string.IsNullOrEmpty(result.Backup))
+                    steps.Add(new RevertStep(item.Number, "cannot", null, "A cópia de como estava antes não foi guardada"));
+                else if (await AgainstTarget(item, by, cancellation) is not { } against)
+                    steps.Add(new RevertStep(item.Number, "cannot", null, "Não existe mais neste ambiente"));
+                else if (against.Changes.Any(change => change.State != "same"))
+                    steps.Add(new RevertStep(item.Number, "changed", "files", "Os arquivos mudaram depois deste pacote; o que está lá agora fica guardado em uma cópia"));
+                else
+                    steps.Add(new RevertStep(item.Number, "can", "files", null));
+                continue;
+            }
+
+            if (item.Action == "Script")
+            {
+                steps.Add(new RevertStep(item.Number, "cannot", null, "Um script livre não tem como ser desfeito sozinho: o contrário dele precisa ser escrito e levado em outro pacote"));
+                continue;
+            }
+            if (string.Equals(item.ObjectKind, "Table", StringComparison.OrdinalIgnoreCase))
+            {
+                steps.Add(new RevertStep(item.Number, "cannot", null, "Tabela não é desfeita pelo painel, por causa dos dados que guarda"));
+                continue;
+            }
+
+            var current = await Read(item.Database, item.ObjectKind, item.Schema, item.Name, by, cancellation);
+            if (item.Action == "Drop")
+                steps.Add(result.Previous is null
+                    ? new RevertStep(item.Number, "cannot", null, "O que foi apagado não ficou guardado")
+                    : current is null
+                        ? new RevertStep(item.Number, "can", "recreate", null)
+                        : new RevertStep(item.Number, "changed", "recreate", "Já existe de novo neste ambiente; volta a ser como era antes do pacote"));
+            else if (result.Previous is null)
+                steps.Add(current is null
+                    ? new RevertStep(item.Number, "cannot", null, "Foi criado pelo pacote e já não existe mais")
+                    : new RevertStep(item.Number, current.Fingerprint == item.Fingerprint ? "can" : "changed", "drop",
+                        current.Fingerprint == item.Fingerprint ? null : "Foi alterado depois deste pacote; essa alteração se perde com ele"));
+            else
+                steps.Add(current is not null && current.Fingerprint == item.Fingerprint
+                    ? new RevertStep(item.Number, "can", "previous", null)
+                    : new RevertStep(item.Number, "changed", "previous", current is null ? "Não existe mais; volta a existir como era antes do pacote" : "Foi alterado depois deste pacote; essa alteração se perde"));
+        }
+        return steps;
+    }
+
+    /// <summary>
+    /// Asks for what a package did here to be put back. It is done by the runner, one item at a
+    /// time, the last applied first.
+    /// </summary>
+    public async Task<PackageRecord> Revert(string id, string by, CancellationToken cancellation)
+    {
+        var record = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
+        if (record.Status is not ("Applied" or "Partial" or "RevertedPartly"))
+            throw new TransportRefused("Só o que foi aplicado neste ambiente pode ser revertido", StatusCodes.Status409Conflict);
+        if (!(await RevertPlan(record, by, cancellation)).Any(step => step.State != "cannot"))
+            throw new TransportRefused("Nada do que este pacote fez pode ser revertido pelo painel", StatusCodes.Status409Conflict);
+        return Change(id, reverting =>
+        {
+            if (reverting.Status is not ("Applied" or "Partial" or "RevertedPartly"))
+                throw new TransportRefused("Só o que foi aplicado neste ambiente pode ser revertido", StatusCodes.Status409Conflict);
+            reverting.Status = "Reverting";
+            reverting.RevertBy = by;
+            reverting.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = by, What = "reverting" });
+        });
+    }
+
+    private static void Outcome(ItemResult result, WorkerControlAnswer answer)
+    {
+        if (!answer.Reached)
+        {
+            // Asked and not answered: it may have been done, it may not.
+            result.Reverted = "unknown";
+            result.RevertProblem = answer.Problem;
+        }
+        else if (!answer.Ok)
+        {
+            result.Reverted = "failed";
+            result.RevertProblem = answer.ErrorMessage;
+        }
+        else
+        {
+            var body = answer.Body!;
+            result.Reverted = body["Applied"]?.GetValue<bool>() == true ? "reverted" : "failed";
+            result.RevertProblem = body["Problem"]?.GetValue<string>();
+            result.RevertBackup = body["Backup"]?.GetValue<string>();
+            result.RevertMessages = [.. (body["Messages"] as JsonArray ?? []).Select(message => message?.GetValue<string>() ?? "")];
+        }
+    }
+
+    private async Task Undo(string id, CancellationToken cancellation)
+    {
+        if (store.Find(id) is not { Status: "Reverting" } record)
+            return;
+        var by = record.RevertBy ?? "";
+        logger.LogInformation("Transport: putting back what package {Name} ({Id}) did, asked by {User}", record.Manifest.Name, id, by);
+
+        List<RevertStep> steps;
+        string? stopped = null;
+        try
+        {
+            steps = await RevertPlan(record, by, cancellation);
+        }
+        catch (TransportRefused refused)
+        {
+            steps = [];
+            stopped = refused.Message;
+        }
+
+        foreach (var step in steps.Where(step => step.State != "cannot"))
+        {
+            var item = record.Manifest.Items.First(candidate => candidate.Number == step.Number);
+            var previous = record.Results.First(result => result.Number == step.Number).Previous;
+            var outcome = new ItemResult();
+            store.Update(id, reverting => reverting.Results.First(result => result.Number == step.Number).Reverted = "reverting");
+            try
+            {
+                if (step.How == "files")
+                    Outcome(outcome, await worker.AskAsync("TransportRevert", by, ReplacePatience, request =>
+                    {
+                        request["Package"] = id;
+                        request["Item"] = item.Number;
+                        request["Kind"] = item.Kind;
+                        request["Name"] = item.Name;
+                        request["Backup"] = record.Results.First(result => result.Number == step.Number).Backup;
+                    }, cancellation));
+                else
+                {
+                    // What the package left there is kept, as what was there before it was.
+                    outcome.RevertReplaced = (await Read(item.Database, item.ObjectKind, item.Schema, item.Name, by, cancellation))?.Script;
+                    Outcome(outcome, await worker.AskAsync("DatabaseApply", by, ApplyPatience, request =>
+                    {
+                        request["Package"] = id;
+                        request["Item"] = item.Number;
+                        request["Action"] = step.How == "drop" ? "Drop" : "Define";
+                        if (!string.IsNullOrEmpty(item.Database))
+                            request["Database"] = item.Database;
+                        request["Kind"] = item.ObjectKind;
+                        request["Variety"] = item.Variety;
+                        request["Schema"] = item.Schema;
+                        request["Name"] = item.Name;
+                        if (step.How != "drop")
+                            request["Script"] = previous;
+                    }, cancellation));
+                }
+            }
+            catch (TransportRefused refused)
+            {
+                outcome.Reverted = "failed";
+                outcome.RevertProblem = refused.Message;
+            }
+
+            store.Update(id, reverting =>
+            {
+                var result = reverting.Results.First(candidate => candidate.Number == step.Number);
+                result.Reverted = outcome.Reverted;
+                result.RevertProblem = outcome.RevertProblem;
+                result.RevertMessages = outcome.RevertMessages;
+                result.RevertBackup = outcome.RevertBackup;
+                result.RevertReplaced = outcome.RevertReplaced;
+                result.RevertedAt = time.GetUtcNow();
+            });
+            if (outcome.Reverted != "reverted")
+            {
+                stopped = $"parou no item {item.Number}: {outcome.RevertProblem}";
+                break;
+            }
+        }
+
+        var finished = store.Update(id, reverted =>
+        {
+            reverted.Status = AfterReverting(reverted);
+            var done = reverted.Results.Count(result => result.Reverted == "reverted");
+            var left = reverted.Results.Count(Stands);
+            reverted.History.Add(new HistoryEntry
+            {
+                At = time.GetUtcNow(), By = by,
+                What = reverted.Status == "Reverted" ? "reverted" : reverted.Status == "RevertedPartly" ? "reverted-partly" : "revert-failed",
+                Detail = stopped ?? (left == 0 ? $"{done} item(s)" : $"{done} item(s) revertido(s); {left} ficaram como o pacote deixou")
+            });
+        });
+        logger.LogInformation("Transport: putting back package {Name} ({Id}) ended as {Status}", record.Manifest.Name, id, finished?.Status);
     }
 
     /// <summary>
@@ -629,6 +870,8 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     {
         foreach (var due in store.Packages().Where(record => record.Status == "Approved" && record.ApplyAt <= time.GetUtcNow()).OrderBy(record => record.ApplyAt))
             await Apply(due.Manifest.Id, cancellation);
+        foreach (var asked in store.Packages().Where(record => record.Status == "Reverting"))
+            await Undo(asked.Manifest.Id, cancellation);
     }
 
     /// <summary>

@@ -77,7 +77,7 @@ public static class TransportEndpoints
     {
         id = record.Manifest.Id, name = record.Manifest.Name, description = record.Manifest.Description, origin = record.Manifest.Origin,
         createdAt = record.Manifest.CreatedAt, createdBy = record.Manifest.CreatedBy, items = record.Manifest.Items.Count,
-        status = record.Status, received = record.Received, deliveries = record.Deliveries, applyAt = record.ApplyAt, approvedBy = record.ApprovedBy, size = record.Size,
+        status = record.Status, received = record.Received, deliveries = record.Deliveries, applyAt = record.ApplyAt, approvedBy = record.ApprovedBy, revertBy = record.RevertBy, size = record.Size,
         changedAt = record.History.LastOrDefault()?.At ?? record.Manifest.CreatedAt
     };
 
@@ -93,7 +93,8 @@ public static class TransportEndpoints
         }),
         history = record.History,
         // What was there before is given with the item, when it is asked for.
-        results = record.Results.Select(result => new { result.Number, result.Status, result.Did, result.Problem, result.Batch, result.Line, result.Messages, result.At, result.Backup, hasPrevious = result.Previous is not null })
+        results = record.Results.Select(result => new { result.Number, result.Status, result.Did, result.Problem, result.Batch, result.Line, result.Messages, result.At, result.Backup, hasPrevious = result.Previous is not null,
+            result.Reverted, result.RevertProblem, result.RevertedAt, result.RevertMessages, result.RevertBackup })
     };
 
     public static void MapTransport(this IEndpointRouteBuilder routes)
@@ -108,7 +109,7 @@ public static class TransportEndpoints
                 environment = store.Environment, area = store.Area().Count,
                 pending = packages.Count(record => record.Status == "Pending"),
                 scheduled = packages.Count(record => record.Status == "Approved"),
-                troubled = packages.Count(record => record.Status is "Partial" or "Failed")
+                troubled = packages.Count(record => record.Status is "Partial" or "Failed" or "RevertedPartly")
             });
         });
 
@@ -262,6 +263,20 @@ public static class TransportEndpoints
         {
             var record = await transport.Approve(id, request.At, User(context), context.RequestAborted);
             loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: package {Name} ({Id}) approved to be applied at {At} (by {User})", record.Manifest.Name, id, record.ApplyAt, User(context));
+            return Results.Json(Detail(record, store));
+        }));
+
+        // What putting back what the package did here would take, item by item; nothing is changed.
+        api.MapGet("/packages/{id}/revert", (string id, TransportStore store, TransportService transport, HttpContext context) => Guarded(async () =>
+        {
+            var record = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
+            return Results.Json(new { steps = await transport.RevertPlan(record, User(context), context.RequestAborted) });
+        }));
+
+        api.MapPost("/packages/{id}/revert", (string id, TransportService transport, TransportStore store, HttpContext context, ILoggerFactory loggers) => Guarded(async () =>
+        {
+            var record = await transport.Revert(id, User(context), context.RequestAborted);
+            loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: package {Name} ({Id}) asked to be reverted (by {User})", record.Manifest.Name, id, User(context));
             return Results.Json(Detail(record, store));
         }));
 

@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult, TapEvent,
   PanelUser,
-  AreaItem, ItemCheck, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
+  AreaItem, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
@@ -351,6 +351,14 @@ export class Api {
 
   approvePackage(id: string, at: string | null): Observable<PackageDetail> {
     return this.http.post<PackageDetail>(`api/transport/packages/${id}/approve`, { at });
+  }
+
+  revertPlan(id: string): Observable<{ steps: RevertStep[] }> {
+    return this.http.get<{ steps: RevertStep[] }>(`api/transport/packages/${id}/revert`);
+  }
+
+  revertPackage(id: string): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/revert`, null);
   }
 
   rejectPackage(id: string, reason: string): Observable<PackageDetail> {

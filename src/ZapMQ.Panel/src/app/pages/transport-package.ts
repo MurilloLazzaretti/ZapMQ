@@ -97,7 +97,8 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     if (!content || content.item.kind !== 'database') {
       return null;
     }
-    const done = this.result(content.item.number)?.status === 'applied';
+    const result = this.result(content.item.number);
+    const done = result?.status === 'applied' && result.reverted !== 'reverted';
     const before = done ? content.previous : content.current;
     const after = content.item.action === 'Drop' ? null : content.script;
     const both = before !== null && after !== null;
@@ -114,7 +115,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.id = this.route.snapshot.paramMap.get('id') ?? '';
     this.load(true);
-    this.timer = setInterval(() => ['Approved', 'Applying'].includes(this.status() ?? '') && this.load(false), 2000);
+    this.timer = setInterval(() => ['Approved', 'Applying', 'Reverting'].includes(this.status() ?? '') && this.load(false), 2000);
   }
 
   ngOnDestroy(): void {
@@ -197,6 +198,45 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     }
   }
 
+  /** Puts back what the package did here, after saying what goes back and what does not. */
+  protected async revert(): Promise<void> {
+    this.busy.set(true);
+    let steps;
+    try {
+      steps = (await firstValueFrom(this.api.revertPlan(this.id))).steps;
+    } catch (failure) {
+      this.say(failure);
+      return;
+    } finally {
+      this.busy.set(false);
+    }
+    const going = steps.filter((step) => step.state !== 'cannot');
+    const staying = steps.filter((step) => step.state === 'cannot');
+    const changed = steps.filter((step) => step.state === 'changed');
+    const name = (number: number) => {
+      const item = this.detail()!.items.find((candidate) => candidate.number === number)!;
+      return `${number} (${item.action === 'Script' ? item.title : item.name})`;
+    };
+    if (!going.length) {
+      this.snack.open(`Nada do que este pacote fez pode ser revertido pelo painel. ${staying.map((step) => `Item ${name(step.number)}: ${step.reason}`).join(' ')}`, 'Fechar', { duration: 15000 });
+      return;
+    }
+    const notes = [
+      ...changed.map((step) => `Item ${name(step.number)}: ${step.reason}.`),
+      ...staying.map((step) => `Item ${name(step.number)} não volta: ${step.reason}.`),
+    ];
+    const sure = await confirm(this.dialog, {
+      title: 'Reverter o pacote?',
+      message: `${going.length === 1 ? 'O item ' + name(going[0].number) + ' volta' : going.length + ' itens voltam'} a ser como ${going.length === 1 ? 'era' : 'eram'} em ${this.detail()!.environment} antes deste pacote, do último aplicado para o primeiro. Aplicações são paradas e iniciadas de novo; os arquivos de configuração do ambiente ficam como estão agora. Se um item falhar, a reversão para ali.`,
+      warning: notes.length ? notes.join(' ') : undefined,
+      action: 'Reverter',
+      danger: true,
+    });
+    if (sure) {
+      await this.act(this.api.revertPackage(this.id));
+    }
+  }
+
   /** Only for what was made here: it goes away, file and all. */
   protected async remove(): Promise<void> {
     const sure = await confirm(this.dialog, {
@@ -251,7 +291,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
         this.detail.set(detail);
         this.problem.set('');
         // Against what is here, while there is still a decision to take; and once more when it is over.
-        if (first || (before !== detail.package.status && !['Approved', 'Applying'].includes(detail.package.status))) {
+        if (first || (before !== detail.package.status && !['Approved', 'Applying', 'Reverting'].includes(detail.package.status))) {
           this.check();
           this.transport.refresh();
         }

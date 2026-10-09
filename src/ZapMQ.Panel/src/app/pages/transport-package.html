@@ -121,10 +121,26 @@
         <section class="panel decide"><div><strong>Aplicando…</strong><span class="muted">{{ now.results.length }} de {{ now.items.length }} itens.</span></div></section>
       }
       @case ('Applied') {
-        <section class="panel decide done"><div><strong>Aplicado em {{ now.environment }}.</strong><span class="muted">{{ now.items.length === 1 ? 'O item foi aplicado.' : 'Todos os ' + now.items.length + ' itens foram aplicados.' }} O mesmo arquivo pode seguir para o próximo ambiente.</span></div><span class="spacer"></span><button mat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button></section>
+        <section class="panel decide done"><div><strong>Aplicado em {{ now.environment }}.</strong><span class="muted">{{ now.items.length === 1 ? 'O item foi aplicado.' : 'Todos os ' + now.items.length + ' itens foram aplicados.' }} O mesmo arquivo pode seguir para o próximo ambiente.</span></div><span class="spacer"></span><button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter</button><button mat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button></section>
       }
       @case ('Partial') {
-        <section class="panel decide warned"><div><strong class="bad">Aplicado em parte.</strong><span class="muted">A aplicação parou no primeiro item que falhou. O que foi aplicado antes continua aplicado; nada foi desfeito.</span></div></section>
+        <section class="panel decide warned"><div><strong class="bad">Aplicado em parte.</strong><span class="muted">A aplicação parou no primeiro item que falhou. O que foi aplicado antes continua aplicado; nada foi desfeito.</span></div><span class="spacer"></span><button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter o que foi aplicado</button></section>
+      }
+      @case ('Reverting') {
+        <section class="panel decide"><div><strong>Revertendo…</strong><span class="muted">Pedido por {{ now.package.revertBy }}. Do último item aplicado para o primeiro.</span></div></section>
+      }
+      @case ('Reverted') {
+        <section class="panel decide" [class.warned]="warnings().blocked">
+          <div>
+            <strong>Revertido em {{ now.environment }}.</strong>
+            <span class="muted">O que este pacote fez aqui foi desfeito por {{ now.package.revertBy }}. Ele pode ser aplicado de novo, ou a correção vir em outro pacote.</span>
+          </div>
+          <span class="spacer"></span>
+          <button mat-button (click)="approve(false)" [disabled]="busy() || !!warnings().blocked"><mat-icon svgIcon="task_alt" /> Aplicar de novo</button>
+        </section>
+      }
+      @case ('RevertedPartly') {
+        <section class="panel decide warned"><div><strong class="bad">Revertido em parte.</strong><span class="muted">Parte do que este pacote fez continua em {{ now.environment }}: veja em cada item. O que não volta pelo painel precisa ser desfeito por outro pacote.</span></div><span class="spacer"></span><button mat-button (click)="revert()" [disabled]="busy()"><mat-icon svgIcon="history" /> Reverter o que falta</button></section>
       }
       @case ('Failed') {
         <section class="panel decide warned"><div><strong class="bad">Nenhum item foi aplicado.</strong><span class="muted">Veja o motivo no primeiro item.</span></div></section>
@@ -153,12 +169,19 @@
               <span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span>
               <span class="standing">
                 @if (result(item.number); as done) {
-                  @switch (done.status) {
+                  @switch (done.reverted) {
+                    @case ('reverted') { <span class="pill warn" [matTooltip]="'Voltou a ser como era antes do pacote, em ' + (done.revertedAt | when)">revertido</span> }
+                    @case ('reverting') { <span class="pill primary">revertendo</span> }
+                    @case ('failed') { <span class="pill danger">reversão falhou</span> }
+                    @case ('unknown') { <span class="pill warn" matTooltip="O pedido de reversão foi feito e a resposta não chegou: pode ter voltado ou não. Confira.">reversão desconhecida</span> }
+                  }
+                  @switch (done.reverted === 'reverted' ? '' : done.status) {
+                    @case ('') {}
                     @case ('applied') { <span class="pill ok">{{ done.did === 'replaced' ? 'substituído' : done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
                     @case ('failed') { <span class="pill danger">falhou</span> }
                     @default { <span class="pill warn" matTooltip="O pedido foi feito e a resposta não chegou: pode ter sido aplicado ou não. Confira no banco.">resultado desconhecido</span> }
                   }
-                } @else if (now.package.status === 'Partial' || now.package.status === 'Failed') {
+                } @else if (now.package.status === 'Partial' || now.package.status === 'Failed' || now.package.status === 'RevertedPartly' || now.package.status === 'Reverting') {
                   <span class="pill" matTooltip="A aplicação parou antes de chegar a este item">não aplicado</span>
                 } @else if (item.action !== 'Script' && state(item); as standing) {
                   <span class="pill" [class]="'pill ' + standing.tone" [matTooltip]="standing.hint">{{ standing.text }}</span>
@@ -170,6 +193,12 @@
             @if (result(item.number); as done) {
               @if (done.problem) {
                 <p class="trouble"><mat-icon svgIcon="error" /> <span>{{ done.problem }}@if (done.line) { <span class="muted"> (lote {{ done.batch }}, linha {{ done.line }})</span> }</span></p>
+              }
+              @if (done.revertProblem && done.reverted !== 'reverted') {
+                <p class="trouble"><mat-icon svgIcon="error" /> <span>Reversão: {{ done.revertProblem }}</span></p>
+              }
+              @if (done.revertBackup) {
+                <p class="kept muted"><mat-icon svgIcon="folder" /> <span>A pasta como o pacote deixou ficou guardada em <span class="mono">{{ done.revertBackup }}</span></span></p>
               }
               @if (done.backup) {
                 <p class="kept muted"><mat-icon svgIcon="folder" /> <span>A pasta como estava antes ficou guardada em <span class="mono">{{ done.backup }}</span></span></p>

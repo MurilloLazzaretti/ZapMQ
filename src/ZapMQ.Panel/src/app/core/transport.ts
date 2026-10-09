@@ -14,6 +14,9 @@ const STATUS: Record<PackageStatus, { text: string; tone: string }> = {
   Applied: { text: 'aplicado', tone: 'ok' },
   Partial: { text: 'aplicado em parte', tone: 'danger' },
   Failed: { text: 'falhou', tone: 'danger' },
+  Reverting: { text: 'revertendo', tone: 'primary' },
+  Reverted: { text: 'revertido', tone: 'warn' },
+  RevertedPartly: { text: 'revertido em parte', tone: 'danger' },
 };
 
 export function statusName(status: PackageStatus): string {
@@ -72,6 +75,11 @@ export function historyText(what: string): string {
       partial: 'Aplicado em parte',
       failed: 'Falhou',
       interrupted: 'Aplicação interrompida',
+      reverting: 'Reversão iniciada',
+      reverted: 'Revertido',
+      'reverted-partly': 'Revertido em parte',
+      'revert-failed': 'A reversão falhou',
+      'revert-interrupted': 'Reversão interrompida',
     } as Record<string, string>
   )[what] ?? what;
 }

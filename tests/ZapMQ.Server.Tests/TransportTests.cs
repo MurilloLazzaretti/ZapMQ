@@ -25,6 +25,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         public List<JObject> Applied { get; } = [];
         public List<JObject> Changes { get; } = [];
         public Func<JObject, JObject?>? OnApply { get; set; }
+        public List<JObject> Reverted { get; } = [];
+        public Func<JObject, JObject?>? OnRevert { get; set; }
         public string[] Databases { get; set; } = ["Sales"];
         /// <summary>
         /// What can be replaced on the machine, as "kind:name", each with its files.
@@ -109,6 +111,10 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                     if (OnApply is null)
                         Targets[$"{request["Kind"]}:{request["Name"]}"] = Deployed;
                     return OnApply?.Invoke(request) ?? new JObject { ["Ok"] = true, ["Applied"] = true, ["Did"] = "replaced", ["Backup"] = "/backup/there", ["Messages"] = new JArray("stopped", "replaced", "started") };
+                case "TransportRevert":
+                    lock (Reverted)
+                        Reverted.Add(request);
+                    return OnRevert?.Invoke(request) ?? new JObject { ["Ok"] = true, ["Applied"] = true, ["Did"] = "reverted", ["Backup"] = "/backup/before-going-back", ["Messages"] = new JArray("stopped", "put back", "started") };
                 case "DatabaseApply":
                     lock (Applied)
                         Applied.Add(request);
@@ -316,6 +322,135 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         Assert.Equal(["received", "approved", "applying", "applied"], applied["history"]!.Select(entry => (string?)entry["what"]));
         // Done is done: it is not approved again.
         await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }), HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task What_a_package_did_to_the_database_is_put_back_the_last_item_first()
+    {
+        var (_, made) = await Made();
+        var here = new PretendDatabase();
+        here.Objects["spClose"] = ("Procedure", "CREATE PROCEDURE dbo.spClose AS RETURN", []);
+        here.Objects["fncTotal"] = ("Function", "CREATE FUNCTION dbo.fncTotal() RETURNS int AS BEGIN RETURN 99 END", []);
+        here.Objects["vwOld"] = ("View", "CREATE VIEW dbo.vwOld AS SELECT 1 AS a", []);
+        await using var _ = await Serve(here);
+        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+        // Not applied, there is nothing to put back.
+        await Json(await Api.PostAsync($"api/transport/packages/{id}/revert", null), HttpStatusCode.Conflict);
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
+        await WaitFor(id, "Applied");
+        // Somebody changed one of them after the package: going back loses that, and it is said.
+        here.Objects["spClose"] = ("Procedure", "CREATE PROCEDURE dbo.spClose AS SELECT 'changed after'", []);
+        lock (here.Applied)
+            here.Applied.Clear();
+
+        var steps = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/revert"))["steps"]!;
+        Assert.Equal([(4, "can", "recreate"), (3, "can", "drop"), (2, "changed", "previous"), (1, "can", "previous")],
+            steps.Select(step => ((int)step["number"]!, (string?)step["state"], (string?)step["how"])));
+
+        Assert.Equal("Reverting", (string?)(await Json(await Api.PostAsync($"api/transport/packages/{id}/revert", null)))["package"]!["status"]);
+        var back = await WaitFor(id, "Reverted", "RevertedPartly", "Applied");
+
+        Assert.Equal(("Reverted", "admin"), ((string?)back["package"]!["status"], (string?)back["package"]!["revertBy"]));
+        Assert.All(back["results"]!, result => Assert.Equal("reverted", (string?)result["reverted"]));
+        lock (here.Applied)
+        {
+            Assert.Equal(["vwOld", "spNew", "spClose", "fncTotal"], here.Applied.Select(request => (string?)request["Name"]));
+            Assert.Equal(["Define", "Drop", "Define", "Define"], here.Applied.Select(request => (string?)request["Action"]));
+        }
+        Assert.Equal("CREATE VIEW dbo.vwOld AS SELECT 1 AS a", here.Objects["vwOld"].Script);
+        Assert.False(here.Objects.ContainsKey("spNew"));
+        Assert.Equal("CREATE PROCEDURE dbo.spClose AS RETURN", here.Objects["spClose"].Script);
+        Assert.EndsWith("RETURN 99 END", here.Objects["fncTotal"].Script);
+        Assert.Equal(["reverting", "reverted"], back["history"]!.TakeLast(2).Select(entry => (string?)entry["what"]));
+        // Put back, it waits again as it did when it arrived.
+        await Json(await Api.PostAsync($"api/transport/packages/{id}/revert", null), HttpStatusCode.Conflict);
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { at = DateTimeOffset.UtcNow.AddHours(3) }));
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/reject", new { }));
+    }
+
+    [Fact]
+    public async Task Putting_back_stops_at_what_fails_and_leaves_alone_what_cannot_be_undone()
+    {
+        var origin = new PretendDatabase();
+        origin.Objects["spClose"] = ("Procedure", "CREATE PROCEDURE dbo.spClose AS SELECT 2", []);
+        origin.Objects["Rates"] = ("Table", "CREATE TABLE dbo.Rates (Id int)", []);
+        byte[] made;
+        await using (await Serve(origin))
+        {
+            await ClearArea();
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "Procedure", schema = "dbo", name = "spClose" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "Table", schema = "dbo", name = "Rates" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { title = "Fill", script = "UPDATE dbo.Rates SET Id = 1" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Rates" }), HttpStatusCode.Created);
+            made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
+        }
+
+        var here = new PretendDatabase();
+        here.Objects["spClose"] = ("Procedure", "CREATE PROCEDURE dbo.spClose AS SELECT 1", []);
+        await using var _ = await Serve(here);
+        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
+        await WaitFor(id, "Applied");
+
+        // The table and the script stay; only the procedure can go back.
+        var steps = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/revert"))["steps"]!;
+        Assert.Equal(["can", "cannot", "cannot"], steps.Select(step => (string?)step["state"]));
+
+        here.OnApply = _ => new JObject { ["Ok"] = true, ["Applied"] = false, ["Problem"] = "Deadlocked", ["Messages"] = new JArray() };
+        await Json(await Api.PostAsync($"api/transport/packages/{id}/revert", null));
+        var failed = await WaitFor(id, "Applied", "RevertedPartly", "Reverted");
+        // Nothing went back: it is as applied as it was, and it says why.
+        Assert.Equal("Applied", (string?)failed["package"]!["status"]);
+        Assert.Equal(("failed", "Deadlocked"), ((string?)failed["results"]![2]!["reverted"], (string?)failed["results"]![2]!["revertProblem"]));
+        Assert.Equal("revert-failed", (string?)failed["history"]!.Last()["what"]);
+
+        here.OnApply = null;
+        await Json(await Api.PostAsync($"api/transport/packages/{id}/revert", null));
+        var partly = await WaitFor(id, "RevertedPartly", "Reverted");
+        Assert.Equal("RevertedPartly", (string?)partly["package"]!["status"]);
+        Assert.Equal([null, null, "reverted"], partly["results"]!.Select(result => (string?)result["reverted"]));
+        Assert.Equal("CREATE PROCEDURE dbo.spClose AS SELECT 1", here.Objects["spClose"].Script);
+        // What is left cannot be put back from here.
+        await Json(await Api.PostAsync($"api/transport/packages/{id}/revert", null), HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Files_go_back_from_the_copy_kept_and_not_under_a_package_applied_after()
+    {
+        var dev = new PretendDatabase();
+        dev.Targets["api:Billing"] = new() { ["Billing.dll"] = "v1" };
+        await using var _ = await Serve(dev);
+        await ClearArea();
+
+        async Task<string> Applied(string version)
+        {
+            dev.Incoming["api:Billing"] = new() { ["Billing.dll"] = version };
+            await Json(await Api.PostAsJsonAsync("api/transport/area/incoming", new { kind = "api", name = "Billing" }), HttpStatusCode.Created);
+            var made = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Billing " + version }), HttpStatusCode.Created))["package"]!["id"]!;
+            await Json(await Api.PostAsJsonAsync($"api/transport/packages/{made}/approve", new { }));
+            await WaitFor(made, "Applied");
+            return made;
+        }
+        var first = await Applied("v2");
+        var second = await Applied("v3");
+
+        var blocked = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{first}/revert"))["steps"]!.Single();
+        Assert.Equal("cannot", (string?)blocked["state"]);
+        Assert.Contains("Billing v3", (string?)blocked["reason"]);
+        await Json(await Api.PostAsync($"api/transport/packages/{first}/revert", null), HttpStatusCode.Conflict);
+
+        Assert.Equal("can", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{second}/revert"))["steps"]!.Single()["state"]);
+        await Json(await Api.PostAsync($"api/transport/packages/{second}/revert", null));
+        var back = await WaitFor(second, "Reverted", "RevertedPartly", "Applied");
+        Assert.Equal(("Reverted", "reverted", "/backup/before-going-back"), ((string?)back["package"]!["status"], (string?)back["results"]![0]!["reverted"], (string?)back["results"]![0]!["revertBackup"]));
+        lock (dev.Reverted)
+            Assert.Equal((second, 1, "api", "Billing", "/backup/there", "admin"), ((string?)dev.Reverted.Single()["Package"], (int)dev.Reverted[0]["Item"]!, (string?)dev.Reverted[0]["Kind"], (string?)dev.Reverted[0]["Name"], (string?)dev.Reverted[0]["Backup"], (string?)dev.Reverted[0]["By"]));
+
+        // With the later one out of the way, the first can go back too.
+        dev.Targets["api:Billing"] = new() { ["Billing.dll"] = "v2" };
+        Assert.Equal("can", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{first}/revert"))["steps"]!.Single()["state"]);
+        await Json(await Api.PostAsync($"api/transport/packages/{first}/revert", null));
+        await WaitFor(first, "Reverted");
     }
 
     [Fact]

@@ -809,7 +809,7 @@ export interface TransportTarget {
   Incoming?: { Path: string; At: string; Files: number | null } | null;
 }
 
-export type PackageStatus = 'Closed' | 'Pending' | 'Rejected' | 'Approved' | 'Applying' | 'Applied' | 'Partial' | 'Failed';
+export type PackageStatus = 'Closed' | 'Pending' | 'Rejected' | 'Approved' | 'Applying' | 'Applied' | 'Partial' | 'Failed' | 'Reverting' | 'Reverted' | 'RevertedPartly';
 
 export interface PackageSummary {
   id: string;
@@ -826,6 +826,7 @@ export interface PackageSummary {
   deliveries: { to: string; at: string; by: string }[];
   applyAt: string | null;
   approvedBy: string | null;
+  revertBy: string | null;
   size: number;
   changedAt: string;
 }
@@ -860,6 +861,20 @@ export interface PackageResult {
   /** Where, on the machine, the folder that was replaced is kept as it was. */
   backup: string | null;
   hasPrevious: boolean;
+  /** How putting it back went, when somebody asked for that. */
+  reverted: 'reverting' | 'reverted' | 'failed' | 'unknown' | null;
+  revertProblem: string | null;
+  revertedAt: string | null;
+  /** Where what the package had left is kept, after it was put back as it was. */
+  revertBackup: string | null;
+}
+
+/** What putting back one applied item would take. */
+export interface RevertStep {
+  number: number;
+  state: 'can' | 'changed' | 'cannot';
+  how: 'files' | 'previous' | 'drop' | 'recreate' | null;
+  reason: string | null;
 }
 
 export interface PackageDetail {
