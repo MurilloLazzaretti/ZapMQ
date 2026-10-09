@@ -111,6 +111,17 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                     if (OnApply is null)
                         Targets[$"{request["Kind"]}:{request["Name"]}"] = Deployed;
                     return OnApply?.Invoke(request) ?? new JObject { ["Ok"] = true, ["Applied"] = true, ["Did"] = "replaced", ["Backup"] = "/backup/there", ["Messages"] = new JArray("stopped", "replaced", "started") };
+                case "ApplicationDefaults":
+                    return new JObject { ["Ok"] = true, ["Allowed"] = true, ["SiteName"] = "{name} {n}" };
+                case "ApplicationCreate":
+                    lock (Applied)
+                        Applied.Add(request);
+                    Deployed = Unzipped(File.ReadAllBytes((string)request["File"]!));
+                    return OnApply?.Invoke(request) ?? new JObject { ["Ok"] = true, ["Created"] = true, ["Messages"] = new JArray("put the files") };
+                case "ApplicationRemove":
+                    lock (Applied)
+                        Applied.Add(request);
+                    return new JObject { ["Ok"] = true, ["Removed"] = true, ["Kept"] = "/removed/there" };
                 case "TransportRevert":
                     lock (Reverted)
                         Reverted.Add(request);
@@ -792,6 +803,44 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }), HttpStatusCode.Conflict);
         Assert.NotEmpty(await Api.GetByteArrayAsync($"api/transport/packages/{id}/download"));
         Assert.Equal("same", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!["state"]);
+    }
+
+    [Fact]
+    public async Task A_new_application_is_brought_as_a_zip_looked_at_and_created_by_the_worker_control()
+    {
+        var machine = new PretendDatabase();
+        await using var _ = await Serve(machine);
+        Assert.True((bool)JObject.Parse(await Api.GetStringAsync("api/transport/applications/defaults"))["Allowed"]!);
+
+        // Zipped with the folder on the outside, and with its configuration: all of it goes.
+        var zip = PretendDatabase.Zipped(new() { ["Orders.exe"] = "v1", ["tools/Fix.exe"] = "f", ["appsettings.json"] = "{published}", ["Orders.ini"] = "[a]", ["lib/Core.dll"] = "c" }, "publish/");
+        var seen = await Json(await Api.PostAsync("api/transport/applications/files", new ByteArrayContent(zip)));
+        Assert.Equal(["Orders.exe", "tools/Fix.exe"], seen["executables"]!.Select(path => (string?)path));
+        Assert.Equal([("appsettings.json", "{published}"), ("Orders.ini", "[a]")], seen["settings"]!.Select(setting => ((string?)setting["path"], (string?)setting["content"])));
+        Assert.Equal(5, seen["files"]!.Count());
+        var token = (string?)seen["token"];
+
+        machine.OnApply = _ => new JObject { ["Ok"] = true, ["Created"] = false, ["Problem"] = "The folder already has something in it", ["Messages"] = new JArray() };
+        var wanted = new { token, kind = "service", name = "Orders", folder = "D:\\services\\orders", executable = "Orders.exe", instances = 1, port = 0, displayName = "Orders", startType = "Automatic", settings = new[] { new { path = "appsettings.json", content = "{of this place}" } } };
+        Assert.False((bool)(await Json(await Api.PostAsJsonAsync("api/transport/applications", wanted)))["Created"]!);
+        // Not created, the files are still there to try again.
+        machine.OnApply = null;
+        var created = await Json(await Api.PostAsJsonAsync("api/transport/applications", wanted));
+        Assert.True((bool)created["Created"]!);
+        lock (machine.Applied)
+        {
+            var asked = machine.Applied.Last();
+            Assert.Equal(("service", "Orders", "Orders.exe", "admin", "{of this place}"), ((string?)asked["Kind"], (string?)asked["Name"], (string?)asked["Executable"], (string?)asked["By"], (string?)asked["Configs"]![0]!["Content"]));
+        }
+        Assert.Equal("{published}", machine.Deployed!["appsettings.json"]);
+        // Created, the zip is gone: the same upload does not make another.
+        await Json(await Api.PostAsJsonAsync("api/transport/applications", wanted), HttpStatusCode.Conflict);
+        await Json(await Api.PostAsJsonAsync("api/transport/applications", new { token = "../../etc", kind = "service", name = "x" }), HttpStatusCode.Conflict);
+
+        var removed = await Json(await Api.DeleteAsync("api/transport/applications/service/Orders?force=true"));
+        Assert.True((bool)removed["Removed"]!);
+        lock (machine.Applied)
+            Assert.Equal(("ApplicationRemove", "service", "Orders", true), ((string?)machine.Applied.Last()["Command"], (string?)machine.Applied.Last()["Kind"], (string?)machine.Applied.Last()["Name"], (bool)machine.Applied.Last()["Force"]!));
     }
 
     [Fact]

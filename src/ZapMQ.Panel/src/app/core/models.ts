@@ -809,6 +809,53 @@ export interface TransportTarget {
   Incoming?: { Path: string; At: string; Files: number | null } | null;
 }
 
+/** What is already on the machine, to follow it when something new is created. */
+export interface ApplicationDefaults {
+  Allowed: boolean;
+  Folders: Record<string, string | null>;
+  SiteName: string;
+  Sites: { Name: string; Port: number; Path: string }[];
+  Groups: { Name: string; Path: string; Workers: number }[];
+  Services: { Name: string; DisplayName: string; Path: string | null; StartType: string }[];
+  Listening: number[];
+}
+
+/** What a zip brought to become an application has in it. */
+export interface InspectedFiles {
+  token: string;
+  files: { path: string; size: number }[];
+  executables: string[];
+  settings: { path: string; content: string }[];
+}
+
+export interface NewApplication {
+  token: string;
+  kind: string;
+  name: string;
+  folder: string;
+  executable: string | null;
+  instances: number;
+  port: number;
+  siteName: string | null;
+  displayName: string | null;
+  startType: string | null;
+  settings: { path: string; content: string }[];
+}
+
+export interface CreatedApplication {
+  Created: boolean;
+  Problem?: string | null;
+  Warning?: string | null;
+  Messages: string[];
+}
+
+export interface RemovedApplication {
+  Removed: boolean;
+  Problem?: string | null;
+  Kept?: string | null;
+  Messages: string[];
+}
+
 export type PackageStatus = 'Closed' | 'Pending' | 'Rejected' | 'Approved' | 'Applying' | 'Applied' | 'Partial' | 'Failed' | 'Reverting' | 'Reverted' | 'RevertedPartly';
 
 export interface PackageSummary {

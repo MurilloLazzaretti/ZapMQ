@@ -92,3 +92,39 @@ textarea {
   .editor { grid-template-columns: minmax(0, 1fr); }
   .files { border-right: none; border-bottom: 1px solid var(--zap-border); max-height: 220px; }
 }
+
+.remove {
+  .what { margin: 0; padding: 6px 20px 4px; }
+  details { color: var(--mat-sys-on-surface-variant); }
+  summary { cursor: pointer; }
+  .confirm {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px 20px;
+    flex-wrap: wrap;
+    padding: 10px 20px 16px;
+
+    label { display: grid; gap: 4px; font: var(--mat-sys-label-large); }
+    input {
+      height: 40px;
+      width: min(320px, 70vw);
+      padding: 0 12px;
+      border: 1px solid var(--zap-border);
+      border-radius: 10px;
+      background: var(--mat-sys-surface);
+      color: var(--mat-sys-on-surface);
+      font: var(--mat-sys-body-medium);
+    }
+  }
+  .danger { --mat-button-filled-container-color: var(--zap-danger); --mat-button-filled-label-text-color: var(--mat-sys-surface); }
+  .removed {
+    display: grid;
+    gap: 6px;
+    padding: 0 20px 14px;
+    justify-items: start;
+
+    ol { margin: 4px 0; padding-left: 22px; }
+    .bad { color: var(--zap-danger); }
+    span { overflow-wrap: anywhere; }
+  }
+}

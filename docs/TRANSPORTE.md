@@ -130,6 +130,33 @@ Um item de arquivos cujo alvo não existe no destino é uma **instalação**, e 
 O que envolve o proxy reverso (uma rota nova para uma API nova) fica fora da instalação
 automática: o painel mostra o trecho a incluir, e a mudança no proxy é feita por alguém.
 
+### 4.2 Criar e excluir uma aplicação no próprio ambiente
+
+O primeiro passo da instalação já existe sem pacote: em **Processos e serviços → Aplicações →
+Nova aplicação**, um assistente cria na máquina deste ambiente um micro serviço, uma API ou um
+serviço do Windows, a partir do `.zip` da pasta publicada.
+
+| Tipo | Informado | Criado pelo agente |
+|---|---|---|
+| Micro serviço | Nome, pasta, executável, processos | A pasta com os arquivos e o grupo no `ConfigWorkers.json`, ligado |
+| API | Nome, pasta, instâncias, primeira porta, nome dos sites | Uma subpasta numerada, um site e um application pool por instância (sem código gerenciado, `ApplicationPoolIdentity`) |
+| Serviço do Windows | Nome, nome de exibição, pasta, executável, início | A pasta, o serviço registrado sob a conta do sistema, a inclusão entre os serviços acompanhados e a partida |
+
+- As sugestões vêm do que já existe: a pasta é a em que está a maioria das aplicações do tipo, o
+  nome dos sites segue o dos sites que há (`{name}` e `{n}`), e a tela mostra os sites com suas
+  portas, os grupos e os serviços, para seguir o padrão. `Transport.CreateFolders` e
+  `Transport.SiteName` dizem outra coisa quando for o caso.
+- Os arquivos de configuração que vieram no zip são mostrados e podem ser ajustados antes de criar.
+- **Nada é sobrescrito**: nome, pasta, site ou porta que já exista recusa a criação antes de
+  qualquer mudança. **O que falha no meio é desfeito**: o que a tentativa criou é retirado.
+- Um grupo ou serviço que foi criado e não subiu fica criado, com o aviso.
+- A rota no proxy reverso continua manual: o assistente mostra o trecho de `upstream`.
+
+**Excluir** fica na página da aplicação e pede o nome digitado: o alvo é parado (com a opção de
+forçar), o grupo, os sites com seus pools ou o serviço são removidos, e a pasta é **movida**
+para `transport/removed/<tipo>/<nome>/<hora>`, não apagada. `Transport.AllowCreate: false`
+desliga a criação e a exclusão na máquina.
+
 ## 5. O caminho de uma mudança
 
 ### 5.1 Entrada

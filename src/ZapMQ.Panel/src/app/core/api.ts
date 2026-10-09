@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult, TapEvent,
   PanelUser,
-  AreaItem, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
+  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
@@ -264,6 +264,23 @@ export class Api {
   /** The zip of a published folder, brought from the machine of whoever is at the panel. */
   addFiles(kind: string, name: string, file: Blob): Observable<AreaItem> {
     return this.http.post<AreaItem>('api/transport/area/upload', file, { params: { kind, name }, headers: { 'Content-Type': 'application/octet-stream' } });
+  }
+
+  applicationDefaults(): Observable<ApplicationDefaults> {
+    return this.http.get<ApplicationDefaults>('api/transport/applications/defaults');
+  }
+
+  /** The zip of a published folder that is to become an application: kept by the service, and looked into. */
+  inspectApplication(file: Blob): Observable<InspectedFiles> {
+    return this.http.post<InspectedFiles>('api/transport/applications/files', file, { headers: { 'Content-Type': 'application/octet-stream' } });
+  }
+
+  createApplication(wanted: NewApplication): Observable<CreatedApplication> {
+    return this.http.post<CreatedApplication>('api/transport/applications', wanted);
+  }
+
+  removeApplication(kind: string, name: string, force: boolean): Observable<RemovedApplication> {
+    return this.http.delete<RemovedApplication>(`api/transport/applications/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`, { params: { force } });
   }
 
   transportSettings(): Observable<TransportSettings> {

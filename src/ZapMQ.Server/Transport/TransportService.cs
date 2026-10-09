@@ -168,7 +168,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// A zip of a published folder, packed again the way a package carries it: the files at
     /// the root, without what belongs to an environment. Gives what it carries.
     /// </summary>
-    private static (byte[] Zip, List<FileReference> Files) Normalize(byte[] brought)
+    private static (byte[] Zip, List<FileReference> Files) Normalize(byte[] brought, bool everything = false)
     {
         var files = new List<FileReference>();
         using var memory = new MemoryStream();
@@ -186,7 +186,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
                 foreach (var (entry, full) in entries.Zip(paths).OrderBy(pair => pair.Second, StringComparer.OrdinalIgnoreCase))
                 {
                     var path = full[outer.Length..];
-                    if (path.Length == 0 || Kept(path))
+                    if (path.Length == 0 || (!everything && Kept(path)))
                         continue;
                     using var content = new MemoryStream();
                     using (var stream = entry.Open())
@@ -206,6 +206,88 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
         if (files.Count == 0)
             throw new TransportRefused("O zip não tem nenhum arquivo para levar");
         return (memory.ToArray(), files);
+    }
+
+    // ---------------------------------------------------------------- new applications
+
+    /// <summary>
+    /// The files of the configuration of an application, which are looked at and may be changed before it is created.
+    /// </summary>
+    private static readonly string[] Settings = ["appsettings*.json", "web.config", "*.ini", "environment.js", "env.json"];
+
+    private const int BiggestSetting = 256 * 1024;
+
+    public sealed record NewFile(string Path, long Size);
+
+    public sealed record NewSetting(string Path, string Content);
+
+    public sealed record Inspected(string Token, List<NewFile> Files, List<string> Executables, List<NewSetting> Settings);
+
+    public sealed record NewApplication(string? Token, string? Kind, string? Name, string? Folder, string? Executable, int Instances, int Port, string? SiteName, string? DisplayName, string? StartType,
+        List<NewSetting>? Settings);
+
+    private static bool GoodToken(string? token) => token is { Length: 32 } && token.All(char.IsAsciiHexDigitLower);
+
+    /// <summary>
+    /// Takes the zip of a published folder that is to become a new application, keeps it for
+    /// a while and says what it has: everything it brings is put in place, configuration included.
+    /// </summary>
+    public Inspected Inspect(byte[] brought)
+    {
+        var (zip, files) = Normalize(brought, everything: true);
+        var token = Guid.NewGuid().ToString("N");
+        var work = store.WorkFile($"new-{token}.zip");
+        Directory.CreateDirectory(Path.GetDirectoryName(work)!);
+        // What was brought and never became anything is not kept for ever.
+        foreach (var old in Directory.EnumerateFiles(Path.GetDirectoryName(work)!, "new-*.zip").Where(old => File.GetLastWriteTimeUtc(old) < time.GetUtcNow().UtcDateTime.AddHours(-6)))
+            File.Delete(old);
+        File.WriteAllBytes(work, zip);
+
+        var settings = new List<NewSetting>();
+        using (var read = new System.IO.Compression.ZipArchive(new MemoryStream(zip), System.IO.Compression.ZipArchiveMode.Read))
+            foreach (var entry in read.Entries.Where(entry => entry.Length <= BiggestSetting))
+            {
+                var name = entry.FullName[(entry.FullName.LastIndexOf('/') + 1)..];
+                if (!Settings.Any(pattern => System.Text.RegularExpressions.Regex.IsMatch(name, "^" + System.Text.RegularExpressions.Regex.Escape(pattern).Replace("\\*", ".*") + "$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)))
+                    continue;
+                using var reader = new StreamReader(entry.Open(), System.Text.Encoding.UTF8);
+                settings.Add(new NewSetting(entry.FullName, reader.ReadToEnd()));
+            }
+        return new Inspected(token, [.. files.Select(file => new NewFile(file.Path, file.Size))],
+            [.. files.Select(file => file.Path).Where(path => path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)).OrderBy(path => path.Count(c => c == '/')).ThenBy(path => path, StringComparer.OrdinalIgnoreCase)],
+            settings);
+    }
+
+    /// <summary>
+    /// Asks the Worker Control to create an application from the zip that was brought before.
+    /// </summary>
+    public async Task<JsonNode> CreateApplication(NewApplication wanted, string by, CancellationToken cancellation)
+    {
+        if (!GoodToken(wanted.Token) || !File.Exists(store.WorkFile($"new-{wanted.Token}.zip")))
+            throw new TransportRefused("Os arquivos enviados não estão mais guardados: envie o zip de novo", StatusCodes.Status409Conflict);
+        var work = store.WorkFile($"new-{wanted.Token}.zip");
+        var answer = await worker.AskAsync("ApplicationCreate", by, ReplacePatience, request =>
+        {
+            request["Kind"] = wanted.Kind;
+            request["Name"] = wanted.Name;
+            request["Folder"] = wanted.Folder;
+            request["File"] = work;
+            request["Executable"] = wanted.Executable;
+            request["Instances"] = wanted.Instances;
+            request["Port"] = wanted.Port;
+            request["SiteName"] = wanted.SiteName;
+            request["DisplayName"] = wanted.DisplayName;
+            request["StartType"] = wanted.StartType;
+            request["Configs"] = new JsonArray([.. (wanted.Settings ?? []).Select(setting => new JsonObject { ["Path"] = setting.Path, ["Content"] = setting.Content })]);
+        }, cancellation);
+        if (!answer.Reached)
+            throw new TransportRefused((answer.Problem ?? "O Worker Control não respondeu") + ". Confira na máquina o que chegou a ser criado antes de tentar de novo.", StatusCodes.Status503ServiceUnavailable);
+        if (!answer.Ok)
+            throw new TransportRefused(answer.ErrorMessage ?? "O Worker Control recusou o pedido", answer.ErrorCode == "unknown-command" ? StatusCodes.Status501NotImplemented : StatusCodes.Status400BadRequest);
+        if (answer.Body!["Created"]?.GetValue<bool>() == true)
+            File.Delete(work);
+        logger.LogInformation("Transport: new {Kind} {Name} asked by {User}: {Result}", wanted.Kind, wanted.Name, by, answer.Body["Created"]?.GetValue<bool>() == true ? "created" : "not created, " + answer.Body["Problem"]);
+        return answer.Body;
     }
 
     private static void RequireFileKind(string? kind, string? name)

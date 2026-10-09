@@ -1,0 +1,224 @@
+<div class="page">
+  <header class="head">
+    <a mat-icon-button routerLink="/workers/aplicacoes" matTooltip="Voltar às aplicações" aria-label="Voltar às aplicações"><mat-icon svgIcon="arrow_back" /></a>
+    <div>
+      <h1>Nova aplicação</h1>
+      <p class="muted">Cria nesta máquina uma aplicação que ela ainda não tem. Nada do que já existe é sobrescrito.</p>
+    </div>
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível começar</strong><span>{{ problem() }}</span></section>
+  } @else if (!defaults()) {
+    <section class="panel empty"><span>Perguntando ao Worker Control o que há nesta máquina…</span></section>
+  } @else if (!defaults()!.Allowed) {
+    <section class="panel empty"><mat-icon svgIcon="error" /><strong>A criação de aplicações está desligada nesta máquina</strong><span>Ela é ligada em <span class="mono">Transport.AllowCreate</span>, na configuração do Worker Control.</span></section>
+  } @else if (result(); as done) {
+    <section class="panel done" [class.failed]="!done.Created">
+      <div class="panel-head">
+        <h2><mat-icon [svgIcon]="done.Created ? 'task_alt' : 'error'" /> {{ done.Created ? name() + ' foi criada' : 'A aplicação não foi criada' }}</h2>
+      </div>
+      @if (done.Problem) { <p class="trouble">{{ done.Problem }}</p> }
+      @if (done.Warning) { <p class="trouble mild">{{ done.Warning }}</p> }
+      @if (done.Created) {
+        <ul class="plan">
+          @for (line of plan(); track $index) { <li><mat-icon svgIcon="chevron_right" /><span>{{ line }}</span></li> }
+        </ul>
+      }
+      @if (done.Messages.length) {
+        <details class="did">
+          <summary>Passos registrados pelo Worker Control</summary>
+          <ol>@for (message of done.Messages; track $index) { <li>{{ message }}</li> }</ol>
+        </details>
+      }
+      @if (done.Created && kind() === 'api') {
+        <div class="proxy">
+          <strong>Falta o proxy reverso</strong>
+          <span class="muted">Para a aplicação receber requisições, inclua este trecho na configuração do NGINX e aponte uma rota para ele, em Processos e serviços → Proxy reverso.</span>
+          <pre class="mono">{{ upstream() }}</pre>
+        </div>
+      }
+      <div class="bar">
+        <span class="spacer"></span>
+        @if (done.Created) {
+          @if (kind() === 'api') { <a mat-button routerLink="/workers/proxy">Abrir o proxy reverso</a> }
+          <a mat-flat-button [routerLink]="['/workers/aplicacoes', kind(), name().trim()]">Abrir a aplicação</a>
+        } @else {
+          <button mat-flat-button (click)="again()">Voltar e ajustar</button>
+        }
+      </div>
+    </section>
+  } @else {
+    <ol class="steps" aria-label="Etapas">
+      @for (label of steps; track label; let index = $index) {
+        <li [class.on]="step() === index" [class.past]="step() > index"><span class="num">{{ index + 1 }}</span> {{ label }}</li>
+      }
+    </ol>
+
+    <section class="panel body">
+      @switch (step()) {
+        @case (0) {
+          <div class="panel-head"><h2>O que será criado?</h2></div>
+          <div class="choices" role="radiogroup" aria-label="Tipo de aplicação">
+            @for (item of kinds; track item) {
+              <button type="button" role="radio" [attr.aria-checked]="kind() === item" [class.on]="kind() === item" (click)="choose(item)">
+                <mat-icon [svgIcon]="targetIcon(item)" />
+                <strong>{{ targetName(item) }}</strong>
+                <span class="muted">
+                  @switch (item) {
+                    @case ('worker') { Um grupo de processos mantido pelo Worker Control, que fala pelo ZapMQ. }
+                    @case ('api') { Uma aplicação do IIS, com um site e um application pool por instância. }
+                    @default { Um serviço registrado no Windows, acompanhado pelo Worker Control. }
+                  }
+                </span>
+              </button>
+            }
+          </div>
+        }
+        @case (1) {
+          <div class="panel-head"><h2>Binários</h2><span class="hint">o .zip da pasta publicada, com os arquivos de configuração</span></div>
+          <div class="upload">
+            <label class="drop" [class.busy]="busy()">
+              <input type="file" accept=".zip,application/zip" (change)="pick($event)" [disabled]="busy()" />
+              <mat-icon svgIcon="upload" />
+              <strong>{{ busy() ? 'Enviando…' : inspected() ? 'Trocar o arquivo' : 'Escolher o arquivo .zip' }}</strong>
+            </label>
+            @if (uploadProblem()) { <p class="trouble">{{ uploadProblem() }}</p> }
+            @if (inspected(); as files) {
+              <p class="got"><mat-icon svgIcon="task_alt" /> <span><strong>{{ fileName() }}</strong> · {{ files.files.length | num }} arquivos · {{ files.settings.length }} de configuração · {{ files.executables.length }} executável(is)</span></p>
+              @if (kind() !== 'api' && !files.executables.length) {
+                <p class="trouble">O zip não tem nenhum executável (.exe). {{ targetName(kind()) }} precisa de um.</p>
+              }
+            }
+          </div>
+        }
+        @case (2) {
+          <div class="panel-head"><h2>Parâmetros</h2><span class="hint">{{ targetName(kind()) }}</span></div>
+          <div class="split">
+            <div class="fields">
+              <label>Nome
+                <input type="text" [ngModel]="name()" (ngModelChange)="name.set($event)" maxlength="64" autocomplete="off" spellcheck="false" />
+                <span class="muted">{{ kind() === 'worker' ? 'É o nome do grupo.' : kind() === 'service' ? 'É o nome do serviço no Windows.' : 'Entra no nome dos sites e da pasta.' }}</span>
+              </label>
+              <label>Pasta
+                <input type="text" class="mono" [ngModel]="folder()" (ngModelChange)="typeFolder($event)" autocomplete="off" spellcheck="false" />
+                <span class="muted">Precisa não existir, ou estar vazia.@if (kind() === 'api') { Cada instância fica em uma subpasta numerada. }</span>
+              </label>
+              @if (kind() !== 'api') {
+                <label>Executável
+                  <select [ngModel]="executable()" (ngModelChange)="executable.set($event)">
+                    @for (path of inspected()?.executables ?? []; track path) { <option [value]="path">{{ path }}</option> }
+                  </select>
+                </label>
+              }
+              @if (kind() === 'worker') {
+                <label>Processos
+                  <input type="number" min="0" max="16" [ngModel]="instances()" (ngModelChange)="instances.set(+$event)" />
+                  <span class="muted">Quantos o grupo mantém no ar.</span>
+                </label>
+              }
+              @if (kind() === 'service') {
+                <label>Nome de exibição
+                  <input type="text" [ngModel]="displayName()" (ngModelChange)="displayName.set($event)" [placeholder]="name()" autocomplete="off" />
+                </label>
+                <label>Início
+                  <select [ngModel]="startType()" (ngModelChange)="startType.set($event)">
+                    <option value="Automatic">Automático</option>
+                    <option value="Manual">Manual</option>
+                  </select>
+                </label>
+              }
+              @if (kind() === 'api') {
+                <div class="pair">
+                  <label>Instâncias
+                    <input type="number" min="1" max="16" [ngModel]="instances()" (ngModelChange)="instances.set(+$event)" />
+                  </label>
+                  <label>Primeira porta
+                    <input type="number" min="1" max="65535" [ngModel]="port()" (ngModelChange)="port.set($event === null || $event === '' ? null : +$event)" />
+                  </label>
+                </div>
+                <label>Nome dos sites
+                  <input type="text" [ngModel]="siteName()" (ngModelChange)="siteName.set($event)" autocomplete="off" spellcheck="false" />
+                  <span class="muted">{{ '{name}' }} é o nome e {{ '{n}' }} o número da instância. Vem do padrão dos sites que já existem.</span>
+                </label>
+                @if (name().trim()) {
+                  <ul class="preview">
+                    @for (site of sites(); track $index) { <li><strong>{{ site.name }}</strong><span class="num">{{ site.port ?? '—' }}</span><span class="mono muted">{{ site.folder }}</span></li> }
+                  </ul>
+                }
+              }
+              @if (wrong()) { <p class="trouble mild">{{ wrong() }}</p> }
+            </div>
+
+            <aside class="reference" aria-label="O que já existe nesta máquina">
+              <h3>O que já existe, para seguir o padrão</h3>
+              @switch (kind()) {
+                @case ('api') {
+                  <table>
+                    <thead><tr><th>Site</th><th class="num">Porta</th><th>Pasta</th></tr></thead>
+                    <tbody>
+                      @for (site of defaults()!.Sites; track site.Name) { <tr><td>{{ site.Name }}</td><td class="num">{{ site.Port }}</td><td class="mono muted">{{ site.Path }}</td></tr> }
+                      @empty { <tr><td colspan="3" class="muted">Nenhum site no servidor web desta máquina.</td></tr> }
+                    </tbody>
+                  </table>
+                }
+                @case ('worker') {
+                  <table>
+                    <thead><tr><th>Grupo</th><th class="num">Processos</th><th>Executável</th></tr></thead>
+                    <tbody>
+                      @for (group of defaults()!.Groups; track group.Name) { <tr><td>{{ group.Name }}</td><td class="num">{{ group.Workers }}</td><td class="mono muted">{{ group.Path }}</td></tr> }
+                      @empty { <tr><td colspan="3" class="muted">Nenhum grupo configurado.</td></tr> }
+                    </tbody>
+                  </table>
+                }
+                @default {
+                  <table>
+                    <thead><tr><th>Serviço</th><th>Início</th><th>Executável</th></tr></thead>
+                    <tbody>
+                      @for (service of defaults()!.Services; track service.Name) { <tr><td>{{ service.Name }}</td><td>{{ service.StartType === 'Manual' ? 'manual' : 'automático' }}</td><td class="mono muted">{{ service.Path }}</td></tr> }
+                      @empty { <tr><td colspan="3" class="muted">Nenhum serviço acompanhado.</td></tr> }
+                    </tbody>
+                  </table>
+                }
+              }
+            </aside>
+          </div>
+        }
+        @case (3) {
+          <div class="panel-head"><h2>Configuração</h2><span class="hint">os arquivos que vieram no zip, ajustados para este ambiente antes de criar</span></div>
+          @if (settings().length) {
+            <div class="editor">
+              <ul class="files" role="listbox" aria-label="Arquivos de configuração">
+                @for (setting of settings(); track setting.path; let index = $index) {
+                  <li><button type="button" [class.on]="openSetting() === index" (click)="openSetting.set(index)"><mat-icon svgIcon="data_object" /><span class="mono">{{ setting.path }}</span>@if (setting.content !== setting.original) { <span class="pill info">alterado</span> }</button></li>
+                }
+              </ul>
+              <textarea class="mono" [ngModel]="settings()[openSetting()].content" (ngModelChange)="edit(openSetting(), $event)" spellcheck="false" [attr.aria-label]="'Conteúdo de ' + settings()[openSetting()].path"></textarea>
+            </div>
+            @if (badSetting()) { <p class="trouble pad">{{ badSetting() }}</p> }
+          } @else {
+            <div class="empty"><span>O zip não trouxe arquivo de configuração. Se a aplicação precisar de um, ele pode ser criado depois na pasta dela.</span></div>
+          }
+        }
+        @default {
+          <div class="panel-head"><h2>Revisão</h2><span class="hint">o que será criado nesta máquina</span></div>
+          <ul class="plan">
+            @for (line of plan(); track $index) { <li><mat-icon svgIcon="chevron_right" /><span>{{ line }}</span></li> }
+          </ul>
+          <p class="muted pad">Se algo falhar no meio, o que já tiver sido criado nesta tentativa é desfeito.</p>
+          @if (failure()) { <p class="trouble pad">{{ failure() }}</p> }
+        }
+      }
+
+      <div class="bar">
+        @if (step() > 0) { <button mat-button (click)="step.set(step() - 1)" [disabled]="busy()">Voltar</button> }
+        <span class="spacer"></span>
+        @if (step() < steps.length - 1) {
+          <button mat-flat-button (click)="step.set(step() + 1)" [disabled]="busy() || !canGoOn()">Continuar</button>
+        } @else {
+          <button mat-flat-button (click)="create()" [disabled]="busy() || !!wrong() || !!badSetting()"><mat-icon svgIcon="add" /> {{ busy() ? 'Criando…' : 'Criar ' + targetName(kind()).toLowerCase() }}</button>
+        }
+      </div>
+    </section>
+  }
+</div>

@@ -129,6 +129,30 @@ public static class TransportEndpoints
         api.MapGet("/targets", (TransportService transport, HttpContext context) => Guarded(async () =>
             Results.Content((await transport.Targets(User(context), context.RequestAborted)).ToJsonString(), "application/json; charset=utf-8")));
 
+        // ── Applications this machine does not have yet ─────────────────────
+
+        // What is already here, to follow it: folders, names of sites, ports in use.
+        api.MapGet("/applications/defaults", (WorkerControlClient worker, HttpContext context) => Relay(worker, context, "ApplicationDefaults"));
+
+        // The zip of the published folder: kept for a while, and what it has is said.
+        api.MapPost("/applications/files", (HttpContext context, TransportService transport) => Guarded(async () =>
+        {
+            using var memory = new MemoryStream();
+            await context.Request.Body.CopyToAsync(memory, context.RequestAborted);
+            return Results.Json(transport.Inspect(memory.ToArray()));
+        })).WithMetadata(new RequestSizeLimitAttribute(MaxPackage));
+
+        api.MapPost("/applications", (TransportService.NewApplication wanted, TransportService transport, HttpContext context) => Guarded(async () =>
+            Results.Content((await transport.CreateApplication(wanted, User(context), context.RequestAborted)).ToJsonString(), "application/json; charset=utf-8")));
+
+        api.MapDelete("/applications/{kind}/{name}", (string kind, string name, bool? force, WorkerControlClient worker, HttpContext context, ILoggerFactory loggers) =>
+            Relay(worker, context, "ApplicationRemove", request =>
+            {
+                request["Kind"] = kind;
+                request["Name"] = name;
+                request["Force"] = force == true;
+            }, loggers, $"Transport: {kind} {name} asked to be removed from the machine", TransportService.ReplacePatience));
+
         // Where the Worker Control takes new versions from, by kind.
         api.MapGet("/settings", (WorkerControlClient worker, HttpContext context) => Relay(worker, context, "TransportSettings"));
 

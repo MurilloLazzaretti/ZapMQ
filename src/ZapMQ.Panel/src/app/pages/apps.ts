@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
@@ -15,7 +16,7 @@ import { WorkerTabs } from '../shared/worker-tabs';
  */
 @Component({
   selector: 'zap-apps',
-  imports: [FormsModule, RouterLink, MatIconModule, MatTooltipModule, WorkerTabs],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, WorkerTabs],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page">
@@ -25,6 +26,7 @@ import { WorkerTabs } from '../shared/worker-tabs';
           <p class="muted">O que roda nesta máquina, com as pastas e os arquivos de configuração de cada uma.</p>
         </div>
         <span class="spacer"></span>
+        <a mat-flat-button routerLink="/workers/aplicacoes/nova"><mat-icon svgIcon="add" /> Nova aplicação</a>
         <zap-worker-tabs />
       </header>
 

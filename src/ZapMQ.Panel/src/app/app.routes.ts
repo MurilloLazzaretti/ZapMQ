@@ -16,6 +16,7 @@ export const routes: Routes = [
       { path: 'mortas', title: 'Mensagens mortas · ZapMQ', loadComponent: () => import('./pages/dead-letters').then((m) => m.DeadLettersPage) },
       { path: 'workers', title: 'Processos e serviços · ZapMQ', loadComponent: () => import('./pages/workers').then((m) => m.WorkersPage) },
       { path: 'workers/aplicacoes', title: 'Aplicações · ZapMQ', loadComponent: () => import('./pages/apps').then((m) => m.AppsPage) },
+      { path: 'workers/aplicacoes/nova', title: 'Nova aplicação · ZapMQ', loadComponent: () => import('./pages/app-new').then((m) => m.AppNewPage) },
       { path: 'workers/aplicacoes/:kind/:name', title: 'Aplicação · ZapMQ', loadComponent: () => import('./pages/transport-app').then((m) => m.TransportAppPage) },
       { path: 'workers/proxy', title: 'Proxy · ZapMQ', loadComponent: () => import('./pages/proxy').then((m) => m.ProxyPage) },
       { path: 'workers/eventos', title: 'Histórico · Worker Control', loadComponent: () => import('./pages/worker-events').then((m) => m.WorkerEventsPage) },

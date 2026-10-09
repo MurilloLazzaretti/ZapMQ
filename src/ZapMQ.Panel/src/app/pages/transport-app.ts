@@ -11,7 +11,7 @@ import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { size } from '../core/database';
 import { AgoPipe } from '../core/format';
-import { TargetFile, TransportTarget } from '../core/models';
+import { RemovedApplication, TargetFile, TransportTarget } from '../core/models';
 import { targetIcon, targetName } from '../core/transport';
 
 /**
@@ -55,6 +55,26 @@ export class TransportAppPage implements OnInit {
   protected readonly instances = computed(() => this.target()?.Paths.length ?? 0);
   /** A module of the web application has nothing to start again. */
   protected readonly restartable = this.kind !== 'frontend';
+
+  /** A module of the web application is not taken away from here. */
+  protected readonly removable = this.kind !== 'frontend';
+  protected readonly removed = signal<RemovedApplication | null>(null);
+  protected typedName = '';
+  protected forceRemove = false;
+
+  protected async remove(): Promise<void> {
+    if (this.typedName.trim() !== this.name) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      this.removed.set(await firstValueFrom(this.api.removeApplication(this.kind, this.name, this.forceRemove)));
+    } catch (failure) {
+      this.say(failure);
+    } finally {
+      this.busy.set(false);
+    }
+  }
 
   ngOnInit(): void {
     this.load();

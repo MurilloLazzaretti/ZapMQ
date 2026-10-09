@@ -84,6 +84,38 @@
         <div class="empty"><span>Lendo…</span></div>
       }
     </section>
+
+    @if (removable) {
+      <section class="panel remove">
+        <div class="panel-head"><h2>Excluir a aplicação</h2><span class="hint">tira desta máquina; a pasta fica guardada</span></div>
+        @if (removed(); as gone) {
+          <div class="removed" [class.failed]="!gone.Removed">
+            <strong>{{ gone.Removed ? name + ' foi excluída desta máquina.' : 'A aplicação não foi excluída por inteiro.' }}</strong>
+            @if (gone.Problem) { <span class="bad">{{ gone.Problem }}</span> }
+            @if (gone.Kept) { <span class="muted">A pasta como estava ficou guardada em <span class="mono">{{ gone.Kept }}</span></span> }
+            <details><summary>Passos registrados pelo Worker Control</summary><ol>@for (message of gone.Messages; track $index) { <li>{{ message }}</li> }</ol></details>
+            <a mat-button routerLink="/workers/aplicacoes">Voltar às aplicações</a>
+          </div>
+        } @else {
+          <p class="muted what">
+            @switch (kind) {
+              @case ('worker') { O grupo é desligado e removido da configuração do Worker Control. }
+              @case ('api') { Os sites e os application pools desta aplicação são removidos do IIS. Se o proxy reverso ainda apontar para ela, ajuste-o depois. }
+              @default { O serviço é parado, tirado do registro do Windows e da lista dos que o Worker Control acompanha. }
+            }
+            A pasta não é apagada: é movida para a área de guarda do Worker Control.
+          </p>
+          <div class="confirm">
+            <label><span>Para confirmar, digite <strong>{{ name }}</strong></span>
+              <input type="text" [(ngModel)]="typedName" autocomplete="off" spellcheck="false" [attr.aria-label]="'Digite ' + name + ' para confirmar'" />
+            </label>
+            <mat-checkbox [(ngModel)]="forceRemove">Forçar o encerramento do que não parar</mat-checkbox>
+            <span class="spacer"></span>
+            <button mat-flat-button class="danger" (click)="remove()" [disabled]="busy() || typedName.trim() !== name"><mat-icon svgIcon="delete" /> {{ busy() ? 'Excluindo…' : 'Excluir' }}</button>
+          </div>
+        }
+      </section>
+    }
   } @else {
     <section class="panel empty"><span>Lendo…</span></section>
   }
