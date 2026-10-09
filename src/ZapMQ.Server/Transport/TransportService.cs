@@ -137,7 +137,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// What is never carried, whatever a zip that was brought has in it. The Worker Control
     /// keeps the same list, and keeps it again when it puts the files in place.
     /// </summary>
-    private static readonly string[] NeverCarried = ["appsettings*.json", "web.config", "ConfigWorkers.json", "*.db", "*.db-wal", "*.db-shm", "logs/"];
+    private static readonly string[] NeverCarried = ["appsettings*.json", "web.config", "ConfigWorkers.json", "*.ini", "environment.js", "env.json", "*.db", "*.db-wal", "*.db-shm", "logs/"];
 
     public static readonly string[] FileKinds = ["worker", "service", "api", "frontend"];
 

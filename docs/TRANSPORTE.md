@@ -88,7 +88,8 @@ Cada item:
 
 **Formato normalizado por tipo.** Um item de arquivos é sempre o zip da pasta publicada, com os
 arquivos na raiz, sem a pasta de fora. Na montagem saem os arquivos de configuração (padrão:
-`appsettings*.json`, `web.config`, `ConfigWorkers.json`, `*.db`, `logs/`; configurável por alvo).
+`appsettings*.json`, `web.config`, `ConfigWorkers.json`, `*.ini`, `environment.js`, `env.json`,
+`*.db`, `logs/`; configurável por alvo).
 Um item de banco é sempre um arquivo `.sql` em UTF-8, com os lotes separados por `GO`.
 
 ## 4. Alvos e nomes lógicos
@@ -372,7 +373,7 @@ Transporte → *Configuração* guarda as pastas de entrada.
   copiado (mexido há menos de 5 segundos) não é pego.
 
 Nos dois casos o que é do ambiente fica de fora: `appsettings*.json`, `web.config`,
-`ConfigWorkers.json`, bancos locais (`*.db`) e `logs/`.
+`ConfigWorkers.json`, `*.ini`, `environment.js`, `env.json`, bancos locais (`*.db`) e `logs/`.
 
 **Aplicar onde o pacote foi montado.** Um pacote fechado pode ser aplicado no próprio ambiente,
 com a mesma comparação e a mesma aprovação (agora ou agendada). É assim que a versão deixada na

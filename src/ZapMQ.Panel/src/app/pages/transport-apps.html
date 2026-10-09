@@ -63,7 +63,7 @@
         <div class="empty"><mat-icon svgIcon="search" /><strong>{{ all.length ? 'Nenhuma aplicação com esse filtro' : 'O Worker Control não conhece nada que possa ser transportado nesta máquina' }}</strong></div>
       }
     </section>
-    <p class="muted note">Arquivos de configuração (<code>appsettings*.json</code>, <code>web.config</code>, bancos locais e logs) nunca entram no pacote nem são substituídos no destino. Eles são editados em <a routerLink="/workers/aplicacoes">Processos e serviços → Aplicações</a>.</p>
+    <p class="muted note">Arquivos de configuração (<code>appsettings*.json</code>, <code>web.config</code>, <code>*.ini</code>, <code>environment.js</code>, <code>env.json</code>, bancos locais e logs) nunca entram no pacote nem são substituídos no destino. Eles são editados em <a routerLink="/workers/aplicacoes">Processos e serviços → Aplicações</a>.</p>
   } @else {
     <section class="panel empty"><span>Perguntando ao Worker Control o que há nesta máquina…</span></section>
   }
