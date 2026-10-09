@@ -140,6 +140,8 @@
   input.mono { font-family: var(--zap-mono, ui-monospace, monospace); font-size: 13px; }
   .muted { font: var(--mat-sys-body-small); }
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  label.check { display: flex; align-items: flex-start; gap: 10px; font: var(--mat-sys-body-medium); cursor: pointer; }
+  label.check input { height: 18px; width: 18px; padding: 0; margin-top: 1px; accent-color: var(--mat-sys-primary); }
 }
 
 .preview {

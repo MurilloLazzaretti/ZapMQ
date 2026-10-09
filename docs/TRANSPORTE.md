@@ -139,7 +139,7 @@ serviço do Windows, a partir do `.zip` da pasta publicada.
 | Tipo | Informado | Criado pelo agente |
 |---|---|---|
 | Micro serviço | Nome, pasta, executável, processos | A pasta com os arquivos e o grupo no `ConfigWorkers.json`, ligado |
-| API | Nome, pasta, instâncias, primeira porta, nome dos sites | Uma subpasta numerada, um site e um application pool por instância (sem código gerenciado, `ApplicationPoolIdentity`) |
+| API | Nome, pasta, instâncias, primeira porta, nome dos sites | Um site e um application pool por instância (sem código gerenciado, `ApplicationPoolIdentity`), todos servindo a mesma pasta ou cada um a sua subpasta numerada, conforme o que já é usado na máquina |
 | Serviço do Windows | Nome, nome de exibição, pasta, executável, início | A pasta, o serviço registrado sob a conta do sistema, a inclusão entre os serviços acompanhados e a partida |
 
 - As sugestões vêm do que já existe: a pasta é a em que está a maioria das aplicações do tipo, o

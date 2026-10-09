@@ -814,6 +814,8 @@ export interface ApplicationDefaults {
   Allowed: boolean;
   Folders: Record<string, string | null>;
   SiteName: string;
+  /** The instances of the applications there are share one folder, instead of one each. */
+  SharedFolder?: boolean;
   Sites: { Name: string; Port: number; Path: string }[];
   Groups: { Name: string; Path: string; Workers: number }[];
   Services: { Name: string; DisplayName: string; Path: string | null; StartType: string }[];
@@ -837,6 +839,7 @@ export interface NewApplication {
   instances: number;
   port: number;
   siteName: string | null;
+  sharedFolder: boolean;
   displayName: string | null;
   startType: string | null;
   settings: { path: string; content: string }[];

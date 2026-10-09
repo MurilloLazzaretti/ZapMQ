@@ -55,6 +55,8 @@ export class AppNewPage implements OnInit {
   protected readonly instances = signal(2);
   protected readonly port = signal<number | null>(null);
   protected readonly siteName = signal('{name} {n}');
+  /** Every instance serves the same folder, as against a numbered folder each. */
+  protected readonly sharedFolder = signal(false);
   protected readonly displayName = signal('');
   protected readonly startType = signal('Automatic');
   protected readonly settings = signal<{ path: string; content: string; original: string }[]>([]);
@@ -82,7 +84,7 @@ export class AppNewPage implements OnInit {
     return Array.from({ length: Math.max(0, Math.min(16, this.instances())) }, (_, index) => ({
       name: this.siteName().replace(/\{name\}/gi, this.name().trim()).replace(/\{n\}/gi, String(index + 1)),
       port: first === null ? null : first + index,
-      folder: this.folder() + this.slash() + (index + 1),
+      folder: this.sharedFolder() ? this.folder() : this.folder() + this.slash() + (index + 1),
     }));
   });
 
@@ -175,7 +177,10 @@ export class AppNewPage implements OnInit {
         ];
       default:
         return [
-          ...this.sites().map((site) => `Pasta ${site.folder} com ${files} arquivos, site "${site.name}" na porta ${site.port} e um application pool com o mesmo nome.`),
+          ...(this.sharedFolder() ? [`Pasta ${this.folder()} com ${files} arquivos, servida por todas as instâncias.`] : []),
+          ...this.sites().map((site) => this.sharedFolder()
+            ? `Site "${site.name}" na porta ${site.port} e um application pool com o mesmo nome.`
+            : `Pasta ${site.folder} com ${files} arquivos, site "${site.name}" na porta ${site.port} e um application pool com o mesmo nome.`),
           `Configuração: ${configured}, igual em todas as instâncias.`,
           'Os application pools são criados sem código gerenciado e com a identidade padrão (ApplicationPoolIdentity).',
         ];
@@ -193,6 +198,7 @@ export class AppNewPage implements OnInit {
       next: (defaults) => {
         this.defaults.set(defaults);
         this.siteName.set(defaults.SiteName || '{name} {n}');
+        this.sharedFolder.set(defaults.SharedFolder === true);
       },
       error: (failure: HttpErrorResponse) =>
         failure.status !== 401 && this.problem.set(failure.status === 501 ? 'O Worker Control instalado é anterior a este recurso (existe a partir da versão 2.17).' : (failure.error?.error ?? 'Não foi possível perguntar ao Worker Control.')),
@@ -271,6 +277,7 @@ export class AppNewPage implements OnInit {
           instances: kind === 'service' ? 1 : this.instances(),
           port: kind === 'api' ? (this.port() ?? 0) : 0,
           siteName: kind === 'api' ? this.siteName() : null,
+          sharedFolder: kind === 'api' && this.sharedFolder(),
           displayName: kind === 'service' ? this.displayName().trim() || null : null,
           startType: kind === 'service' ? this.startType() : null,
           settings: this.settings().map(({ path, content }) => ({ path, content })),

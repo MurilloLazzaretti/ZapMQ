@@ -224,7 +224,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     public sealed record Inspected(string Token, List<NewFile> Files, List<string> Executables, List<NewSetting> Settings);
 
     public sealed record NewApplication(string? Token, string? Kind, string? Name, string? Folder, string? Executable, int Instances, int Port, string? SiteName, string? DisplayName, string? StartType,
-        List<NewSetting>? Settings);
+        List<NewSetting>? Settings, bool SharedFolder = false);
 
     private static bool GoodToken(string? token) => token is { Length: 32 } && token.All(char.IsAsciiHexDigitLower);
 
@@ -276,6 +276,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             request["Instances"] = wanted.Instances;
             request["Port"] = wanted.Port;
             request["SiteName"] = wanted.SiteName;
+            request["SharedFolder"] = wanted.SharedFolder;
             request["DisplayName"] = wanted.DisplayName;
             request["StartType"] = wanted.StartType;
             request["Configs"] = new JsonArray([.. (wanted.Settings ?? []).Select(setting => new JsonObject { ["Path"] = setting.Path, ["Content"] = setting.Content })]);

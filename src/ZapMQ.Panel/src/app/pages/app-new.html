@@ -102,7 +102,7 @@
               </label>
               <label>Pasta
                 <input type="text" class="mono" [ngModel]="folder()" (ngModelChange)="typeFolder($event)" autocomplete="off" spellcheck="false" />
-                <span class="muted">Precisa não existir, ou estar vazia.@if (kind() === 'api') { Cada instância fica em uma subpasta numerada. }</span>
+                <span class="muted">Precisa não existir, ou estar vazia.</span>
               </label>
               @if (kind() !== 'api') {
                 <label>Executável
@@ -137,6 +137,9 @@
                     <input type="number" min="1" max="65535" [ngModel]="port()" (ngModelChange)="port.set($event === null || $event === '' ? null : +$event)" />
                   </label>
                 </div>
+                <label class="check"><input type="checkbox" [ngModel]="sharedFolder()" (ngModelChange)="sharedFolder.set($event)" />
+                  <span>Uma pasta só para todas as instâncias <span class="muted">— desmarcado, cada instância fica em uma subpasta numerada</span></span>
+                </label>
                 <label>Nome dos sites
                   <input type="text" [ngModel]="siteName()" (ngModelChange)="siteName.set($event)" autocomplete="off" spellcheck="false" />
                   <span class="muted">{{ '{name}' }} é o nome e {{ '{n}' }} o número da instância. Vem do padrão dos sites que já existem.</span>
