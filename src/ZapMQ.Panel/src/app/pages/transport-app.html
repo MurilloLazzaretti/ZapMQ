@@ -1,0 +1,90 @@
+<div class="page">
+  <header class="head">
+    <a mat-icon-button routerLink="/transporte/aplicacoes" matTooltip="Voltar às aplicações" aria-label="Voltar às aplicações"><mat-icon svgIcon="arrow_back" /></a>
+    <div class="title">
+      <h1>{{ name }}</h1>
+      <p class="muted">
+        <mat-icon [svgIcon]="targetIcon(kind)" /> {{ targetName(kind) }}
+        @if (target(); as now) {
+          @if (now.Version) { · versão {{ now.Version }} }
+          @if (now.Sites.length) { · sites: {{ now.Sites.join(', ') }} }
+          @if (now.Groups.length > 1) { · grupos: {{ now.Groups.join(', ') }} }
+        }
+      </p>
+    </div>
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível ler a aplicação</strong><span>{{ problem() }}</span></section>
+  } @else if (missing()) {
+    <section class="panel empty"><mat-icon svgIcon="search" /><strong>Esta aplicação não existe nesta máquina</strong><a mat-button routerLink="/transporte/aplicacoes">Ver as aplicações</a></section>
+  } @else if (target(); as now) {
+    @if (now.Problem) {
+      <div class="notice danger" role="alert"><mat-icon svgIcon="error" /><div>{{ now.Problem }}</div></div>
+    }
+
+    <section class="panel">
+      <div class="panel-head"><h2>Onde está</h2></div>
+      <ul class="paths">
+        @for (path of now.Paths; track path; let index = $index) {
+          <li><mat-icon svgIcon="folder" /><span class="mono">{{ path }}</span>@if (now.Paths.length > 1) { <span class="muted">instância {{ index + 1 }}</span> }</li>
+        } @empty {
+          <li class="muted">Nenhuma pasta conhecida.</li>
+        }
+      </ul>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Arquivos de configuração</h2>
+        <span class="hint">são deste ambiente: nenhum pacote os leva nem os substitui</span>
+      </div>
+      @if (files(); as list) {
+        @if (list.length) {
+          <div class="editor">
+            <ul class="files" role="listbox" aria-label="Arquivos de configuração">
+              @for (file of list; track file.Instance + file.Path) {
+                <li>
+                  <button type="button" [class.on]="open()?.Path === file.Path && open()?.Instance === file.Instance" (click)="select(file)">
+                    <mat-icon svgIcon="data_object" />
+                    <span class="what"><strong class="mono">{{ file.Path }}</strong>
+                      <span class="muted">@if (instances() > 1) { instância {{ file.Instance + 1 }} · } {{ size(file.Size / 1024) }} · alterado {{ file.ModifiedAt | ago }}</span></span>
+                  </button>
+                </li>
+              }
+            </ul>
+
+            <div class="pane">
+              @if (open(); as file) {
+                @if (loaded()) {
+                  <textarea class="mono" [ngModel]="text" (ngModelChange)="typed($event)" spellcheck="false" [attr.aria-label]="'Conteúdo de ' + file.Path"></textarea>
+                  @if (invalid()) {
+                    <p class="wrong"><mat-icon svgIcon="error" /> <span>Não é um JSON válido: {{ invalid() }}</span></p>
+                  }
+                  <div class="bar">
+                    @if (restartable) {
+                      <mat-checkbox [(ngModel)]="restart">Reiniciar a aplicação depois de salvar</mat-checkbox>
+                    }
+                    <span class="spacer"></span>
+                    <button mat-button (click)="discard()" [disabled]="busy() || !edited()">Desfazer</button>
+                    <button mat-flat-button (click)="save()" [disabled]="busy() || !edited() || !!invalid()"><mat-icon svgIcon="save" /> Salvar</button>
+                  </div>
+                } @else {
+                  <p class="muted hint-pane">Lendo {{ file.Path }}…</p>
+                }
+              } @else {
+                <p class="muted hint-pane">Escolha um arquivo para ver e editar. Ao salvar, a versão anterior fica guardada no servidor.</p>
+              }
+            </div>
+          </div>
+        } @else {
+          <div class="empty"><span>Esta aplicação não tem arquivo de configuração que possa ser editado aqui.</span></div>
+        }
+      } @else {
+        <div class="empty"><span>Lendo…</span></div>
+      }
+    </section>
+  } @else {
+    <section class="panel empty"><span>Lendo…</span></section>
+  }
+</div>

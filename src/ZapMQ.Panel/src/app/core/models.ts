@@ -901,3 +901,20 @@ export interface TransportSummary {
   scheduled: number;
   troubled: number;
 }
+
+/** A file of an application that belongs to the environment and can be edited on the panel. */
+export interface TargetFile {
+  /** Which of the folders of the application it is in, when there is more than one. */
+  Instance: number;
+  Folder: string;
+  Path: string;
+  Size: number;
+  ModifiedAt: string;
+}
+
+export interface TransportSettings {
+  /** By kind: where a new version is left on the machine. */
+  Inboxes: Record<string, { Path: string; Exists: boolean; Said: boolean }>;
+  Keep: string[];
+  KeepVersions: number;
+}

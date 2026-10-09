@@ -638,4 +638,47 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         Assert.NotEmpty(await Api.GetByteArrayAsync($"api/transport/packages/{id}/download"));
         Assert.Equal("same", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!["state"]);
     }
+
+    [Fact]
+    public async Task The_files_of_the_environment_and_the_inboxes_are_asked_of_the_worker_control()
+    {
+        var asked = new List<JObject>();
+        var worker = await V2Client.ConnectAsync(server.Port, "WorkerControl");
+        await using var _ = worker;
+        await worker.RequestAsync("bind", "WorkerControlAdmin");
+        var listening = Task.Run(async () =>
+        {
+            while (true)
+            {
+                var delivery = await worker.NextPushAsync();
+                var request = (JObject)delivery["message"]!["body"]!;
+                lock (asked)
+                    asked.Add(request);
+                var answer = (string?)request["Path"] == "App.exe"
+                    ? new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "not-found", ["Message"] = "not a file of the environment" } }
+                    : (string?)request["Sha256"] == "old"
+                        ? new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "invalid-state", ["Message"] = "changed by somebody else" } }
+                        : new JObject { ["Ok"] = true, ["Content"] = "{ }", ["Sha256"] = "abc" };
+                await worker.RequestAsync("respond", "WorkerControlAdmin", frame => { frame["messageId"] = delivery["message"]!["id"]; frame["response"] = answer; });
+            }
+        });
+
+        Assert.Equal("{ }", (string?)JObject.Parse(await Api.GetStringAsync("api/transport/file?kind=api&name=Orders&instance=1&path=appsettings.json"))["Content"]);
+        Assert.Equal(HttpStatusCode.OK, (await Api.PutAsJsonAsync("api/transport/file", new { kind = "api", name = "Orders", instance = 1, path = "appsettings.json", content = "{ \"a\": 1 }", sha256 = "abc", restart = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Api.PutAsJsonAsync("api/transport/file", new { kind = "api", name = "Orders", path = "appsettings.json", content = "{}", sha256 = "old" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Api.GetAsync("api/transport/file?kind=api&name=Orders&path=App.exe")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Api.GetAsync("api/transport/files?kind=api&name=Orders")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Api.GetAsync("api/transport/settings")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Api.PutAsJsonAsync("api/transport/settings/inboxes", new Dictionary<string, string?> { ["api"] = "D:\\drop\\api", ["worker"] = "" })).StatusCode);
+
+        lock (asked)
+        {
+            Assert.Equal(["TransportFile", "SetTransportFile", "SetTransportFile", "TransportFile", "TransportFiles", "TransportSettings", "SetTransportInboxes"], asked.Select(request => (string?)request["Command"]));
+            Assert.Equal((1, "appsettings.json", "admin"), ((int)asked[0]["Instance"]!, (string?)asked[0]["Path"], (string?)asked[0]["By"]));
+            Assert.Equal(("{ \"a\": 1 }", "abc", true), ((string?)asked[1]["Content"], (string?)asked[1]["Sha256"], (bool)asked[1]["Restart"]!));
+            Assert.Equal(("D:\\drop\\api", ""), ((string?)asked[6]["Inboxes"]!["api"], (string?)asked[6]["Inboxes"]!["worker"]));
+        }
+        using var anonymous = new HttpClient { BaseAddress = new Uri($"http://localhost:{server.PanelPort}/") };
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("api/transport/file?kind=api&name=Orders&path=appsettings.json")).StatusCode);
+    }
 }

@@ -328,13 +328,21 @@ Sites que servem a mesma aplicação viram um alvo só, com todas as pastas, e t
 Um serviço executado por um empacotador (`nssm`) não diz onde está o programa: a pasta é informada
 em `Transport.Targets`, que também serve para corrigir ou acrescentar qualquer alvo.
 
-**Entrada.** Em Transporte → Área → *Aplicações*, para cada alvo:
+**Telas.** Transporte → *Aplicações* lista o que roda na máquina, dividido por tipo, com busca por
+nome ou pasta. Cada aplicação tem a sua tela, com as pastas, os sites ou grupos que a servem e os
+arquivos de configuração (seção 11.2). Transporte → *Configuração* guarda as pastas de entrada.
+
+**Entrada.** Em Transporte → *Aplicações*, para cada alvo:
 
 - *O que está rodando*: o agente empacota a pasta como está agora.
+- *Enviar versão*: o `.zip` da pasta publicada, escolhido na máquina de quem está no painel, com
+  ou sem a pasta de fora.
 - *Versão nova na entrada*: aparece quando alguém deixou uma versão nova para aquele alvo na
   **pasta de entrada** do servidor. É o começo do caminho de uma versão: o programador copia a
-  pasta publicada para `transport\inbox\{tipo}\{nome}` (ao lado do agente; `Transport.Inbox` muda
-  o lugar), com o tipo `api`, `worker`, `service` ou `frontend` e o nome como aparece na lista.
+  pasta publicada para a pasta de entrada do tipo, em uma pasta com o nome da aplicação como
+  aparece na lista. A pasta de entrada de cada tipo (`api`, `worker`, `service`, `frontend`) é
+  dita em Transporte → *Configuração* e criada ao salvar; sem dizer nada, é
+  `transport\inbox\{tipo}`, ao lado do agente.
   Um `.zip` com o nome do alvo também serve. Levada à área, a versão sai da pasta de entrada. O
   que foi deixado com um nome que não é de nenhum alvo é apontado; o que ainda está sendo
   copiado (mexido há menos de 5 segundos) não é pego.
@@ -373,8 +381,7 @@ escrita. O agente não substitui a si mesmo.
 um agente em outra máquina não é atendido.
 
 **Comandos do agente:** `TransportTargets`, `TransportTarget`, `TransportCapture` e
-`TransportDeploy`. **Rotas novas:** `targets`, `area/running` e `area/incoming`. (`area/upload`,
-que recebe o zip pelo navegador, existe na API e não está em nenhuma tela.)
+`TransportDeploy`. **Rotas novas:** `targets`, `area/running`, `area/incoming` e `area/upload`.
 
 **Ainda não feito na etapa 2:**
 
@@ -383,3 +390,27 @@ que recebe o zip pelo navegador, existe na API e não está em nenhuma tela.)
 - a parada e a partida de sites no servidor web foram escritas e não puderam ser exercitadas fora
   do Windows: a primeira troca real de uma API é que as prova. O mesmo vale para serviços do
   Windows de verdade; o que foi exercitado são as pastas, os arquivos e a ordem dos passos.
+
+### 11.2 Arquivos do ambiente
+
+O que nunca viaja em um pacote é editado no próprio painel, na tela de cada aplicação.
+
+- **Quais arquivos:** os que estão na pasta da aplicação, casam com a lista do que é do ambiente
+  (`Transport.Keep`) e são texto (`.json`, `.config`, `.xml`, `.ini`, `.yml`, `.env` e
+  semelhantes), até 1 MB. Bancos locais e logs não entram. Nada fora da pasta da aplicação é
+  alcançado.
+- **Salvar** só grava sobre a versão que foi aberta: se alguém mudou o arquivo nesse meio tempo, é
+  preciso abrir de novo. Um `.json` que não é JSON válido não é gravado. A versão anterior fica em
+  `transport\backup\config\{tipo}\{nome}\{data}`.
+- **Reiniciar depois de salvar** é opcional e usa a mesma parada e partida do transporte.
+- **Uma aplicação com mais de uma pasta** (instâncias) tem os arquivos de cada uma listados e
+  editados à parte.
+- **Fica registrado** quem abriu e quem gravou cada arquivo, no log do painel e no histórico do
+  agente.
+
+Estes arquivos costumam guardar senhas e cadeias de conexão. Quem entra no painel os vê, e o
+pedido passa pela fila de administração do agente: vale o mesmo aviso da seção 10 sobre o
+protocolo de mensageria não ter autenticação.
+
+**Comandos do agente:** `TransportSettings`, `SetTransportInboxes`, `TransportFiles`,
+`TransportFile` e `SetTransportFile`. **Rotas:** `settings`, `settings/inboxes`, `files` e `file`.

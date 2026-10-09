@@ -1,0 +1,71 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Transporte</h1>
+      <p class="muted">O que roda nesta máquina e pode ir em um pacote.</p>
+    </div>
+    <span class="spacer"></span>
+    <zap-transport-tabs />
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível listar as aplicações</strong><span>{{ problem() }}</span></section>
+  } @else if (targets(); as all) {
+    @if (unmatched().length) {
+      <div class="notice" role="alert">
+        <mat-icon svgIcon="warning" />
+        <div><strong>Na pasta de entrada há o que não corresponde a nenhuma aplicação desta máquina.</strong> Confira o nome: <span class="mono">{{ unmatched().join(', ') }}</span></div>
+      </div>
+    }
+
+    <section class="panel">
+      <div class="tools">
+        <label class="search">
+          <mat-icon svgIcon="search" />
+          <input type="search" placeholder="Buscar por nome ou pasta" [ngModel]="search()" (ngModelChange)="search.set($event)" aria-label="Buscar aplicação" />
+        </label>
+        <div class="kinds" role="tablist" aria-label="Tipo de aplicação">
+          <button type="button" [class.on]="!kind()" (click)="kind.set('')">Todas</button>
+          @for (item of kinds; track item) {
+            <button type="button" [class.on]="kind() === item" [disabled]="!counts()[item] && kind() !== item" (click)="kind.set(item)">
+              <mat-icon [svgIcon]="targetIcon(item)" /> {{ targetName(item, true) }} <span class="count">{{ counts()[item] }}</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      @for (section of sections(); track section.kind) {
+        <div class="section">
+          <h2><mat-icon [svgIcon]="targetIcon(section.kind)" /> {{ targetName(section.kind, true) }} <span class="muted">{{ section.items.length }}</span></h2>
+          <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Enviar versão</em>.</p>
+          <ul>
+            @for (target of section.items; track target.Name) {
+              <li>
+                <a class="who" [routerLink]="['/transporte/aplicacoes', target.Kind, target.Name]">
+                  <strong>{{ target.Name }}</strong>
+                  @if (target.Version) { <span class="pill">{{ target.Version }}</span> }
+                  @if (target.Problem) { <span class="pill danger" [matTooltip]="target.Problem">sem pasta conhecida</span> }
+                </a>
+                <span class="muted mono path" [matTooltip]="target.Paths.join('\n')">{{ target.Paths[0] }}@if (target.Paths.length > 1) { <span> (+{{ target.Paths.length - 1 }})</span> }</span>
+                <span class="actions">
+                  @if (target.Incoming; as left) {
+                    <button mat-flat-button (click)="incoming(target)" [disabled]="busy()" [matTooltip]="'Deixada na pasta de entrada ' + (left.At | ago)">Versão nova na entrada</button>
+                  }
+                  <button mat-button (click)="zip.click()" [disabled]="busy()" matTooltip="Envia o .zip da pasta publicada e coloca na área">Enviar versão</button>
+                  <input #zip type="file" accept=".zip" hidden (change)="upload(target, $event)" />
+                  <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" matTooltip="Empacota o que está nesta máquina agora e coloca na área">O que está rodando</button>
+                  <a mat-icon-button [routerLink]="['/transporte/aplicacoes', target.Kind, target.Name]" matTooltip="Arquivos de configuração e detalhes" aria-label="Detalhes"><mat-icon svgIcon="chevron_right" /></a>
+                </span>
+              </li>
+            }
+          </ul>
+        </div>
+      } @empty {
+        <div class="empty"><mat-icon svgIcon="search" /><strong>{{ all.length ? 'Nenhuma aplicação com esse filtro' : 'O Worker Control não conhece nada que possa ser transportado nesta máquina' }}</strong></div>
+      }
+    </section>
+    <p class="muted note">Arquivos de configuração (<code>appsettings*.json</code>, <code>web.config</code>, bancos locais e logs) nunca entram no pacote nem são substituídos no destino. Eles são editados na tela de cada aplicação.</p>
+  } @else {
+    <section class="panel empty"><span>Perguntando ao Worker Control o que há nesta máquina…</span></section>
+  }
+</div>

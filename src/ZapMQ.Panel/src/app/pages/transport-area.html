@@ -18,54 +18,11 @@
         <span class="spacer"></span>
         <a mat-button routerLink="/banco/alteracoes"><mat-icon svgIcon="history" /> Alterações do banco</a>
         <a mat-button routerLink="/banco/objetos"><mat-icon svgIcon="table" /> Objetos do banco</a>
-        <button mat-button (click)="choose()"><mat-icon svgIcon="deployed_code" /> Aplicações</button>
+        <a mat-button routerLink="/transporte/aplicacoes"><mat-icon svgIcon="deployed_code" /> Aplicações</a>
         <button mat-button (click)="writing.set(!writing())"><mat-icon svgIcon="code" /> Escrever script</button>
         <button mat-button (click)="file.click()"><mat-icon svgIcon="upload" /> Importar .sql</button>
         <input #file type="file" accept=".sql,text/plain" hidden (change)="pick($event)" />
       </div>
-
-      @if (choosing()) {
-        <div class="targets">
-          @if (targetsProblem()) {
-            <p class="muted">{{ targetsProblem() }}</p>
-          } @else if (!targets()) {
-            <p class="muted">Perguntando ao Worker Control o que há nesta máquina…</p>
-          } @else {
-            @for (kind of targetKinds; track kind) {
-              @if (of(kind).length) {
-                <h3><mat-icon [svgIcon]="targetIcon(kind)" /> {{ targetName(kind, true) }}</h3>
-                <ul>
-                  @for (target of of(kind); track target.Name) {
-                    <li>
-                      <span class="who">
-                        <strong>{{ target.Name }}</strong>
-                        @if (target.Version) { <span class="muted">{{ target.Version }}</span> }
-                        @if (target.Problem) { <span class="bad" [matTooltip]="target.Problem">sem pasta conhecida</span> }
-                      </span>
-                      <span class="muted mono path">{{ target.Paths[0] }}@if (target.Paths.length > 1) { <span> (+{{ target.Paths.length - 1 }})</span> }</span>
-                      @if (target.Incoming; as left) {
-                        <button mat-flat-button (click)="incoming(target)" [disabled]="busy()" [matTooltip]="'Deixada na pasta de entrada ' + (left.At | ago) + (left.Files ? ', ' + left.Files + ' arquivos' : '')">Versão nova na entrada</button>
-                      } @else {
-                        <span></span>
-                      }
-                      <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" matTooltip="Empacota o que está nesta máquina agora, sem a configuração">O que está rodando</button>
-                    </li>
-                  }
-                </ul>
-              }
-            }
-            @if (!targets()!.length) { <p class="muted">O Worker Control não conhece nada que possa ser substituído nesta máquina.</p> }
-            @if (unmatched().length) {
-              <p class="note bad">Na pasta de entrada há o que não corresponde a nenhuma aplicação desta máquina (confira o nome): <span class="mono">{{ unmatched().join(', ') }}</span></p>
-            }
-            <p class="muted note">
-              <strong>Versão nova:</strong> copie a pasta publicada para <span class="mono">{{ inbox() }}\tipo\nome</span> no servidor, com o tipo (<code>api</code>, <code>worker</code>, <code>service</code> ou <code>frontend</code>)
-              e o nome exatamente como aparece nesta lista. Ela aparece aqui para ser levada à área.
-            </p>
-            <p class="muted note">Arquivos de configuração (<code>appsettings*.json</code>, <code>web.config</code>, bancos locais e logs) nunca entram no pacote nem são substituídos no destino.</p>
-          }
-        </div>
-      }
 
       @if (writing()) {
         <form class="script" (ngSubmit)="addScript()">
@@ -112,11 +69,11 @@
             </tbody>
           </table>
         </div>
-      } @else if (!writing() && !choosing()) {
+      } @else if (!writing()) {
         <div class="empty">
           <mat-icon svgIcon="playlist_add" />
           <strong>A área está vazia</strong>
-          <span>Inclua objetos pelas telas <a routerLink="/banco/alteracoes">Alterações</a> e <a routerLink="/banco/objetos">Objetos</a> do banco, escreva um script, ou escolha uma aplicação.</span>
+          <span>Inclua objetos pelas telas <a routerLink="/banco/alteracoes">Alterações</a> e <a routerLink="/banco/objetos">Objetos</a> do banco, escreva um script, ou escolha uma <a routerLink="/transporte/aplicacoes">aplicação</a>.</span>
         </div>
       }
     </section>

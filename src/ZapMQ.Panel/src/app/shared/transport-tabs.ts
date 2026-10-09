@@ -3,7 +3,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Transport } from '../core/transport';
 
-/** The screens of the transport: what is waiting to go into a package, and the packages. */
+/** The screens of the transport: what waits to go into a package, the packages, what runs on the machine and how it is all set up. */
 @Component({
   selector: 'zap-transport-tabs',
   imports: [RouterLink, RouterLinkActive, MatIconModule],
@@ -18,6 +18,8 @@ import { Transport } from '../core/transport';
         <mat-icon svgIcon="inventory_2" /> Pacotes
         @if (transport.waiting(); as count) { <span class="count hot">{{ count }}</span> }
       </a>
+      <a routerLink="/transporte/aplicacoes" routerLinkActive="active"><mat-icon svgIcon="deployed_code" /> Aplicações</a>
+      <a routerLink="/transporte/configuracao" routerLinkActive="active"><mat-icon svgIcon="tune" /> Configuração</a>
     </nav>
   `,
   styles: `

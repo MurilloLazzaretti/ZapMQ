@@ -19,6 +19,32 @@ public static class TransportEndpoints
 
     public sealed record AddTargetRequest(string? Kind, string? Name);
 
+    public sealed record WriteFileRequest(string? Kind, string? Name, int Instance, string? Path, string? Content, string? Sha256, bool Restart);
+
+    /// <summary>
+    /// Asks the Worker Control and gives its answer as it came, with its own names for the fields.
+    /// </summary>
+    private static async Task<IResult> Relay(WorkerControlClient worker, HttpContext context, string command, Action<System.Text.Json.Nodes.JsonObject>? more = null,
+        ILoggerFactory? loggers = null, string? audit = null, TimeSpan? patience = null)
+    {
+        var answer = patience is { } wait
+            ? await worker.AskAsync(command, User(context), wait, more, context.RequestAborted)
+            : await worker.AskAsync(command, User(context), more, context.RequestAborted);
+        if (!answer.Reached)
+            return Results.Json(new { error = answer.Problem, code = "unreachable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        if (!answer.Ok)
+            return Results.Json(new { error = answer.ErrorMessage, code = answer.ErrorCode }, statusCode: answer.ErrorCode switch
+            {
+                "not-found" => StatusCodes.Status404NotFound,
+                "invalid-state" => StatusCodes.Status409Conflict,
+                "unknown-command" => StatusCodes.Status501NotImplemented,
+                _ => StatusCodes.Status400BadRequest
+            });
+        if (audit is not null && loggers is not null)
+            loggers.CreateLogger("ZapMQ.Panel").LogInformation(audit + " (by {User})", User(context));
+        return Results.Content(answer.Body!.ToJsonString(), "application/json; charset=utf-8");
+    }
+
     public sealed record CloseRequest(string? Name, string? Description, List<string>? Items, bool KeepOrder);
 
     public sealed record ApproveRequest(DateTimeOffset? At);
@@ -99,6 +125,39 @@ public static class TransportEndpoints
         // What can be replaced on the machine of this environment.
         api.MapGet("/targets", (TransportService transport, HttpContext context) => Guarded(async () =>
             Results.Content((await transport.Targets(User(context), context.RequestAborted)).ToJsonString(), "application/json; charset=utf-8")));
+
+        // Where the Worker Control takes new versions from, by kind.
+        api.MapGet("/settings", (WorkerControlClient worker, HttpContext context) => Relay(worker, context, "TransportSettings"));
+
+        api.MapPut("/settings/inboxes", (Dictionary<string, string?> inboxes, WorkerControlClient worker, HttpContext context, ILoggerFactory loggers) =>
+            Relay(worker, context, "SetTransportInboxes", request =>
+            {
+                var said = new System.Text.Json.Nodes.JsonObject();
+                foreach (var (kind, path) in inboxes)
+                    said[kind] = path;
+                request["Inboxes"] = said;
+            }, loggers, "Transport: inboxes changed"));
+
+        // The files of an application that belong to the environment: its configuration.
+        api.MapGet("/files", (string? kind, string? name, WorkerControlClient worker, HttpContext context) =>
+            Relay(worker, context, "TransportFiles", request => { request["Kind"] = kind; request["Name"] = name; }));
+
+        api.MapGet("/file", (string? kind, string? name, int? instance, string? path, WorkerControlClient worker, HttpContext context, ILoggerFactory loggers) =>
+            Relay(worker, context, "TransportFile", request => { request["Kind"] = kind; request["Name"] = name; request["Instance"] = instance ?? 0; request["Path"] = path; },
+                // Who looked at a configuration is worth knowing: it may have what gives access to other things.
+                loggers, $"Transport: file {path} of {kind} {name} opened"));
+
+        api.MapPut("/file", (WriteFileRequest body, WorkerControlClient worker, HttpContext context, ILoggerFactory loggers) =>
+            Relay(worker, context, "SetTransportFile", request =>
+            {
+                request["Kind"] = body.Kind;
+                request["Name"] = body.Name;
+                request["Instance"] = body.Instance;
+                request["Path"] = body.Path;
+                request["Content"] = body.Content;
+                request["Sha256"] = body.Sha256;
+                request["Restart"] = body.Restart;
+            }, loggers, $"Transport: file {body.Path} of {body.Kind} {body.Name} written{(body.Restart ? ", asking for a restart" : "")}", TransportService.ReplacePatience));
 
         // What a target is running right now, packed and put in the area.
         api.MapPost("/area/running", (AddTargetRequest request, TransportService transport, HttpContext context) => Guarded(async () =>

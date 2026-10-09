@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult, TapEvent,
   PanelUser,
-  AreaItem, ItemCheck, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
+  AreaItem, ItemCheck, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, DatabasePoint, DatabaseQuery, DatabaseState,
   Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
@@ -254,6 +254,32 @@ export class Api {
   /** What a target is running right now, packed by the Worker Control. */
   addRunning(kind: string, name: string): Observable<AreaItem> {
     return this.http.post<AreaItem>('api/transport/area/running', { kind, name });
+  }
+
+  /** The zip of a published folder, brought from the machine of whoever is at the panel. */
+  addFiles(kind: string, name: string, file: Blob): Observable<AreaItem> {
+    return this.http.post<AreaItem>('api/transport/area/upload', file, { params: { kind, name }, headers: { 'Content-Type': 'application/octet-stream' } });
+  }
+
+  transportSettings(): Observable<TransportSettings> {
+    return this.http.get<TransportSettings>('api/transport/settings');
+  }
+
+  setInboxes(inboxes: Record<string, string>): Observable<unknown> {
+    return this.http.put('api/transport/settings/inboxes', inboxes);
+  }
+
+  /** The files of an application that belong to the environment. */
+  targetFiles(kind: string, name: string): Observable<{ Target: TransportTarget; Files: TargetFile[] }> {
+    return this.http.get<{ Target: TransportTarget; Files: TargetFile[] }>('api/transport/files', { params: { kind, name } });
+  }
+
+  targetFile(kind: string, name: string, instance: number, path: string): Observable<{ Content: string; Sha256: string; ModifiedAt: string }> {
+    return this.http.get<{ Content: string; Sha256: string; ModifiedAt: string }>('api/transport/file', { params: { kind, name, instance, path } });
+  }
+
+  writeTargetFile(file: { kind: string; name: string; instance: number; path: string; content: string; sha256: string; restart: boolean }): Observable<{ Sha256: string; Backup: string; Restarted: boolean; RestartProblem: string | null }> {
+    return this.http.put<{ Sha256: string; Backup: string; Restarted: boolean; RestartProblem: string | null }>('api/transport/file', file);
   }
 
   removeFromArea(id: string): Observable<void> {
