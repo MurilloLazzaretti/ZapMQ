@@ -829,6 +829,8 @@ export interface PackageSummary {
   revertBy: string | null;
   /** Whoever approved or reverted it asked for what does not stop in time to be ended by force. */
   force: boolean;
+  /** Who said they know it went wrong; it does not ask for attention after that. */
+  acknowledgedBy: string | null;
   size: number;
   changedAt: string;
 }

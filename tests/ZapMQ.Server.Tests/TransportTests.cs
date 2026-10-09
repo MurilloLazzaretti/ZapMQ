@@ -475,7 +475,12 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await Task.Delay(500);
         lock (here.Applied)
             Assert.Equal(2, here.Applied.Count);
-        Assert.Equal(1, (int)JObject.Parse(await Api.GetStringAsync("api/transport/summary"))["troubled"]! > 0 ? 1 : 0);
+        var troubled = (int)JObject.Parse(await Api.GetStringAsync("api/transport/summary"))["troubled"]!;
+        Assert.True(troubled > 0);
+        // Somebody knows about it: it stays as it is, and stops asking for attention.
+        var known = await Json(await Api.PostAsync($"api/transport/packages/{id}/acknowledge", null));
+        Assert.Equal(("Partial", "admin", "acknowledged"), ((string?)known["package"]!["status"], (string?)known["package"]!["acknowledgedBy"], (string?)known["history"]!.Last()["what"]));
+        Assert.Equal(troubled - 1, (int)JObject.Parse(await Api.GetStringAsync("api/transport/summary"))["troubled"]!);
     }
 
     [Fact]

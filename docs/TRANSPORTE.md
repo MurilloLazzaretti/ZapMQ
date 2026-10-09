@@ -204,6 +204,10 @@ que não parar**: nesse caso, passado o tempo, o processo é encerrado à força
 que ele estiver fazendo naquele momento é interrompido, por isso a opção vem desligada e é
 escolhida a cada vez. Um pacote que falhou sem aplicar nada pode ser aplicado de novo.
 
+**Dar ciência.** Um pacote que falhou, foi aplicado em parte ou revertido em parte conta no aviso
+do menu até alguém dar ciência dele na tela do pacote. Ele continua no histórico como está; só
+deixa de pedir atenção. Se for aplicado ou revertido de novo, volta a contar conforme o resultado.
+
 ### 5.6 Reverter
 
 Um pacote aplicado, ou aplicado em parte, pode ser revertido por decisão de alguém, no botão

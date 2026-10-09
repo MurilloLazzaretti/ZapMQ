@@ -91,6 +91,7 @@ import upload from '@material-symbols/svg-400/rounded/upload.svg';
 import playlistAdd from '@material-symbols/svg-400/rounded/playlist_add.svg';
 import eventIcon from '@material-symbols/svg-400/rounded/event.svg';
 import taskAlt from '@material-symbols/svg-400/rounded/task_alt.svg';
+import doneAll from '@material-symbols/svg-400/rounded/done_all.svg';
 import database from '@material-symbols/svg-400/rounded/database.svg';
 import hardDrive from '@material-symbols/svg-400/rounded/hard_drive.svg';
 import lock from '@material-symbols/svg-400/rounded/lock.svg';
@@ -100,7 +101,7 @@ const ICONS: Record<string, string> = {
   terminal, download, vertical_align_bottom: verticalAlignBottom, wrap_text: wrapText, delete_sweep: deleteSweep,
   stop, folder, autorenew, settings_applications: settingsApplications,
   web, widgets, publish,
-  local_shipping: localShipping, inventory_2: inventory, upload, playlist_add: playlistAdd, event: eventIcon, task_alt: taskAlt,
+  local_shipping: localShipping, inventory_2: inventory, upload, playlist_add: playlistAdd, event: eventIcon, task_alt: taskAlt, done_all: doneAll,
   password, manage_accounts: manageAccounts,
   database, hard_drive: hardDrive, lock, table, code, key, account_tree: accountTree,
   monitoring, timer, group, filter_alt: filterAlt,

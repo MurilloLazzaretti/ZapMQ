@@ -353,6 +353,10 @@ export class Api {
     return this.http.post<PackageDetail>(`api/transport/packages/${id}/approve`, { at, force });
   }
 
+  acknowledgePackage(id: string): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/acknowledge`, null);
+  }
+
   revertPlan(id: string): Observable<{ steps: RevertStep[] }> {
     return this.http.get<{ steps: RevertStep[] }>(`api/transport/packages/${id}/revert`);
   }

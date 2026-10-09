@@ -212,6 +212,11 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     }
   }
 
+  /** Somebody knows it went wrong: it stops being counted in the menu. */
+  protected async acknowledge(): Promise<void> {
+    await this.act(this.api.acknowledgePackage(this.id));
+  }
+
   private forcing(): boolean {
     return this.force && this.forcible();
   }

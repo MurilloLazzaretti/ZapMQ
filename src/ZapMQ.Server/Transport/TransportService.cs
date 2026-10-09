@@ -594,6 +594,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             if (!Waits(record))
                 throw new TransportRefused("Este pacote não está mais aguardando aprovação neste ambiente", StatusCodes.Status409Conflict);
             record.Status = "Approved";
+            record.AcknowledgedBy = null;
             record.ApprovedBy = by;
             record.ApplyAt = at ?? now;
             record.Force = force;
@@ -613,6 +614,20 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
         record.Status = record.Status != "Approved" ? "Rejected" : record.Received ? "Pending" : "Closed";
         record.ApplyAt = null;
         record.ApprovedBy = null;
+    });
+
+    /// <summary>
+    /// Somebody says they know this one went wrong: it stays as the record of what happened and
+    /// stops asking for attention.
+    /// </summary>
+    public PackageRecord Acknowledge(string id, string by) => Change(id, record =>
+    {
+        if (record.Status is not ("Partial" or "Failed" or "RevertedPartly"))
+            throw new TransportRefused("Este pacote não está pedindo atenção", StatusCodes.Status409Conflict);
+        if (record.AcknowledgedBy is not null)
+            return;
+        record.AcknowledgedBy = by;
+        record.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = by, What = "acknowledged" });
     });
 
     private PackageRecord Change(string id, Action<PackageRecord> change) =>
@@ -745,6 +760,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             if (reverting.Status is not ("Applied" or "Partial" or "RevertedPartly"))
                 throw new TransportRefused("Só o que foi aplicado neste ambiente pode ser revertido", StatusCodes.Status409Conflict);
             reverting.Status = "Reverting";
+            reverting.AcknowledgedBy = null;
             reverting.RevertBy = by;
             reverting.Force = force;
             reverting.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = by, What = "reverting", Detail = force ? "forçando o encerramento do que não parar" : null });

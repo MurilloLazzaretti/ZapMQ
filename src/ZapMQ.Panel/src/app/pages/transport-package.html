@@ -124,7 +124,7 @@
         <section class="panel decide done"><div><strong>Aplicado em {{ now.environment }}.</strong><span class="muted">{{ now.items.length === 1 ? 'O item foi aplicado.' : 'Todos os ' + now.items.length + ' itens foram aplicados.' }} O mesmo arquivo pode seguir para o próximo ambiente.</span></div><span class="spacer"></span><button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter</button><button mat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button></section>
       }
       @case ('Partial') {
-        <section class="panel decide warned"><div><strong class="bad">Aplicado em parte.</strong><span class="muted">A aplicação parou no primeiro item que falhou. O que foi aplicado antes continua aplicado; nada foi desfeito.</span></div><span class="spacer"></span><button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter o que foi aplicado</button></section>
+        <section class="panel decide warned"><div><strong class="bad">Aplicado em parte.</strong><span class="muted">A aplicação parou no primeiro item que falhou. O que foi aplicado antes continua aplicado; nada foi desfeito.</span></div><span class="spacer"></span>@if (now.package.acknowledgedBy) { <span class="muted acked">{{ now.package.acknowledgedBy }} deu ciência</span> } @else { <button mat-button (click)="acknowledge()" [disabled]="busy()" matTooltip="O pacote fica como registro e deixa de contar no aviso do menu"><mat-icon svgIcon="done_all" /> Dar ciência</button> }<button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter o que foi aplicado</button></section>
       }
       @case ('Reverting') {
         <section class="panel decide"><div><strong>Revertendo…</strong><span class="muted">Pedido por {{ now.package.revertBy }}. Do último item aplicado para o primeiro.</span></div></section>
@@ -140,12 +140,13 @@
         </section>
       }
       @case ('RevertedPartly') {
-        <section class="panel decide warned"><div><strong class="bad">Revertido em parte.</strong><span class="muted">Parte do que este pacote fez continua em {{ now.environment }}: veja em cada item. O que não volta pelo painel precisa ser desfeito por outro pacote.</span></div><span class="spacer"></span><button mat-button (click)="revert()" [disabled]="busy()"><mat-icon svgIcon="history" /> Reverter o que falta</button></section>
+        <section class="panel decide warned"><div><strong class="bad">Revertido em parte.</strong><span class="muted">Parte do que este pacote fez continua em {{ now.environment }}: veja em cada item. O que não volta pelo painel precisa ser desfeito por outro pacote.</span></div><span class="spacer"></span>@if (now.package.acknowledgedBy) { <span class="muted acked">{{ now.package.acknowledgedBy }} deu ciência</span> } @else { <button mat-button (click)="acknowledge()" [disabled]="busy()" matTooltip="O pacote fica como registro e deixa de contar no aviso do menu"><mat-icon svgIcon="done_all" /> Dar ciência</button> }<button mat-button (click)="revert()" [disabled]="busy()"><mat-icon svgIcon="history" /> Reverter o que falta</button></section>
       }
       @case ('Failed') {
         <section class="panel decide warned">
           <div><strong class="bad">Nenhum item foi aplicado.</strong><span class="muted">Veja o motivo no primeiro item.@if (retriable()) { Nada foi alterado: resolvido o motivo, o pacote pode ser aplicado de novo. }</span></div>
           <span class="spacer"></span>
+          @if (now.package.acknowledgedBy) { <span class="muted acked">{{ now.package.acknowledgedBy }} deu ciência</span> } @else { <button mat-button (click)="acknowledge()" [disabled]="busy()" matTooltip="O pacote fica como registro e deixa de contar no aviso do menu"><mat-icon svgIcon="done_all" /> Dar ciência</button> }
           @if (retriable()) {
             <button mat-button (click)="approve(false)" [disabled]="busy() || !!warnings().blocked"><mat-icon svgIcon="task_alt" /> Aplicar de novo</button>
           }

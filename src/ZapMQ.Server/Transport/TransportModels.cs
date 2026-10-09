@@ -192,6 +192,12 @@ public sealed class PackageRecord
     /// in time to be ended by force.
     /// </summary>
     public bool Force { get; set; }
+
+    /// <summary>
+    /// Who said they know it went wrong. From then on it does not ask for anybody any more,
+    /// until something else happens to it.
+    /// </summary>
+    public string? AcknowledgedBy { get; set; }
     public List<HistoryEntry> History { get; set; } = [];
     public List<ItemResult> Results { get; set; } = [];
 

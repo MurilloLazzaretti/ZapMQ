@@ -75,6 +75,7 @@ export function historyText(what: string): string {
       partial: 'Aplicado em parte',
       failed: 'Falhou',
       interrupted: 'Aplicação interrompida',
+      acknowledged: 'Ciência dada',
       reverting: 'Reversão iniciada',
       reverted: 'Revertido',
       'reverted-partly': 'Revertido em parte',

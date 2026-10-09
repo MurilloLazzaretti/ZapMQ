@@ -79,7 +79,7 @@ public static class TransportEndpoints
     {
         id = record.Manifest.Id, name = record.Manifest.Name, description = record.Manifest.Description, origin = record.Manifest.Origin,
         createdAt = record.Manifest.CreatedAt, createdBy = record.Manifest.CreatedBy, items = record.Manifest.Items.Count,
-        status = record.Status, received = record.Received, deliveries = record.Deliveries, applyAt = record.ApplyAt, approvedBy = record.ApprovedBy, revertBy = record.RevertBy, force = record.Force, size = record.Size,
+        status = record.Status, received = record.Received, deliveries = record.Deliveries, applyAt = record.ApplyAt, approvedBy = record.ApprovedBy, revertBy = record.RevertBy, force = record.Force, acknowledgedBy = record.AcknowledgedBy, size = record.Size,
         changedAt = record.History.LastOrDefault()?.At ?? record.Manifest.CreatedAt
     };
 
@@ -111,7 +111,7 @@ public static class TransportEndpoints
                 environment = store.Environment, area = store.Area().Count,
                 pending = packages.Count(record => record.Status == "Pending"),
                 scheduled = packages.Count(record => record.Status == "Approved"),
-                troubled = packages.Count(record => record.Status is "Partial" or "Failed" or "RevertedPartly")
+                troubled = packages.Count(record => record.Status is "Partial" or "Failed" or "RevertedPartly" && record.AcknowledgedBy is null)
             });
         });
 
@@ -281,6 +281,10 @@ public static class TransportEndpoints
             loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: package {Name} ({Id}) asked to be reverted (by {User})", record.Manifest.Name, id, User(context));
             return Results.Json(Detail(record, store));
         }));
+
+        // Somebody knows it went wrong: it stops being counted among what asks for attention.
+        api.MapPost("/packages/{id}/acknowledge", (string id, TransportService transport, TransportStore store, HttpContext context) => Guarded(() =>
+            Task.FromResult(Results.Json(Detail(transport.Acknowledge(id, User(context)), store)))));
 
         api.MapPost("/packages/{id}/reject", (string id, RejectRequest request, TransportService transport, TransportStore store, HttpContext context, ILoggerFactory loggers) => Guarded(() =>
         {
