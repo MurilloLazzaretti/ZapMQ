@@ -37,11 +37,11 @@
       @for (section of sections(); track section.kind) {
         <div class="section">
           <h2><mat-icon [svgIcon]="targetIcon(section.kind)" /> {{ targetName(section.kind, true) }} <span class="muted">{{ section.items.length }}</span></h2>
-          <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Enviar versão</em>.</p>
+          <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Enviar versão</em>. <em>Empacotar</em> leva a versão que está rodando agora.</p>
           <ul>
             @for (target of section.items; track target.Name) {
               <li>
-                <a class="who" [routerLink]="['/transporte/aplicacoes', target.Kind, target.Name]">
+                <a class="who" [routerLink]="['/workers/aplicacoes', target.Kind, target.Name]" matTooltip="Pastas e arquivos de configuração, em Processos e serviços">
                   <strong>{{ target.Name }}</strong>
                   @if (target.Version) { <span class="pill">{{ target.Version }}</span> }
                   @if (target.Problem) { <span class="pill danger" [matTooltip]="target.Problem">sem pasta conhecida</span> }
@@ -53,8 +53,7 @@
                   }
                   <button mat-button (click)="zip.click()" [disabled]="busy()" matTooltip="Envia o .zip da pasta publicada e coloca na área">Enviar versão</button>
                   <input #zip type="file" accept=".zip" hidden (change)="upload(target, $event)" />
-                  <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" matTooltip="Empacota o que está nesta máquina agora e coloca na área">O que está rodando</button>
-                  <a mat-icon-button [routerLink]="['/transporte/aplicacoes', target.Kind, target.Name]" matTooltip="Arquivos de configuração e detalhes" aria-label="Detalhes"><mat-icon svgIcon="chevron_right" /></a>
+                  <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" matTooltip="Empacota a versão que está rodando nesta máquina agora e coloca na área">Empacotar</button>
                 </span>
               </li>
             }
@@ -64,7 +63,7 @@
         <div class="empty"><mat-icon svgIcon="search" /><strong>{{ all.length ? 'Nenhuma aplicação com esse filtro' : 'O Worker Control não conhece nada que possa ser transportado nesta máquina' }}</strong></div>
       }
     </section>
-    <p class="muted note">Arquivos de configuração (<code>appsettings*.json</code>, <code>web.config</code>, bancos locais e logs) nunca entram no pacote nem são substituídos no destino. Eles são editados na tela de cada aplicação.</p>
+    <p class="muted note">Arquivos de configuração (<code>appsettings*.json</code>, <code>web.config</code>, bancos locais e logs) nunca entram no pacote nem são substituídos no destino. Eles são editados em <a routerLink="/workers/aplicacoes">Processos e serviços → Aplicações</a>.</p>
   } @else {
     <section class="panel empty"><span>Perguntando ao Worker Control o que há nesta máquina…</span></section>
   }

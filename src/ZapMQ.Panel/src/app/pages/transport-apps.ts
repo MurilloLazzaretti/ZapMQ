@@ -63,7 +63,7 @@ export class TransportAppsPage implements OnInit {
 
   /** What the application is running right now goes into the area. */
   protected running(target: TransportTarget): Promise<void> {
-    return this.place(this.api.addRunning(target.Kind, target.Name), `${target.Name}: o que está rodando foi para a área`);
+    return this.place(this.api.addRunning(target.Kind, target.Name), `${target.Name}: a versão que está rodando foi para a área`);
   }
 
   /** The new version that was left for it in the inbox goes into the area, and leaves the inbox. */

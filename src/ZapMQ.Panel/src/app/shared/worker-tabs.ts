@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
-/** The screens of the area for what runs on the machine: processes, services and connections. */
+/** The screens of the area for what runs on the machine: processes, services, applications and connections. */
 @Component({
   selector: 'zap-worker-tabs',
   imports: [RouterLink, RouterLinkActive, MatIconModule],
@@ -11,6 +11,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
     <nav aria-label="Processos e serviços">
       <a routerLink="/workers" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"><mat-icon svgIcon="precision_manufacturing" /> Grupos</a>
       <a routerLink="/workers/servicos" routerLinkActive="active"><mat-icon svgIcon="settings_applications" /> Serviços</a>
+      <a routerLink="/workers/aplicacoes" routerLinkActive="active"><mat-icon svgIcon="deployed_code" /> Aplicações</a>
       <a routerLink="/workers/conexoes" routerLinkActive="active"><mat-icon svgIcon="lan" /> Conexões</a>
       <a routerLink="/workers/eventos" routerLinkActive="active"><mat-icon svgIcon="history" /> Histórico</a>
       <a routerLink="/workers/configuracao" routerLinkActive="active"><mat-icon svgIcon="tune" /> Configuração</a>

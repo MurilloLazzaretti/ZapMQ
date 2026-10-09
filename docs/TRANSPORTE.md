@@ -329,12 +329,13 @@ Um serviço executado por um empacotador (`nssm`) não diz onde está o programa
 em `Transport.Targets`, que também serve para corrigir ou acrescentar qualquer alvo.
 
 **Telas.** Transporte → *Aplicações* lista o que roda na máquina, dividido por tipo, com busca por
-nome ou pasta. Cada aplicação tem a sua tela, com as pastas, os sites ou grupos que a servem e os
-arquivos de configuração (seção 11.2). Transporte → *Configuração* guarda as pastas de entrada.
+nome ou pasta, e as formas de levar uma versão à área. As pastas, os sites ou grupos e os arquivos
+de configuração de cada aplicação ficam em Processos e serviços → *Aplicações* (seção 11.2).
+Transporte → *Configuração* guarda as pastas de entrada.
 
 **Entrada.** Em Transporte → *Aplicações*, para cada alvo:
 
-- *O que está rodando*: o agente empacota a pasta como está agora.
+- *Empacotar*: o agente empacota a versão que está rodando, a pasta como está agora.
 - *Enviar versão*: o `.zip` da pasta publicada, escolhido na máquina de quem está no painel, com
   ou sem a pasta de fora.
 - *Versão nova na entrada*: aparece quando alguém deixou uma versão nova para aquele alvo na
@@ -393,7 +394,8 @@ um agente em outra máquina não é atendido.
 
 ### 11.2 Arquivos do ambiente
 
-O que nunca viaja em um pacote é editado no próprio painel, na tela de cada aplicação.
+O que nunca viaja em um pacote é editado no próprio painel, em Processos e serviços →
+*Aplicações*, na tela de cada aplicação: é assunto do ambiente em que se está, não do transporte.
 
 - **Quais arquivos:** os que estão na pasta da aplicação, casam com a lista do que é do ambiente
   (`Transport.Keep`) e são texto (`.json`, `.config`, `.xml`, `.ini`, `.yml`, `.env` e

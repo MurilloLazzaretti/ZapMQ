@@ -27,7 +27,7 @@ const INTERNAL = /^(\d+)(SS|TR)?$|^WorkerControl/;
     <div class="page">
       <header class="head">
         <div>
-          <h1>Filas</h1>
+          <h1>Mensageria</h1>
           <p class="muted">{{ rows().length }} de {{ all().length }} · atualizado ao vivo</p>
         </div>
         <span class="spacer"></span>

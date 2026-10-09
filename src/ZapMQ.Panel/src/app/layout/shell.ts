@@ -64,9 +64,9 @@ export class Shell implements OnInit, OnDestroy {
   protected readonly destinations: Destination[] = [
     { path: '/', label: 'Visão geral', icon: 'dashboard', exact: true },
     { path: '/mapa', label: 'Mapa', icon: 'hub' },
-    { path: '/filas', label: 'Filas', icon: 'stacks', also: '/mortas', badge: this.dead },
+    { path: '/filas', label: 'Mensageria', icon: 'stacks', also: '/mortas', badge: this.dead },
     { path: '/workers', label: 'Processos e serviços', icon: 'precision_manufacturing' },
-    { path: '/trafego', label: 'Tráfego', icon: 'monitoring' },
+    { path: '/trafego', label: 'Tráfego HTTP', icon: 'monitoring' },
     { path: '/web', label: 'Aplicação web', icon: 'web' },
     { path: '/banco', label: 'Banco de dados', icon: 'database' },
     { path: '/transporte', label: 'Transporte', icon: 'local_shipping', badge: this.transport.waiting },

@@ -10,7 +10,7 @@ import { NumPipe } from '../core/format';
   imports: [RouterLink, RouterLinkActive, MatIconModule, NumPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <nav aria-label="Filas">
+    <nav aria-label="Mensageria">
       <a routerLink="/filas" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"><mat-icon svgIcon="stacks" /> Filas</a>
       <a routerLink="/mortas" routerLinkActive="active">
         <mat-icon svgIcon="skull" /> Mensagens mortas

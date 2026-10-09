@@ -66,7 +66,7 @@ const DECIMAL = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
         </a>
 
         <a class="panel block" routerLink="/trafego">
-          <span class="name"><mat-icon svgIcon="monitoring" /> Tráfego <small class="muted">última hora, APIs</small> <mat-icon class="go" svgIcon="chevron_right" /></span>
+          <span class="name"><mat-icon svgIcon="monitoring" /> Tráfego HTTP <small class="muted">última hora, APIs</small> <mat-icon class="go" svgIcon="chevron_right" /></span>
           @if (traffic(); as now) {
             @if (now.Configured) {
               <span class="figures">

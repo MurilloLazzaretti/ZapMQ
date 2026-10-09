@@ -1,6 +1,6 @@
 <div class="page">
   <header class="head">
-    <a mat-icon-button routerLink="/transporte/aplicacoes" matTooltip="Voltar às aplicações" aria-label="Voltar às aplicações"><mat-icon svgIcon="arrow_back" /></a>
+    <a mat-icon-button routerLink="/workers/aplicacoes" matTooltip="Voltar às aplicações" aria-label="Voltar às aplicações"><mat-icon svgIcon="arrow_back" /></a>
     <div class="title">
       <h1>{{ name }}</h1>
       <p class="muted">
@@ -17,7 +17,7 @@
   @if (problem()) {
     <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível ler a aplicação</strong><span>{{ problem() }}</span></section>
   } @else if (missing()) {
-    <section class="panel empty"><mat-icon svgIcon="search" /><strong>Esta aplicação não existe nesta máquina</strong><a mat-button routerLink="/transporte/aplicacoes">Ver as aplicações</a></section>
+    <section class="panel empty"><mat-icon svgIcon="search" /><strong>Esta aplicação não existe nesta máquina</strong><a mat-button routerLink="/workers/aplicacoes">Ver as aplicações</a></section>
   } @else if (target(); as now) {
     @if (now.Problem) {
       <div class="notice danger" role="alert"><mat-icon svgIcon="error" /><div>{{ now.Problem }}</div></div>
