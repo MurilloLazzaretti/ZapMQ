@@ -66,7 +66,9 @@ public static class PanelHost
     {
         var path = context.Request.Path;
         var guarded = path.StartsWithSegments("/api") || path.StartsWithSegments("/admin") || path.StartsWithSegments("/metrics");
-        var open = path.StartsWithSegments("/api/login") || path.StartsWithSegments("/api/logout") || path.StartsWithSegments("/api/session");
+        // What another environment hands in carries its own proof, a signature, checked by the route itself.
+        var open = path.StartsWithSegments("/api/login") || path.StartsWithSegments("/api/logout") || path.StartsWithSegments("/api/session")
+            || path.StartsWithSegments("/api/transport/inbound");
         if (!guarded || open)
             return next(context);
 

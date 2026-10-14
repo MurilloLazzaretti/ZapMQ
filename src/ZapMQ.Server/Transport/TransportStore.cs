@@ -37,6 +37,11 @@ public sealed class TransportStore
     /// </summary>
     public string Environment { get; }
 
+    /// <summary>
+    /// The folder of the transport, where the routes and what arrives in parts are kept too.
+    /// </summary>
+    public string Root => _root;
+
     private string AreaPath => Path.Combine(_root, "area.json");
 
     /// <summary>
@@ -365,6 +370,18 @@ public sealed class TransportStore
     /// <summary>
     /// Changes what is known of a package here, and writes it down. Null when there is no such package.
     /// </summary>
+    /// <summary>
+    /// The other environment has the whole package: from now on it is part of what happened there.
+    /// </summary>
+    public void Delivered(string id, string to, string by, DateTimeOffset now) => Update(id, record =>
+    {
+        record.Deliveries.Add(new Delivery { To = to, At = now, By = by });
+        record.History.Add(new HistoryEntry { At = now, By = by, What = "sent", Detail = $"entregue a {to}" });
+    });
+
+    public void SendFailed(string id, string to, string by, string problem, DateTimeOffset now) => Update(id, record =>
+        record.History.Add(new HistoryEntry { At = now, By = by, What = "send-failed", Detail = $"{to}: {problem}" }));
+
     public PackageRecord? Update(string id, Action<PackageRecord> change)
     {
         lock (_gate)

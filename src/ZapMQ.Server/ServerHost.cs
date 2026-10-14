@@ -102,6 +102,9 @@ public static class ServerHost
         });
         builder.Services.AddSingleton(services => new Transport.TransportStore(options.Transport, services.GetRequiredService<ILogger<Transport.TransportStore>>()));
         builder.Services.AddSingleton<Transport.TransportService>();
+        builder.Services.AddSingleton(services => new Transport.TransportRouteStore(services.GetRequiredService<Transport.TransportStore>().Root, services.GetRequiredService<ILogger<Transport.TransportRouteStore>>()));
+        builder.Services.AddSingleton<Transport.TransportInbound>();
+        builder.Services.AddSingleton<Transport.TransportSender>();
         if (options.Panel.Enabled)
             builder.Services.AddHostedService<Transport.TransportRunner>();
         builder.Services.AddSingleton<MetricsSampler>();

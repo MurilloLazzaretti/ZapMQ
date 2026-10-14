@@ -13,6 +13,11 @@ public sealed class ServerFixture : IAsyncLifetime
 {
     private WebApplication? _app;
 
+    /// <summary>
+    /// How the environment of this server is called; two of them make a route between environments.
+    /// </summary>
+    public string Environment { get; init; } = "TEST";
+
     public int Port { get; private set; }
 
     /// <summary>
@@ -65,7 +70,7 @@ public sealed class ServerFixture : IAsyncLifetime
                 ["ZapMQ:WorkerControlKeyFile"] = _definitions + ".key",
                 ["ZapMQ:SettingsFile"] = _definitions + ".settings",
                 ["ZapMQ:Transport:Directory"] = _definitions + ".transport",
-                ["ZapMQ:Transport:Environment"] = "TEST"
+                ["ZapMQ:Transport:Environment"] = Environment
             });
             builder.Services.AddSingleton<global::ZapMQ.Server.V1.IPeerResolver>(new Peers(this));
         });

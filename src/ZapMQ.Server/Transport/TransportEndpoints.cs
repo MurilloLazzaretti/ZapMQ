@@ -102,6 +102,7 @@ public static class TransportEndpoints
     public static void MapTransport(this IEndpointRouteBuilder routes)
     {
         var api = routes.MapGroup("/api/transport");
+        routes.MapTransportRoutes();
 
         api.MapGet("/summary", (TransportStore store) =>
         {
