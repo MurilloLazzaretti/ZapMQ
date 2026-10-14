@@ -230,9 +230,6 @@ export class AppNewPage implements OnInit {
       this.executable.set(inspected.executables[0] ?? '');
       this.settings.set(inspected.settings.map((setting) => ({ ...setting, original: setting.content })));
       this.openSetting.set(0);
-      if (!this.name()) {
-        this.name.set(file.name.replace(/\.zip$/i, '').replace(/[^A-Za-z0-9._-]/g, ''));
-      }
     } catch (failure) {
       this.uploadProblem.set(uploadProblem(failure, 'Não foi possível receber o arquivo.'));
     } finally {

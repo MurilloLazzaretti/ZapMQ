@@ -33,8 +33,8 @@
       }
       @if (done.Created && kind() === 'api') {
         <div class="proxy">
-          <strong>Falta o proxy reverso</strong>
-          <span class="muted">Para a aplicação receber requisições, inclua este trecho na configuração do NGINX e aponte uma rota para ele, em Processos e serviços → Proxy reverso.</span>
+          <strong>Confira o proxy reverso</strong>
+          <span class="muted">Se o NGINX já encaminha para estas portas, não há nada a fazer. Se a aplicação é nova, inclua este trecho na configuração e aponte uma rota para ele, em Processos e serviços → Proxy reverso.</span>
           <pre class="mono">{{ upstream() }}</pre>
         </div>
       }
