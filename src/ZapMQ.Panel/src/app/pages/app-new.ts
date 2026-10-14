@@ -7,6 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
+import { jsonProblem, uploadProblem } from '../core/settings';
 import { size } from '../core/database';
 import { NumPipe } from '../core/format';
 import { ApplicationDefaults, CreatedApplication, InspectedFiles } from '../core/models';
@@ -146,10 +147,9 @@ export class AppNewPage implements OnInit {
   protected readonly badSetting = computed(() => {
     for (const setting of this.settings()) {
       if (setting.path.toLowerCase().endsWith('.json')) {
-        try {
-          JSON.parse(setting.content);
-        } catch (error) {
-          return `${setting.path} não é um JSON válido: ${(error as Error).message}`;
+        const problem = jsonProblem(setting.content);
+        if (problem) {
+          return `${setting.path} não é um JSON válido: ${problem}`;
         }
       }
     }
@@ -234,7 +234,7 @@ export class AppNewPage implements OnInit {
         this.name.set(file.name.replace(/\.zip$/i, '').replace(/[^A-Za-z0-9._-]/g, ''));
       }
     } catch (failure) {
-      this.uploadProblem.set((failure as HttpErrorResponse).error?.error ?? 'Não foi possível receber o arquivo.');
+      this.uploadProblem.set(uploadProblem(failure, 'Não foi possível receber o arquivo.'));
     } finally {
       this.busy.set(false);
     }

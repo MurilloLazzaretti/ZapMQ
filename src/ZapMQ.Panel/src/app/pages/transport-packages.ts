@@ -7,6 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
+import { uploadProblem } from '../core/settings';
 import { AgoPipe, WhenPipe } from '../core/format';
 import { PackageSummary } from '../core/models';
 import { Transport, statusName, statusTone } from '../core/transport';
@@ -123,7 +124,7 @@ export class TransportPackagesPage implements OnInit, OnDestroy {
       this.transport.refresh();
       void this.router.navigate(['/transporte/pacotes', received.package.id]);
     } catch (failure) {
-      this.snack.open((failure as HttpErrorResponse).error?.error ?? 'O arquivo não pôde ser importado', 'Fechar', { duration: 9000 });
+      this.snack.open(uploadProblem(failure, 'O arquivo não pôde ser importado'), 'Fechar', { duration: 12000 });
     } finally {
       this.busy.set(false);
     }

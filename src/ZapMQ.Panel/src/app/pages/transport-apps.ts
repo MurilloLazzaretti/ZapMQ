@@ -8,6 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Router, RouterLink } from '@angular/router';
 import { Observable, firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
+import { uploadProblem } from '../core/settings';
 import { AgoPipe } from '../core/format';
 import { AreaItem, TransportTarget } from '../core/models';
 import { TARGET_KINDS, Transport, targetIcon, targetName } from '../core/transport';
@@ -89,7 +90,7 @@ export class TransportAppsPage implements OnInit {
       this.transport.refresh();
       this.load();
     } catch (failure) {
-      this.snack.open((failure as HttpErrorResponse).error?.error ?? 'O serviço não aceitou o pedido', 'Fechar', { duration: 8000 });
+      this.snack.open(uploadProblem(failure, 'O serviço não aceitou o pedido'), 'Fechar', { duration: 12000 });
     } finally {
       this.busy.set(false);
     }

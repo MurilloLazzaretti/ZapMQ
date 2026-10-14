@@ -9,6 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
+import { jsonProblem } from '../core/settings';
 import { size } from '../core/database';
 import { AgoPipe } from '../core/format';
 import { RemovedApplication, TargetFile, TransportTarget } from '../core/models';
@@ -108,13 +109,8 @@ export class TransportAppPage implements OnInit {
     if (!this.open()?.Path.toLowerCase().endsWith('.json')) {
       return '';
     }
-    try {
-      // Comments are allowed in these files and are not JSON for the browser.
-      JSON.parse(text.replace(/^\s*\/\/.*$/gm, ''));
-      return '';
-    } catch (error) {
-      return (error as Error).message;
-    }
+    // As the applications read it: comments and a comma left before a closing bracket are fine.
+    return jsonProblem(text);
   }
 
   protected discard(): void {
