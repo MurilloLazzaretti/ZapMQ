@@ -200,6 +200,8 @@ To script against them, log in first (`POST /api/login` with `{"user": "...", "p
 
 ## ⚙️ Installation
 
+The whole path of bringing ZapMQ 2 and Worker Control 2 to an environment, including replacing a 1.x installation in use, is in [`docs/INSTALACAO.md`](docs/INSTALACAO.md) (in Portuguese). What follows is ZapMQ alone.
+
 Run the commands in a PowerShell window opened as administrator. The examples use the folder `C:\ZapMQ`; a path without spaces keeps the commands simple.
 
 1. Copy `ZapMQ.exe` and `appsettings.json` to `C:\ZapMQ`.
