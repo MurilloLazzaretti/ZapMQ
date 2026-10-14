@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
+import { RouterLink } from '@angular/router';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, forkJoin, of } from 'rxjs';
 import { Api } from '../core/api';
@@ -32,7 +33,7 @@ const WHOLE = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
  */
 @Component({
   selector: 'zap-traffic',
-  imports: [FormsModule, MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, Stat, TimeChart, NumPipe, WhenPipe, AgoPipe],
+  imports: [RouterLink, FormsModule, MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, Stat, TimeChart, NumPipe, WhenPipe, AgoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './traffic.html',
   styleUrl: './traffic.scss',

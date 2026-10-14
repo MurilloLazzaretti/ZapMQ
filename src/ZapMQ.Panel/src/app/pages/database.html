@@ -45,7 +45,7 @@
     <section class="panel empty">
       <mat-icon svgIcon="database" />
       <strong>Nenhum banco de dados configurado</strong>
-      <span>Informe a instância na seção <code>Database</code> do <code>ConfigWorkers.json</code>: <code>Server</code>, <code>User</code> e <code>Password</code>.</span>
+      <span>Informe a instância, o usuário e a senha em <a routerLink="/configuracoes" [queryParams]="{ assunto: 'banco' }">Configurações → Banco de dados</a>.</span>
       <span>A senha é trocada no arquivo por uma versão cifrada assim que o Worker Control a lê.</span>
     </section>
   } @else if (state(); as now) {

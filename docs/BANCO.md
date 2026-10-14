@@ -30,7 +30,7 @@ mostra o que ele lê.
 
 ## 2. Configuração
 
-Seção `Database` do `ConfigWorkers.json`:
+Seção `Database` do `Environment.json` do Worker Control, editável no painel em Configurações → Banco de dados:
 
 ```json
 "Database": {

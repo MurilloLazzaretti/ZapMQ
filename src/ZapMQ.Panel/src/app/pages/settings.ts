@@ -9,7 +9,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, firstValueFrom, forkJoin, of } from 'rxjs';
 import { Api } from '../core/api';
 import { Auth } from '../core/auth';
@@ -159,6 +159,7 @@ interface Frontend {
 export class SettingsPage implements OnInit {
   private readonly api = inject(Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly route = inject(ActivatedRoute);
   protected readonly auth = inject(Auth);
   protected readonly transport = inject(Transport);
 
@@ -250,6 +251,10 @@ export class SettingsPage implements OnInit {
   protected readonly frontends = computed(() => (this.config()?.['Frontends'] as Frontend[] | undefined) ?? []);
 
   ngOnInit(): void {
+    // ?assunto= opens one subject, as the pages that depend on it link here.
+    const asked = this.route.snapshot.queryParamMap.get('assunto');
+    if (asked && ['ambiente', 'web', 'downloads', ...SECTIONS.map((section) => section.id)].includes(asked))
+      this.current.set(asked);
     this.load();
     this.loadOwn();
   }

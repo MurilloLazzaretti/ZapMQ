@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { RouterLink } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Observable, firstValueFrom } from 'rxjs';
@@ -21,7 +22,7 @@ import { WorkerTabs } from '../shared/worker-tabs';
  */
 @Component({
   selector: 'zap-proxy',
-  imports: [FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, WorkerTabs, AgoPipe],
+  imports: [RouterLink, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, WorkerTabs, AgoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './proxy.html',
   styleUrl: './transport-app.scss',

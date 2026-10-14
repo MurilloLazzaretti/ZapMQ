@@ -39,7 +39,7 @@
     <section class="panel empty">
       <mat-icon svgIcon="monitoring" />
       <strong>Nenhum log de acesso configurado</strong>
-      <span>Informe, na seção <code>Traffic</code> do <code>ConfigWorkers.json</code>, o arquivo em que o proxy grava uma linha por requisição.</span>
+      <span>Informe o arquivo em que o proxy grava uma linha por requisição em <a routerLink="/configuracoes" [queryParams]="{ assunto: 'trafego' }">Configurações → Tráfego HTTP</a>.</span>
     </section>
   }
 

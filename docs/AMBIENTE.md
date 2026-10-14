@@ -194,7 +194,7 @@ O painel "Atenção" do mapa passa a existir também na Visão geral, e inclui s
 Em Processos e serviços → *Proxy*: o arquivo principal do NGINX e os `.conf` que ele inclui,
 lidos e editados no painel.
 
-- **Onde está o proxy.** Pela seção `Proxy` do `ConfigWorkers.json` (`Config`, `Executable`,
+- **Onde está o proxy.** Pela seção `Proxy` do `Environment.json` (`Config`, `Executable`,
   `Service`); sem ela, pela pasta do log de acesso de `Traffic`, que fica ao lado da pasta de
   configuração.
 - **Salvar** grava o arquivo e pergunta ao próprio proxy se a configuração inteira continua
@@ -227,7 +227,7 @@ Comandos novos na fila `WorkerControlAdmin`. A versão do contrato passa a 2; os
 
 ## 9. Configuração
 
-Chaves novas no `ConfigWorkers.json`, todas opcionais. Sem elas o agente faz o que faz hoje.
+Chaves novas, todas opcionais. Sem elas o agente faz o que faz hoje. `Services` fica no `ConfigWorkers.json`; `Traffic` e `Frontends`, no `Environment.json`. Abaixo, como se fossem um arquivo só.
 
 ```json
 {

@@ -15,7 +15,7 @@
       <section class="panel empty">
         <mat-icon svgIcon="dns" />
         <strong>Não se sabe onde está o proxy nesta máquina</strong>
-        <span>Ele é encontrado pelo log de acesso configurado em <code>Traffic</code>, ou pela seção <code>Proxy</code> do <code>ConfigWorkers.json</code> (<code>Config</code>, <code>Executable</code>, <code>Service</code>).</span>
+        <span>Ele é encontrado pelo log de acesso configurado em <code>Traffic</code>, ou pelo que for informado em <a routerLink="/configuracoes" [queryParams]="{ assunto: 'proxy' }">Configurações → Proxy reverso</a>.</span>
       </section>
     } @else {
       @if (now.Problem) {

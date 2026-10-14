@@ -6,6 +6,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { RouterLink } from '@angular/router';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Api } from '../core/api';
@@ -101,7 +102,7 @@ export class WebModuleDialog {
  */
 @Component({
   selector: 'zap-web',
-  imports: [FormsModule, MatButtonModule, MatButtonToggleModule, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, Stat, NumPipe, AgoPipe, WhenPipe],
+  imports: [RouterLink, FormsModule, MatButtonModule, MatButtonToggleModule, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, Stat, NumPipe, AgoPipe, WhenPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './web.html',
   styleUrl: './web.scss',

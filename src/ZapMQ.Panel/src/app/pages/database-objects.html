@@ -31,7 +31,7 @@
     <section class="panel empty">
       <mat-icon svgIcon="database" />
       <strong>Nenhum banco para listar</strong>
-      <span>Informe os bancos em <code>Databases</code>, na seção <code>Database</code> do <code>ConfigWorkers.json</code>.</span>
+      <span>Informe os bancos acompanhados em <a routerLink="/configuracoes" [queryParams]="{ assunto: 'banco' }">Configurações → Banco de dados</a>.</span>
     </section>
   } @else {
     <section class="panel">
