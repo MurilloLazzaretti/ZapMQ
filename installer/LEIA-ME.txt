@@ -1,0 +1,36 @@
+ZapMQ 2 e Worker Control 2 - instalador
+=======================================
+
+Instala, atualiza, ou troca uma instalação 1.x pelos dois serviços. O guia completo está em
+docs/INSTALACAO.md, no repositório do ZapMQ.
+
+1. Extraia o zip inteiro numa pasta do servidor (por exemplo D:\instalar-zapmq).
+
+2. Abra o PowerShell como administrador, nessa pasta, e libere os arquivos baixados:
+
+       Get-ChildItem -Recurse | Unblock-File
+
+3. Veja antes o que será feito, sem mudar nada:
+
+       powershell -ExecutionPolicy Bypass -File .\instalar.ps1 -Pasta D:\OjiTec -Ambiente QAS -Simular
+
+4. Rode de verdade (a mensageria e os micro serviços param por alguns minutos):
+
+       powershell -ExecutionPolicy Bypass -File .\instalar.ps1 -Pasta D:\OjiTec -Ambiente QAS
+
+   -Pasta     onde ficam as pastas ZapMQ e WorkerControl numa instalação nova ou na troca do 1.x
+   -Ambiente  DEV, QAS ou PRD (só na primeira instalação do ZapMQ)
+   -Somente   ZapMQ ou WorkerControl, para fazer um de cada vez
+
+O que ele faz:
+- nada instalado: instala os dois e registra os serviços;
+- 1.x instalado: o ZapMQ 2 ganha o serviço ZapMQServer e o 1.x fica parado, em início manual;
+  o Worker Control continua no mesmo serviço, apontado para o executável novo, com o mesmo
+  ConfigWorkers.json. O desinstalador do 1.x NUNCA deve ser usado: ele apaga o serviço do 2;
+- 2.x instalado: guarda o executável atual com a versão no nome e coloca o novo.
+
+Se o serviço novo não responder, ele volta sozinho ao que estava. Tudo fica num log
+(instalar-<data>.log) nesta pasta.
+
+Depois de uma instalação nova ou da troca do 1.x: publicar o painel no NGINX (o trecho aparece no
+fim), entrar com admin/admin, trocar a senha e, em Processos e serviços, clicar em Proteger agora.

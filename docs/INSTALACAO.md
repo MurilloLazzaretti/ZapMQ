@@ -35,13 +35,28 @@ Anote, no ambiente de destino:
    de configuração, formato do log de acesso).
 6. **A aplicação web** (pasta, se é monolito ou micro frontends) e as **pastas de arquivos para
    download**.
-7. **O banco:** instância, bancos usados e o usuário que o agente vai usar (seção 7).
+7. **O banco:** instância, bancos usados e o usuário que o agente vai usar (seção 8).
 8. **Rede:** o nome do site no DNS interno e se os servidores dos outros ambientes o alcançam na
    porta 80/443 (para as rotas de transporte).
 9. **Antivírus:** se há regra que bloqueia executáveis novos (o Microsoft Defender faz isso com a
    regra de prevalência). Combine a liberação da pasta com quem administra o servidor **antes**.
 
-## 3. Ordem
+## 3. Com o instalador
+
+O zip `ZapMQ-<versão>-WorkerControl-<versão>.zip` (montado por `installer/empacotar.sh`) faz as
+seções 5, 6 e 9 sozinho: instalação nova, troca do 1.x ou atualização, decidindo pelo que encontra
+na máquina, e volta ao que estava se o serviço novo não responder. Como usar está no `LEIA-ME.txt`
+dentro dele; em resumo, como administrador:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\instalar.ps1 -Pasta D:\Apps -Ambiente QAS -Simular   # só mostra
+powershell -ExecutionPolicy Bypass -File .\instalar.ps1 -Pasta D:\Apps -Ambiente QAS
+```
+
+As decisões do script são testadas sem Windows por `installer/testar.ps1` (`pwsh ./installer/testar.ps1`).
+As seções 5 e 6 abaixo são o mesmo caminho feito à mão.
+
+## 4. Ordem
 
 1. **ZapMQ 2** no lugar do ZapMQ 1.x. Os clientes 1.x continuam falando com ele.
 2. **Worker Control 2** no lugar do Worker Control 1.x, com o mesmo `ConfigWorkers.json`.
@@ -49,10 +64,10 @@ Anote, no ambiente de destino:
    administração**.
 4. O resto, conforme o ambiente: banco, tráfego, aplicação web, downloads, transporte.
 
-Cada passo é verificado (seção 9) antes do seguinte. Os dois primeiros param a mensageria e os
+Cada passo é verificado (seção 10) antes do seguinte. Os dois primeiros param a mensageria e os
 micro serviços por alguns minutos: faça-os em horário combinado.
 
-## 4. ZapMQ 2
+## 5. ZapMQ 2
 
 1. Crie a pasta (por exemplo `D:\Apps\ZapMQ`) e copie `ZapMQ.exe` e `appsettings.json`.
 2. Ajuste o `appsettings.json`:
@@ -92,7 +107,7 @@ micro serviços por alguns minutos: faça-os em horário combinado.
 
 **Voltar:** `Stop-Service ZapMQServer -Force; Set-Service ZapMQservice -StartupType Automatic; Start-Service ZapMQservice`.
 
-## 5. Worker Control 2
+## 6. Worker Control 2
 
 > **Nunca use o desinstalador do Worker Control 1.x (`unins000.exe`).** O serviço tem o mesmo nome
 > nas duas versões, e o desinstalador antigo para e apaga o serviço da 2.x junto. O 1.x sai
@@ -124,7 +139,7 @@ que não conhece: prefira o painel.
 
 **Voltar:** pare o serviço e rode o `sc.exe config` de novo com o caminho do executável 1.x.
 
-## 6. Painel
+## 7. Painel
 
 1. Publique pelo proxy reverso, no site que já existe (NGINX):
 
@@ -152,7 +167,7 @@ que não conhece: prefira o painel.
    Control passa a aceitar só pedidos selados com uma chave que só o ZapMQ e o agente têm. Sem
    isso, qualquer programa que alcance a porta da fila pode pedir ao agente o que o painel pede.
 
-## 7. O resto, conforme o ambiente
+## 8. O resto, conforme o ambiente
 
 Tudo em *Configurações*, no painel, que confere antes de gravar:
 
@@ -171,7 +186,7 @@ Tudo em *Configurações*, no painel, que confere antes de gravar:
   `docs/TRANSPORTE.md`). Os relógios dos servidores precisam estar a menos de 5 minutos uns dos
   outros.
 
-## 8. Atualizações seguintes
+## 9. Atualizações seguintes
 
 Com o serviço parado, guarde o executável atual com a versão no nome, coloque o novo e inicie:
 
@@ -185,7 +200,7 @@ Start-Service ZapMQServer
 O mesmo vale para o Worker Control. As configurações e os dados ficam como estão. Voltar é
 renomear de volta.
 
-## 9. Verificação
+## 10. Verificação
 
 | O quê | Como |
 |---|---|
@@ -198,7 +213,7 @@ renomear de volta.
 | Log do agente | `ServiceStarted`, `ConfigApplied` e um `WorkerUp` por processo |
 | Desligamento | reiniciar o servidor e conferir no log do agente `Windows is shutting down` seguido de `Stopped` |
 
-## 10. Problemas conhecidos
+## 11. Problemas conhecidos
 
 | Sintoma | Causa |
 |---|---|
