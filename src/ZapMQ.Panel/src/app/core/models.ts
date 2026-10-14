@@ -927,6 +927,32 @@ export interface PackageItem {
   fingerprint: string | null;
   base: string | null;
   size: number;
+  /** What the application is where the package was made, to install it where it does not exist. */
+  install?: InstallInfo | null;
+  /** How it was said to be installed here, when the package was approved. */
+  chosen?: InstallChoice | null;
+}
+
+export interface InstallInfo {
+  executable: string | null;
+  instances: number;
+  ports: number[];
+  displayName: string | null;
+  startType: string | null;
+  settings: { path: string; content: string; blanked: string[] }[];
+  proxy: string | null;
+}
+
+export interface InstallChoice {
+  folder: string;
+  executable: string | null;
+  instances: number;
+  port: number;
+  siteName: string | null;
+  sharedFolder: boolean;
+  displayName: string | null;
+  startType: string | null;
+  settings: { path: string; content: string }[];
 }
 
 export interface PackageResult {
@@ -947,6 +973,8 @@ export interface PackageResult {
   revertedAt: string | null;
   /** Where what the package had left is kept, after it was put back as it was. */
   revertBackup: string | null;
+  /** The item made here an application that was not here before. */
+  installed?: boolean;
 }
 
 /** What putting back one applied item would take. */
@@ -969,7 +997,7 @@ export interface PackageDetail {
 /** How one item of a package stands against what this environment has. */
 export interface ItemCheck {
   number: number;
-  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'unknown' | 'missing';
+  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'unknown' | 'missing' | 'install';
   added: number;
   changed: number;
   removed: number;

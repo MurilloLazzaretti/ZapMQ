@@ -12,9 +12,10 @@ import { Api } from '../core/api';
 import { kindIcon, kindName, size } from '../core/database';
 import { diff } from '../core/diff';
 import { NumPipe, WhenPipe } from '../core/format';
-import { ItemCheck, PackageDetail, PackageItem, PackageItemDetail, PackageResult } from '../core/models';
+import { ApplicationDefaults, InstallChoice, ItemCheck, PackageDetail, PackageItem, PackageItemDetail, PackageResult } from '../core/models';
 import { Transport, historyText, itemAction, itemTone, statusName, statusTone, targetIcon, targetName } from '../core/transport';
 import { confirm } from '../shared/dialogs';
+import { InstallForm } from '../shared/install-form';
 import { PackageSend } from '../shared/package-send';
 import { DiffView } from '../shared/diff-view';
 
@@ -30,7 +31,8 @@ const STATES: Record<string, { text: string; tone: string; hint: string }> = {
   absent: { text: 'já não existe', tone: '', hint: 'O objeto a apagar não existe aqui: nada será feito.' },
   script: { text: 'script', tone: 'primary', hint: 'Roda como está, dentro de uma transação.' },
   unknown: { text: 'não foi possível comparar', tone: 'warn', hint: '' },
-  missing: { text: 'não existe aqui', tone: 'danger', hint: 'Este ambiente não tem esse alvo. Instalar o que ainda não existe não é feito pelo transporte, por ora.' },
+  missing: { text: 'não existe aqui', tone: 'danger', hint: 'Este ambiente não tem esse alvo, e o pacote não diz como instalá-lo (veio de uma versão anterior, ou o tipo não é instalado pelo transporte).' },
+  install: { text: 'será instalado', tone: 'primary', hint: 'Este ambiente não tem essa aplicação: ela é criada aqui com o que for informado em Instalar aqui.' },
 };
 
 const FORCING = 'O que não parar no tempo de espera terá o processo encerrado à força: o que ele estiver fazendo nesse momento é interrompido.';
@@ -41,7 +43,7 @@ const FORCING = 'O que não parar no tempo de espera terá o processo encerrado 
  */
 @Component({
   selector: 'zap-transport-package',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, DiffView, NumPipe, WhenPipe, PackageSend],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, DiffView, NumPipe, WhenPipe, PackageSend, InstallForm],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './transport-package.html',
   styleUrl: './transport-package.scss',
@@ -64,6 +66,13 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected readonly busy = signal(false);
   /** The item whose content is open, and what was read of it. */
   protected readonly open = signal<number | null>(null);
+  /** What this environment does not have and the package says how to install, and how it was said to be. */
+  protected readonly installing = computed(() => {
+    const numbers = new Set((this.checks() ?? []).filter((check) => check.state === 'install').map((check) => check.number));
+    return (this.detail()?.items ?? []).filter((item) => numbers.has(item.number) && item.install);
+  });
+  protected readonly defaults = signal<ApplicationDefaults | null>(null);
+  private installs: Record<number, InstallChoice> = {};
   protected readonly content = signal<PackageItemDetail | null>(null);
   protected readonly scheduling = signal(false);
   protected readonly refusing = signal(false);
@@ -195,6 +204,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
       warnings.conflicts ? `${warnings.conflicts} item(ns) diferentes do ponto de partida` : '',
       warnings.missing ? `${warnings.missing} item(ns) usam algo que não existe aqui nem vem no pacote` : '',
       warnings.drops ? `${warnings.drops} objeto(s) serão apagados` : '',
+      this.installing().length ? `${this.installing().length} aplicação(ões) serão instaladas aqui` : '',
     ].filter(Boolean);
     const at = scheduled ? new Date(this.when) : null;
     if (scheduled && (!this.when || Number.isNaN(at!.getTime()))) {
@@ -202,13 +212,14 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     }
     const sure = await confirm(this.dialog, {
       title: scheduled ? 'Agendar a aplicação?' : 'Aplicar agora?',
-      message: `${this.detail()!.items.length} item(ns) serão aplicados no banco de ${this.detail()!.environment}${scheduled ? ' em ' + at!.toLocaleString('pt-BR') : ''}. Se um item falhar, a aplicação para ali e nada é desfeito sozinho.`,
+      message: `${this.detail()!.items.length} item(ns) serão aplicados em ${this.detail()!.environment}${scheduled ? ' em ' + at!.toLocaleString('pt-BR') : ''}. Se um item falhar, a aplicação para ali e nada é desfeito sozinho.`,
       warning: [...notes.map((note) => note + '.'), this.forcing() ? FORCING : ''].filter(Boolean).join(' ') || undefined,
       action: scheduled ? 'Agendar' : 'Aplicar',
       danger: notes.length > 0 || this.forcing(),
     });
     if (sure) {
-      await this.act(this.api.approvePackage(this.id, at ? at.toISOString() : null, this.forcing()));
+      const installs = Object.fromEntries(this.installing().map((item) => [item.number, this.installs[item.number]]));
+      await this.act(this.api.approvePackage(this.id, at ? at.toISOString() : null, this.forcing(), this.installing().length ? installs : undefined));
       this.scheduling.set(false);
     }
   }
@@ -309,6 +320,10 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     this.snack.open((failure as HttpErrorResponse).error?.error ?? 'O serviço não aceitou o pedido', 'Fechar', { duration: 8000 });
   }
 
+  protected chosen(number: number, choice: InstallChoice): void {
+    this.installs[number] = choice;
+  }
+
   protected reload(): void {
     this.load(false);
   }
@@ -340,6 +355,10 @@ export class TransportPackagePage implements OnInit, OnDestroy {
       next: (answer) => {
         this.checks.set(answer.checks);
         this.checkProblem.set('');
+        if (answer.checks.some((check) => check.state === 'install') && !this.defaults()) {
+          // What is usual on this machine, to suggest the folder and the names.
+          this.api.applicationDefaults().subscribe({ next: (defaults) => this.defaults.set(defaults), error: () => this.defaults.set(null) });
+        }
       },
       error: (failure: HttpErrorResponse) => {
         this.checks.set(null);

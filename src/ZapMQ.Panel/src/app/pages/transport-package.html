@@ -157,6 +157,15 @@
       }
     }
 
+    @if (installing().length) {
+      <section class="panel">
+        <div class="panel-head"><h2>Instalar aqui</h2><span class="hint">o que {{ now.environment }} ainda não tem: informe o que é deste ambiente e preencha a configuração</span></div>
+        @for (item of installing(); track item.number) {
+          <zap-install-form [item]="item" [defaults]="defaults()" [environment]="now.environment" [origin]="now.package.origin" (changed)="chosen(item.number, $event)" />
+        }
+      </section>
+    }
+
     @if ((now.package.status === 'Closed' && !now.package.received) || now.package.status === 'Applied') {
       <zap-package-send [packageId]="now.package.id" (delivered)="reload()" />
     }
@@ -183,7 +192,7 @@
                   <mat-icon [svgIcon]="kindIcon(item.objectKind)" [matTooltip]="kindName(item.objectKind)" /><span><span class="muted">{{ item.schema }}.</span><strong>{{ item.name }}</strong></span>
                 }
               </span>
-              <span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span>
+              @if (!installing().includes(item)) { <span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span> }
               <span class="standing">
                 @if (result(item.number); as done) {
                   @switch (done.reverted) {
@@ -194,7 +203,7 @@
                   }
                   @switch (done.reverted === 'reverted' ? '' : done.status) {
                     @case ('') {}
-                    @case ('applied') { <span class="pill ok">{{ done.did === 'replaced' ? 'substituído' : done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
+                    @case ('applied') { <span class="pill ok">{{ done.installed ? 'instalado' : done.did === 'replaced' ? 'substituído' : done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
                     @case ('failed') { <span class="pill danger">falhou</span> }
                     @default { <span class="pill warn" matTooltip="O pedido foi feito e a resposta não chegou: pode ter sido aplicado ou não. Confira no banco.">resultado desconhecido</span> }
                   }

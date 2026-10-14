@@ -7,7 +7,7 @@ import {
   AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
-  HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending } from './models';
+  HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending, InstallChoice } from './models';
 
 /**
  * The panel API. Every address is relative, so it follows the <base href> the service writes
@@ -427,8 +427,8 @@ export class Api {
     return this.http.get<PackageItemDetail>(`api/transport/packages/${id}/items/${number}`);
   }
 
-  approvePackage(id: string, at: string | null, force = false): Observable<PackageDetail> {
-    return this.http.post<PackageDetail>(`api/transport/packages/${id}/approve`, { at, force });
+  approvePackage(id: string, at: string | null, force = false, installs?: Record<number, InstallChoice>): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/approve`, { at, force, installs });
   }
 
   acknowledgePackage(id: string): Observable<PackageDetail> {
