@@ -1101,6 +1101,7 @@ export interface TransportSending {
   sent: number;
   total: number;
   problem: string | null;
+  note: string | null;
   by: string;
   startedAt: string;
   endedAt: string | null;

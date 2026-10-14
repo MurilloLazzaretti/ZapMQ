@@ -480,6 +480,10 @@ public sealed class TransportSender(TransportRouteStore routes, TransportStore s
         public long Sent { get; set; }
         public long Total { get; set; }
         public string? Problem { get; set; }
+        /// <summary>
+        /// Something worth knowing about a delivery that went well: the other side already had it.
+        /// </summary>
+        public string? Note { get; set; }
         public string By { get; set; } = "";
         public DateTimeOffset StartedAt { get; set; }
         public DateTimeOffset? EndedAt { get; set; }
@@ -625,6 +629,12 @@ public sealed class TransportSender(TransportRouteStore routes, TransportStore s
             {
                 if (!finished.IsSuccessStatusCode)
                     throw new TransportRefused(await Problem(finished));
+                var said = JsonDocument.Parse(await finished.Content.ReadAsStringAsync()).RootElement;
+                var there = said.TryGetProperty("environment", out var environment) ? environment.GetString() : null;
+                if (string.Equals(there, store.Environment, StringComparison.OrdinalIgnoreCase))
+                    sending.Note = $"a rota leva a este mesmo ambiente ({there}): o pacote já está aqui, nada novo foi criado";
+                else if (said.TryGetProperty("alreadyHere", out var already) && already.GetBoolean())
+                    sending.Note = $"{there ?? route.Name} já tinha este pacote: ele continua lá como estava";
             }
             var now = time.GetUtcNow();
             store.Delivered(sending.Package, route.Name, sending.By, now);

@@ -12,6 +12,7 @@ import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
 import { CatalogColumn, CatalogDetail, CatalogReference, ObjectChange } from '../core/models';
 import { colour } from '../core/sql';
 import { Transport } from '../core/transport';
+import { copyText } from '../core/clipboard';
 
 /** The parts of an object, as the screen calls them. */
 const PARTS: Record<string, string> = {
@@ -158,7 +159,10 @@ export class DatabaseObjectPage implements OnInit, OnDestroy {
     if (!script) {
       return;
     }
-    navigator.clipboard?.writeText(script).then(() => {
+    void copyText(script).then((done) => {
+      if (!done) {
+        return;
+      }
       this.copied.set(true);
       this.copiedTimer = setTimeout(() => this.copied.set(false), 2000);
     });

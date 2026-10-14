@@ -12,6 +12,7 @@ import { Auth } from '../core/auth';
 import { TransportRoute, TransportRoutes } from '../core/models';
 import { WhenPipe } from '../core/format';
 import { ask, confirm } from './dialogs';
+import { copyText } from '../core/clipboard';
 
 interface Draft {
   id: string | null;
@@ -204,7 +205,8 @@ export class TransportRoutesPanel implements OnInit {
     this.busy.set(true);
     try {
       const answer = await firstValueFrom(this.api.testTransportRoute(route.id));
-      this.snack.open(`${route.name} respondeu: ambiente ${answer.environment}, com a assinatura aceita.`, undefined, { duration: 5000 });
+      const self = answer.environment.toLowerCase() === (this.data()?.environment ?? '').toLowerCase();
+      this.snack.open(`${route.name} respondeu: ambiente ${answer.environment}, com a assinatura aceita.` + (self ? ' É este mesmo ambiente: a rota serve para testar o caminho, não para levar pacotes.' : ''), undefined, { duration: self ? 9000 : 5000 });
     } catch (failure) {
       this.problem(failure, `${route.name} não respondeu`);
     } finally {
@@ -260,11 +262,7 @@ export class TransportRoutesPanel implements OnInit {
   }
 
   protected async copy(key: string): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(key);
-      this.snack.open('Chave copiada', undefined, { duration: 2000 });
-    } catch {
-      this.snack.open('Selecione a chave e copie com Ctrl+C', undefined, { duration: 4000 });
-    }
+    const done = await copyText(key);
+    this.snack.open(done ? 'Chave copiada' : 'Não foi possível copiar: selecione a chave e use Ctrl+C', undefined, { duration: done ? 2000 : 5000 });
   }
 }

@@ -15,6 +15,7 @@ import { Api } from '../core/api';
 import { Auth } from '../core/auth';
 import { Transport } from '../core/transport';
 import { ApplicationDefaults, ProxyState, WorkerConfig, ZapMQSettings } from '../core/models';
+import { copyText } from '../core/clipboard';
 
 type Kind = 'text' | 'number' | 'bool' | 'list' | 'secret';
 
@@ -438,8 +439,7 @@ export class SettingsPage implements OnInit {
   }
 
   protected copy(text: string): void {
-    void navigator.clipboard?.writeText(text);
-    this.snack.open('Trecho copiado', undefined, { duration: 2000 });
+    void copyText(text).then((done) => this.snack.open(done ? 'Trecho copiado' : 'Não foi possível copiar: selecione o trecho e use Ctrl+C', undefined, { duration: done ? 2000 : 5000 }));
   }
 
   protected addDownload(): void {

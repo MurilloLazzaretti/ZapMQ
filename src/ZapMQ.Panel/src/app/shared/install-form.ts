@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApplicationDefaults, InstallChoice, PackageItem } from '../core/models';
 import { targetIcon, targetName } from '../core/transport';
+import { copyText } from '../core/clipboard';
 
 /** The lines of the proxy of the other environment, with its ports replaced one for one by the ones chosen here. */
 export function adaptProxy(proxy: string, from: number[], to: number[]): string {
@@ -158,11 +159,7 @@ export class InstallForm implements OnInit {
   }
 
   protected async copy(text: string): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(text);
-      this.snack.open('Copiado', undefined, { duration: 2000 });
-    } catch {
-      this.snack.open('Selecione o texto e copie com Ctrl+C', undefined, { duration: 4000 });
-    }
+    const done = await copyText(text);
+    this.snack.open(done ? 'Copiado' : 'Não foi possível copiar: selecione o texto e use Ctrl+C', undefined, { duration: done ? 2000 : 5000 });
   }
 }

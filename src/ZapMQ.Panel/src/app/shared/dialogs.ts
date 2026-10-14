@@ -4,6 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { firstValueFrom } from 'rxjs';
+import { copyText } from '../core/clipboard';
 
 export interface Confirmation {
   title: string;
@@ -93,7 +94,7 @@ export class JsonDialog {
   protected copied = false;
 
   protected copy(): void {
-    void navigator.clipboard?.writeText(this.text).then(() => (this.copied = true));
+    void copyText(this.text).then((done) => (this.copied = done));
   }
 }
 

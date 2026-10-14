@@ -43,7 +43,10 @@ import { TransportRoute, TransportSending } from '../core/models';
               <span>Enviando para <strong>{{ now.route }}</strong>: {{ percent(now) }}%</span>
               <span class="bar"><span [style.width.%]="percent(now)"></span></span>
             }
-            @case ('delivered') { <span>Entregue a <strong>{{ now.route }}</strong>, conferido pelo SHA-256.</span> }
+            @case ('delivered') {
+              @if (now.note) { <span>Enviado a <strong>{{ now.route }}</strong>, mas {{ now.note }}.</span> }
+              @else { <span>Entregue a <strong>{{ now.route }}</strong>, conferido pelo SHA-256. Lá ele aguarda aprovação.</span> }
+            }
             @case ('failed') { <span>O envio para <strong>{{ now.route }}</strong> não foi concluído: {{ now.problem }}. Enviar de novo continua de onde parou.</span> }
           }
         </div>

@@ -108,6 +108,7 @@ public sealed class TransportRouteTests : IAsyncLifetime
         var sent = await Sent(id);
         Assert.True((string?)sent["status"] == "delivered", (string?)sent["problem"]);
         Assert.Equal(bytes.Length, (long)sent["sent"]!);
+        Assert.Null((string?)sent["note"]);
 
         // On the other side it waits for someone of QAS to approve it.
         var there = JObject.Parse(await _qas.Admin.GetStringAsync($"api/transport/packages/{id}"));
@@ -120,9 +121,11 @@ public sealed class TransportRouteTests : IAsyncLifetime
         Assert.Equal("QAS", (string?)here["package"]!["deliveries"]![0]!["to"]);
         Assert.Contains(here["history"]!, entry => (string?)entry["what"] == "sent");
 
-        // Sending again finds it there and is done at once.
+        // Sending again finds it there and is done at once, saying so.
         await Json(await _dev.Admin.PostAsJsonAsync($"api/transport/packages/{id}/send", new { route }), HttpStatusCode.Accepted);
-        Assert.Equal("delivered", (string?)(await Sent(id))["status"]);
+        var again = await Sent(id);
+        Assert.Equal("delivered", (string?)again["status"]);
+        Assert.Contains("QAS já tinha este pacote", (string?)again["note"]);
     }
 
     [Fact]
