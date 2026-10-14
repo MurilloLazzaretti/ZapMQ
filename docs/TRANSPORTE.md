@@ -136,18 +136,29 @@ testa a configuração antes de recarregar.
 
 ### 4.1 Alvo que ainda não existe
 
-Um item de arquivos cujo alvo não existe no destino é uma **instalação**, e a aprovação muda:
+Um item de micro serviço, serviço do Windows ou API cujo alvo não existe no destino é uma
+**instalação**. Ao fechar o pacote, a origem anota no item o que o alvo é lá:
 
-- o pacote leva, além dos arquivos, o que o alvo é: o executável, o tipo e, quando fizer sentido,
-  um **modelo** dos arquivos de configuração, sem os valores do ambiente de origem;
-- quem aprova informa o que é próprio do ambiente: a pasta, as instâncias e as portas, o número
-  de processos do grupo, o nome e a conta do serviço, e preenche a configuração a partir do
-  modelo;
-- o agente cria a pasta, copia os arquivos e registra o alvo: o grupo no `ConfigWorkers.json`, o
-  serviço no Windows, o site no servidor web, o módulo no manifesto da aplicação web.
+- o executável, dentro da pasta, e o número de processos do grupo ou de instâncias da API;
+- o nome de exibição e o início do serviço;
+- os **arquivos de configuração**, com o que parece segredo **em branco**: chaves cujo nome diz
+  senha, segredo, token ou chave (`Password`, `Pwd`, `Senha`, `Secret`, `Token`, `ApiKey`…), em
+  JSON, `.config`/`.xml`, `.ini`, `.env` e `.yml`, e a senha dentro de uma cadeia de conexão (o
+  servidor, o banco e o usuário ficam). O item diz quais foram deixados em branco;
+- para uma API, as **linhas do proxy reverso** que levam a ela: o `upstream` que lista as portas
+  dos sites dela e os `location` que o usam.
 
-O que envolve o proxy reverso (uma rota nova para uma API nova) fica fora da instalação
-automática: o painel mostra o trecho a incluir, e a mudança no proxy é feita por alguém.
+No destino o item aparece como **será instalado**, e a aprovação pede, em *Instalar aqui*, o que
+é do ambiente: a pasta (sugerida pela pasta em que estão as outras do tipo), as instâncias e a
+primeira porta, o nome dos sites, os processos, o nome e o início do serviço, e a configuração
+preenchida a partir do modelo. As linhas do proxy aparecem com as portas escolhidas no lugar das
+da origem, para copiar e incluir pela aba **Proxy reverso**, que testa a configuração antes de
+recarregar: o proxy não é mudado sozinho.
+
+Ao aplicar, o agente cria a aplicação como o assistente de 4.2 cria uma nova, com os arquivos do
+item e a configuração preenchida. Reverter o pacote não a tira: isso é feito na tela da
+aplicação. Um pacote de versão anterior, ou um tipo que não é instalado assim (módulo web,
+arquivo para download), continua como **não existe aqui**, o que impede a aprovação.
 
 ### 4.2 Criar e excluir uma aplicação no próprio ambiente
 
@@ -205,13 +216,33 @@ se alcançam pela rede.
 
 ### 5.3 Envio
 
-O painel de origem entrega o arquivo ao painel de destino por HTTP, pelo endereço público do
-destino (o do proxy, com TLS), em partes, com retomada. Cada ligação entre dois ambientes tem uma
-chave própria, configurada nos dois lados; sem ela o destino recusa. O destino confere o tamanho e
-o SHA-256 e responde que recebeu. Para a origem, acabou: o pacote fica marcado como entregue.
+O painel de origem entrega o arquivo ao painel de destino por HTTP, por uma **rota de
+transporte**, em *Transporte → Configuração*:
 
-Se o destino não aceitar conexões vindas de fora, a ligação é invertida na configuração: o destino
-é que busca, de tempos em tempos, o que a origem tem para ele.
+- **Rota** (na origem): um nome (`QAS`), o endereço do painel de destino
+  (`https://qas.servidor/zapmq`) e a chave que o destino deu. Só o usuário master cadastra.
+- **Origem autorizada** (no destino): o nome do ambiente que pode enviar. Ao autorizar, o destino
+  gera uma chave de 256 bits, mostrada **uma única vez** (`zt1.…`), para ser colada na rota da
+  origem. Excluir a origem invalida a chave na hora.
+- **Assinatura:** cada pedido leva um HMAC-SHA256, com a chave, do método, do caminho, da hora,
+  de um valor usado uma só vez e do SHA-256 do corpo. O destino recusa o que não está assinado, o
+  que vem de origem não autorizada, o que está a mais de 5 minutos do relógio dele, o que já foi
+  recebido uma vez e o que foi alterado no caminho. É a única rota do painel fora do login.
+- **HTTPS** é exigido; `http` só marcando, na rota, que é uma rede interna sem certificado.
+- **Chaves guardadas** em `transport/routes.json`, protegidas pela máquina (DPAPI): o arquivo
+  levado a outra máquina não serve. Nunca saem em uma resposta, salvo a chave nova de uma origem,
+  uma vez.
+- **Envio** em partes de 4 MB, com retomada: um envio que caiu continua de onde parou. No fim o
+  destino confere o tamanho e o SHA-256 e guarda o pacote como **pendente**. Para a origem,
+  acabou: o pacote fica marcado como entregue, e não é mais excluído lá.
+- **Testar** pergunta ao destino quem ele é, com a assinatura: confere o endereço, a chave e os
+  relógios.
+
+Um pacote fechado, ou aplicado (para seguir ao próximo ambiente), tem **Enviar** na tela dele.
+Baixar e importar o arquivo continua valendo entre ambientes que não se alcançam pela rede.
+
+Se o destino não aceitar conexões vindas de fora, a ligação teria de ser invertida (o destino
+busca o que a origem tem para ele); isso não está feito.
 
 ### 5.4 Aprovação
 
@@ -317,14 +348,9 @@ No agente:
 }
 ```
 
-No painel:
-
-```json
-"Transport": {
-  "Environment": "DEV",
-  "Links": [ { "To": "QAS", "Url": "https://qas.exemplo/zapmq", "Key": "…" } ]
-}
-```
+No painel, `ZapMQ:Transport:Environment` dá o nome do ambiente. As rotas e as origens
+autorizadas não ficam no `appsettings.json`: são cadastradas no painel (seção 5.3) e guardadas em
+`transport/routes.json`, com as chaves protegidas.
 
 ## 9. Etapas
 
@@ -468,7 +494,6 @@ um agente em outra máquina não é atendido.
 
 **Ainda não feito na etapa 2:**
 
-- instalar um alvo que não existe no destino (seção 4.1);
 - os arquivos da aplicação web que não são de um módulo (a casca que os carrega);
 - a parada e a partida de sites no servidor web foram escritas e não puderam ser exercitadas fora
   do Windows: a primeira troca real de uma API é que as prova. O mesmo vale para serviços do
