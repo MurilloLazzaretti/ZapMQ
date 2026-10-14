@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  MessageModel, PublishResult, TapEvent,
+  MessageModel, PublishResult,
   PanelUser,
   AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
@@ -83,10 +83,6 @@ export class Api {
 
   messages(queue: string, limit = 50): Observable<PendingMessage[]> {
     return this.http.get<PendingMessage[]>(`api/queues/${encodeURIComponent(queue)}/messages`, { params: { limit } });
-  }
-
-  recentMessages(queue: string): Observable<TapEvent[]> {
-    return this.http.get<TapEvent[]>(`api/queues/${encodeURIComponent(queue)}/recent`);
   }
 
   publishMessage(queue: string, message: { body: unknown; ttlMs: number; rpc: boolean }): Observable<PublishResult> {

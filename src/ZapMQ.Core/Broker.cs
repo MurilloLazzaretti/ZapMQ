@@ -382,13 +382,13 @@ public sealed class Broker
         _queues.TryGetValue(queue, out var target) ? target.Purge() : 0;
 
     /// <summary>
-    /// Who has published to each queue, asked it for messages or is bound to it, lately.
-    /// </summary>
-    /// <summary>
     /// The longest window <see cref="GetActivity"/> can answer for.
     /// </summary>
     public static TimeSpan ActivityMemory => MessageQueue.PartyMemory;
 
+    /// <summary>
+    /// Who has published to each queue, asked it for messages or is bound to it, lately.
+    /// </summary>
     public IReadOnlyList<QueueActivity> GetActivity(TimeSpan window)
     {
         var since = _time.GetUtcNow() - window;

@@ -38,13 +38,13 @@ public sealed class WorkerControlClient(Broker broker, TimeProvider time, AdminK
         AskAsync(command, by, Patience, more, cancellation);
 
     /// <summary>
-    /// Asks and waits for as long as said: what changes something on the machine may take a while.
-    /// </summary>
-    /// <summary>
     /// True while this ZapMQ has a key to seal what it asks with.
     /// </summary>
     public bool HasKey => keys.Key is not null;
 
+    /// <summary>
+    /// Asks and waits for as long as said: what changes something on the machine may take a while.
+    /// </summary>
     public async Task<WorkerControlAnswer> AskAsync(string command, string? by, TimeSpan patience, Action<JsonObject>? more = null, CancellationToken cancellation = default)
     {
         // Asking a queue nobody consumes would only leave a dead letter behind each time.

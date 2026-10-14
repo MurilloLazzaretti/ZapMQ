@@ -56,9 +56,6 @@ public sealed record QueueParty(string Name, DateTimeOffset LastSeen, long Count
 public sealed record QueueActivity(string Queue, IReadOnlyList<QueueParty> Publishers, IReadOnlyList<QueueParty> Askers, IReadOnlyList<string> Consumers);
 
 /// <summary>
-/// Counters of the whole broker since it started. They keep counting after a queue is let go.
-/// </summary>
-/// <summary>
 /// Something that happened to a message of a queue that is being watched. <see cref="Kind"/>
 /// is <c>published</c>, <c>delivered</c>, <c>confirmed</c>, <c>responded</c> or <c>dead</c>.
 /// The body comes with the publication, the answer with the response and the reason with the
@@ -66,6 +63,9 @@ public sealed record QueueActivity(string Queue, IReadOnlyList<QueueParty> Publi
 /// </summary>
 public sealed record MessageEvent(string Kind, string Queue, string Id, DateTimeOffset At, string? Body = null, bool Rpc = false, string? Party = null, string? Response = null, string? Reason = null);
 
+/// <summary>
+/// Counters of the whole broker since it started. They keep counting after a queue is let go.
+/// </summary>
 public sealed record BrokerTotals(long Published, long Delivered, long Confirmed, long DeadLettered);
 
 public enum DeadLetterReason

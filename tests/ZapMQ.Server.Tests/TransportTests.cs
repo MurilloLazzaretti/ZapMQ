@@ -660,7 +660,7 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using (await Serve(origin))
         {
             await ClearArea();
-            Assert.Equal(1, JObject.Parse(await Api.GetStringAsync("api/transport/targets"))["Targets"]!.Count());
+            Assert.Single(JObject.Parse(await Api.GetStringAsync("api/transport/targets"))["Targets"]!);
 
             // Brought as a zip made by a careless hand: the folder on the outside, and the configuration in it.
             var zip = PretendDatabase.Zipped(new() { ["Orders.Api.dll"] = "v2", ["wwwroot/index.html"] = "<html>", ["appsettings.json"] = "{dev}", ["web.config"] = "<x/>", ["logs/today.log"] = "noise" }, outer: "publish/");

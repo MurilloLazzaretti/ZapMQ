@@ -56,15 +56,15 @@ public static class DataSnapEndpoints
     }
 
     /// <summary>
-    /// Splits the call into method and parameters from the request line as it was sent. The
-    /// decoded path cannot be used: a message containing an escaped slash would be split in two.
-    /// </summary>
-    /// <summary>
     /// A 1.x client says nothing about itself; who uses a queue is told by <see cref="V1Callers"/>.
     /// </summary>
     [ThreadStatic]
     private static string? _caller;
 
+    /// <summary>
+    /// Splits the call into method and parameters from the request line as it was sent. The
+    /// decoded path cannot be used: a message containing an escaped slash would be split in two.
+    /// </summary>
     private static string[] ReadCall(HttpContext context)
     {
         var target = context.Features.GetRequiredFeature<IHttpRequestFeature>().RawTarget;

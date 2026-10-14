@@ -35,15 +35,15 @@ public sealed class ServerOptions
     public int MaxRequestLineBytes { get; set; } = 4 * 1024 * 1024;
 
     /// <summary>
-    /// File that keeps the queue settings made through the panel, relative to the executable
-    /// unless it is a full path.
-    /// </summary>
-    /// <summary>
     /// Where the message models saved through the panel are kept. Relative to the executable
     /// unless it is a full path.
     /// </summary>
     public string MessageModelsFile { get; set; } = "models.json";
 
+    /// <summary>
+    /// File that keeps the queue settings made through the panel, relative to the executable
+    /// unless it is a full path.
+    /// </summary>
     public string QueueDefinitionsFile { get; set; } = "queues.json";
 
     /// <summary>
