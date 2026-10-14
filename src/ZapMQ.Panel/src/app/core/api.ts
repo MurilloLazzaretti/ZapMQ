@@ -7,8 +7,7 @@ import {
   AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
-  HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
-} from './models';
+  HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending } from './models';
 
 /**
  * The panel API. Every address is relative, so it follows the <base href> the service writes
@@ -307,6 +306,42 @@ export class Api {
 
   removeApplication(kind: string, name: string, force: boolean): Observable<RemovedApplication> {
     return this.http.delete<RemovedApplication>(`api/transport/applications/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`, { params: { force } });
+  }
+
+  transportRoutes(): Observable<TransportRoutes> {
+    return this.http.get<TransportRoutes>('api/transport/routes');
+  }
+
+  addTransportRoute(route: { name: string; url: string; key: string; allowHttp: boolean }): Observable<TransportRoute> {
+    return this.http.post<TransportRoute>('api/transport/routes', route);
+  }
+
+  changeTransportRoute(id: string, route: { name: string; url: string; key: string; allowHttp: boolean }): Observable<TransportRoute> {
+    return this.http.put<TransportRoute>(`api/transport/routes/${encodeURIComponent(id)}`, route);
+  }
+
+  removeTransportRoute(id: string): Observable<unknown> {
+    return this.http.delete(`api/transport/routes/${encodeURIComponent(id)}`);
+  }
+
+  testTransportRoute(id: string): Observable<{ environment: string }> {
+    return this.http.post<{ environment: string }>(`api/transport/routes/${encodeURIComponent(id)}/test`, {});
+  }
+
+  addTransportOrigin(name: string): Observable<{ origin: TransportOrigin; key: string }> {
+    return this.http.post<{ origin: TransportOrigin; key: string }>('api/transport/origins', { name });
+  }
+
+  removeTransportOrigin(name: string): Observable<unknown> {
+    return this.http.delete(`api/transport/origins/${encodeURIComponent(name)}`);
+  }
+
+  sendPackage(id: string, route: string): Observable<TransportSending> {
+    return this.http.post<TransportSending>(`api/transport/packages/${encodeURIComponent(id)}/send`, { route });
+  }
+
+  packageSendings(id: string): Observable<TransportSending[]> {
+    return this.http.get<TransportSending[]>(`api/transport/packages/${encodeURIComponent(id)}/sends`);
   }
 
   transportSettings(): Observable<TransportSettings> {

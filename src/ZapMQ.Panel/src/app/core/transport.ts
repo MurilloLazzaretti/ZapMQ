@@ -75,6 +75,8 @@ export function historyText(what: string): string {
     {
       closed: 'Fechado',
       downloaded: 'Baixado como arquivo',
+      sent: 'Enviado',
+      'send-failed': 'Envio não concluído',
       received: 'Recebido',
       approved: 'Aprovado',
       cancelled: 'Aprovação cancelada',

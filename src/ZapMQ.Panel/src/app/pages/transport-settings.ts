@@ -8,19 +8,20 @@ import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { TransportSettings } from '../core/models';
 import { TARGET_KINDS, targetIcon, targetName } from '../core/transport';
+import { TransportRoutesPanel } from '../shared/transport-routes';
 import { TransportTabs } from '../shared/transport-tabs';
 
 /** How the transport is set up on this environment: where new versions are left, by kind. */
 @Component({
   selector: 'zap-transport-settings',
-  imports: [FormsModule, MatButtonModule, MatIconModule, TransportTabs],
+  imports: [FormsModule, MatButtonModule, MatIconModule, TransportTabs, TransportRoutesPanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page">
       <header class="head">
         <div>
           <h1>Transporte</h1>
-          <p class="muted">Como o transporte funciona neste ambiente.</p>
+          <p class="muted">Como o transporte funciona neste ambiente e por onde ele chega aos outros.</p>
         </div>
         <span class="spacer"></span>
         <zap-transport-tabs />
@@ -57,6 +58,9 @@ import { TransportTabs } from '../shared/transport-tabs';
       } @else {
         <section class="panel empty"><span>Lendo…</span></section>
       }
+
+      <!-- Of ZapMQ itself, not of the Worker Control: shown even while it does not answer. -->
+      <zap-transport-routes />
     </div>
   `,
   styles: `

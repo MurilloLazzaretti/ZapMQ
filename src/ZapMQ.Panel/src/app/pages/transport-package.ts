@@ -15,6 +15,7 @@ import { NumPipe, WhenPipe } from '../core/format';
 import { ItemCheck, PackageDetail, PackageItem, PackageItemDetail, PackageResult } from '../core/models';
 import { Transport, historyText, itemAction, itemTone, statusName, statusTone, targetIcon, targetName } from '../core/transport';
 import { confirm } from '../shared/dialogs';
+import { PackageSend } from '../shared/package-send';
 import { DiffView } from '../shared/diff-view';
 
 /** How an item stands against this environment, in the words of the panel. */
@@ -40,7 +41,7 @@ const FORCING = 'O que não parar no tempo de espera terá o processo encerrado 
  */
 @Component({
   selector: 'zap-transport-package',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, DiffView, NumPipe, WhenPipe],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, DiffView, NumPipe, WhenPipe, PackageSend],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './transport-package.html',
   styleUrl: './transport-package.scss',
@@ -306,6 +307,10 @@ export class TransportPackagePage implements OnInit, OnDestroy {
 
   private say(failure: unknown): void {
     this.snack.open((failure as HttpErrorResponse).error?.error ?? 'O serviço não aceitou o pedido', 'Fechar', { duration: 8000 });
+  }
+
+  protected reload(): void {
+    this.load(false);
   }
 
   private load(first: boolean): void {

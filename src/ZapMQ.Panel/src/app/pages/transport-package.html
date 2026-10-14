@@ -30,7 +30,7 @@
             @if (now.package.deliveries.length) {
               <span class="muted">@for (delivery of now.package.deliveries; track $index) { Entregue a <strong>{{ delivery.to }}</strong> em {{ delivery.at | when }}, por {{ delivery.by }}. } Um pacote entregue não é mais excluído aqui.</span>
             } @else {
-              <span class="muted">Para levá-lo adiante, baixe o arquivo e importe-o no ambiente seguinte, em Transporte → Pacotes.</span>
+              <span class="muted">Para levá-lo adiante, envie-o por uma rota de transporte, ou baixe o arquivo e importe-o no ambiente seguinte, em Transporte → Pacotes.</span>
             }
           </div>
           <span class="spacer"></span>
@@ -155,6 +155,10 @@
       @case ('Rejected') {
         <section class="panel decide"><div><strong>Recusado em {{ now.environment }}.</strong><span class="muted">Não pode mais ser aplicado aqui. O que ele trazia continua registrado abaixo; a correção vem em outro pacote.</span></div></section>
       }
+    }
+
+    @if ((now.package.status === 'Closed' && !now.package.received) || now.package.status === 'Applied') {
+      <zap-package-send [packageId]="now.package.id" (delivered)="reload()" />
     }
 
     @if (forcible()) {

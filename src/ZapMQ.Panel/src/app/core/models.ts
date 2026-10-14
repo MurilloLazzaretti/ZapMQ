@@ -1035,3 +1035,45 @@ export interface ProxyState {
   Problem?: string | null;
   Files?: { Path: string; Size: number; ModifiedAt: string; Main: boolean }[];
 }
+
+/** Where a package can be sent from here. The key never comes back from the server. */
+export interface TransportRoute {
+  id: string;
+  name: string;
+  url: string;
+  allowHttp: boolean;
+  createdAt: string;
+  createdBy: string;
+  lastUsedAt: string | null;
+  lastProblem: string | null;
+  /** False when the key was kept by another machine and has to be typed again. */
+  keyReadable: boolean;
+}
+
+/** An environment that may send packages here. */
+export interface TransportOrigin {
+  name: string;
+  createdAt: string;
+  createdBy: string;
+  lastSeenAt: string | null;
+}
+
+export interface TransportRoutes {
+  environment: string;
+  routes: TransportRoute[];
+  origins: TransportOrigin[];
+}
+
+/** A package on its way along a route. */
+export interface TransportSending {
+  package: string;
+  routeId: string;
+  route: string;
+  status: 'sending' | 'delivered' | 'failed';
+  sent: number;
+  total: number;
+  problem: string | null;
+  by: string;
+  startedAt: string;
+  endedAt: string | null;
+}
