@@ -64,7 +64,8 @@ code, pre, .mono { font-family: var(--zap-mono); font-size: 0.86em; }
 // A path or a name in the middle of a text breaks where it has to, instead of going past the screen.
 code { overflow-wrap: anywhere; }
 // A row of choices that does not fit a phone scrolls in itself instead of being cut at the edge.
-.mat-button-toggle-group { max-width: 100%; overflow-x: auto; }
+// (Twice the class: the style of Material, which hides what does not fit, comes after this one.)
+.mat-button-toggle-group.mat-button-toggle-group { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 
 ::selection { background: color-mix(in srgb, var(--mat-sys-primary) 28%, transparent); }
 
