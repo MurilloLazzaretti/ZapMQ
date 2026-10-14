@@ -144,15 +144,20 @@ e o **Banco de dados**.
   ociosa. Parte dos sites parada é aviso; todos, fora do ar.
 - **Localizar** procura no nome dos componentes e das filas: diz quem consome e quem publica em
   cada fila encontrada, destaca esses componentes e leva até eles.
-- **Zoom**: os botões, ou Ctrl + rolagem; arrastar move. Ao abrir, o desenho cabe na largura;
-  "Ver tudo" encaixa o desenho inteiro.
+- **Zoom**: os botões, ou Ctrl + rolagem, ou dois dedos; arrastar move. Ao abrir, o desenho cabe na
+  largura; num celular, abre legível a partir da esquerda. "Ver tudo" encaixa o desenho inteiro.
+- **Atualização**: a cada 30 s, ou o que for escolhido na tela (de 10 s a 5 min), lembrado pelo
+  navegador; há um botão para ler agora e a hora da última leitura. Cada leitura pede ao Worker
+  Control que olhe a máquina inteira (sites, processos e conexões do banco).
 - **O painel ao lado** lista o que pede atenção e, com um componente escolhido, tudo o que se sabe
   dele: o banco, o HTTP, as filas com pendentes e mortas, com quem fala, e o atalho para a tela dele.
 
 O mapa junta o que o broker sabe (aplicações, filas, quem publica e consome), o `Status` do Worker
 Control (grupos e serviços), o `Landscape` (APIs com seus sites, aplicações web e conexões do
 banco por processo, do Worker Control 2.19) e o tráfego por destino do proxy. Cada aplicação do
-broker é atribuída a um componente pelo processo que a abriu.
+broker é atribuída a um componente pelo processo que a abriu; uma vista só no passado, sem processo
+(o wrapper 2.x fala 1.x por um instante quando o ZapMQ volta), pelo nome, sem levar a etiqueta do
+protocolo daquele instante.
 
 ### 4.3 Filas
 
