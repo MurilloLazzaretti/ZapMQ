@@ -38,7 +38,7 @@ const TARGETS: Record<string, { one: string; many: string; icon: string }> = {
   worker: { one: 'Micro serviço', many: 'Micro serviços', icon: 'memory' },
   service: { one: 'Serviço do Windows', many: 'Serviços do Windows', icon: 'settings_applications' },
   api: { one: 'API', many: 'APIs', icon: 'dns' },
-  frontend: { one: 'Aplicação web', many: 'Aplicação web: casca, módulos e monolitos', icon: 'widgets' },
+  frontend: { one: 'Aplicação web', many: 'Aplicação web', icon: 'widgets' },
 };
 
 export const TARGET_KINDS = ['worker', 'service', 'api', 'frontend'];
@@ -126,6 +126,26 @@ export class Transport {
       },
       error: () => undefined,
     });
+  }
+
+  /**
+   * Puts several objects in the area, one after the other; what fails is said and the rest
+   * goes on. Gives how many went in.
+   */
+  async addMany(items: { database?: string; kind: string; schema: string; name: string }[]): Promise<number> {
+    const failed: string[] = [];
+    let done = 0;
+    for (const item of items) {
+      try {
+        await firstValueFrom(this.api.addToArea(item));
+        done++;
+      } catch (failure) {
+        failed.push(`${item.schema}.${item.name}: ${(failure as HttpErrorResponse).error?.error ?? 'recusado'}`);
+      }
+    }
+    this.snack.open(`${done} ${done === 1 ? 'objeto foi' : 'objetos foram'} para a expedição${failed.length ? `; não ${failed.length === 1 ? 'foi' : 'foram'}: ${failed.join(' · ')}` : ''}`, 'Fechar', { duration: failed.length ? 15000 : 4000 });
+    this.refresh();
+    return done;
   }
 
   /** Puts an object in the area and says so; true when it went in. */

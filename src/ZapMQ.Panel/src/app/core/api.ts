@@ -165,6 +165,15 @@ export class Api {
     return this.http.get<{ Text: string; Config: WorkerConfig }>('api/workers/config');
   }
 
+  /** The settings of the environment, kept apart from the configuration of the supervisor. */
+  environment(): Observable<{ Text: string; Config: Record<string, unknown>; File: string }> {
+    return this.http.get<{ Text: string; Config: Record<string, unknown>; File: string }>('api/workers/environment');
+  }
+
+  saveEnvironment(config: Record<string, unknown>): Observable<unknown> {
+    return this.http.put('api/workers/environment', { config });
+  }
+
   saveWorkerConfig(config: WorkerConfig | string): Observable<unknown> {
     return this.http.put('api/workers/config', { config });
   }

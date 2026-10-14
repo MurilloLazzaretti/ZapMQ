@@ -233,6 +233,18 @@
                 <input matInput type="number" [(ngModel)]="file.ZapMQPort" (ngModelChange)="touch()" />
               </mat-form-field>
               <mat-form-field>
+                <mat-label>Reler este arquivo a cada (ms)</mat-label>
+                <input matInput type="number" min="1000" [ngModel]="file.RateLoadConfig ?? null" (ngModelChange)="optional(file, 'RateLoadConfig', $event)" placeholder="180000" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Histórico de eventos (dias)</mat-label>
+                <input matInput type="number" min="1" [ngModel]="$any(file)['EventRetentionDays'] ?? null" (ngModelChange)="optional(file, 'EventRetentionDays', $event)" placeholder="30" />
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Medições de saúde (horas)</mat-label>
+                <input matInput type="number" min="1" [ngModel]="$any(file)['HealthRetentionHours'] ?? null" (ngModelChange)="optional(file, 'HealthRetentionHours', $event)" placeholder="24" />
+              </mat-form-field>
+              <mat-form-field>
                 <mat-label>Processos iniciados por lote</mat-label>
                 <input matInput type="number" min="1" [ngModel]="file.StartBatchSize ?? null" (ngModelChange)="optional(file, 'StartBatchSize', $event)" placeholder="4" />
               </mat-form-field>

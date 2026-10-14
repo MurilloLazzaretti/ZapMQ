@@ -179,6 +179,9 @@ Declarar um exchange e as filas que recebem cópia do que é publicado nele. Ent
 
 ### 4.7 Worker Control
 
+Nas listas de aplicações do transporte e de objetos do banco, vários itens podem ser marcados e
+levados à expedição de uma vez.
+
 A área **Processos e serviços** tem cinco abas: **Micro serviços**, **Serviços do Windows**,
 **Aplicações**, **Proxy reverso** e **Histórico**. Em Micro serviços ficam juntos os dois lados dos
 grupos: **Acompanhar** (o que está rodando) e **Configurar** (como cada grupo roda); o cartão de
@@ -234,8 +237,11 @@ os bancos, o usuário e a senha, guardada cifrada para a máquina, e os limites 
 **Aplicações** (as pastas em que as aplicações novas são criadas, o nome dos sites, a espera para
 parar, as cópias guardadas e os arquivos do ambiente), **Aplicação web** (cada aplicação, com a
 arquitetura: **MFE**, casca e módulos trocados separados, ou **monolito**, trocado inteiro),
-**Tráfego HTTP**, **Proxy reverso** e **Worker Control**. Tudo fica no `ConfigWorkers.json`, que o
-Worker Control confere antes de passar a usar; uma recusa aparece com o motivo. O que é do próprio
+**Tráfego HTTP**, **Proxy reverso** e **Worker Control**. Tudo fica no `Environment.json` do Worker Control,
+separado do `ConfigWorkers.json`, que guarda só o que é dele (onde está o ZapMQ, os grupos, os serviços
+acompanhados) e é editado em Micro serviços → Configurar. O Worker Control confere antes de passar a
+usar; uma recusa aparece com o motivo. Ao abrir a tela, o que está em uso sem estar escrito (os padrões e
+o que foi deduzido da máquina: pastas, nome dos sites, proxy) vem preenchido, para ser gravado. O que é do próprio
 ZapMQ (portas, nome do ambiente) continua no `appsettings.json` dele e é só mostrado.
 
 ## 5. O que o servidor ganha

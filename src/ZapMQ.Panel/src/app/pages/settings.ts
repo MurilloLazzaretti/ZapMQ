@@ -10,11 +10,11 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { catchError, firstValueFrom, forkJoin, of } from 'rxjs';
 import { Api } from '../core/api';
 import { Auth } from '../core/auth';
 import { Transport } from '../core/transport';
-import { WorkerConfig } from '../core/models';
+import { ApplicationDefaults, ProxyState, WorkerConfig } from '../core/models';
 
 type Kind = 'text' | 'number' | 'bool' | 'list' | 'secret';
 
@@ -26,6 +26,8 @@ interface Field {
   hint?: string;
   /** What is used while nothing is written. */
   fallback?: string;
+  /** Only an example of what goes there: nothing is used in its place. */
+  example?: string;
   wide?: boolean;
 }
 
@@ -46,12 +48,12 @@ const SECTIONS: Section[] = [
     id: 'banco', title: 'Banco de dados', icon: 'database', path: 'Database', optional: 'Acompanhar um banco de dados',
     about: 'A instância que o Worker Control acompanha e em que aplica os scripts do transporte. A senha é guardada cifrada para esta máquina.',
     fields: [
-      { key: 'Name', label: 'Nome do ambiente no painel', kind: 'text', fallback: 'DEV' },
-      { key: 'Server', label: 'Servidor (instância)', kind: 'text', fallback: 'servidor\\instância' },
+      { key: 'Name', label: 'Nome do ambiente no painel', kind: 'text', example: 'DEV' },
+      { key: 'Server', label: 'Servidor (instância)', kind: 'text', example: 'servidor\\instância' },
       { key: 'Databases', label: 'Bancos acompanhados', kind: 'list', hint: 'Um por linha. Só esses aparecem e recebem scripts.' },
       { key: 'User', label: 'Usuário', kind: 'text', hint: 'Vazio usa a conta do serviço (autenticação do Windows).' },
       { key: 'Password', label: 'Senha', kind: 'secret' },
-      { key: 'Encrypt', label: 'Conexão cifrada', kind: 'bool' },
+      { key: 'Encrypt', label: 'Conexão cifrada', kind: 'bool', fallback: 'false' },
       { key: 'TrustServerCertificate', label: 'Confiar no certificado do servidor', kind: 'bool', fallback: 'true' },
       { key: 'SampleSeconds', label: 'Leitura a cada (s)', kind: 'number', fallback: '30' },
       { key: 'RetentionDays', label: 'Histórico de saúde (dias)', kind: 'number', fallback: '7' },
@@ -81,7 +83,7 @@ const SECTIONS: Section[] = [
     id: 'trafego', title: 'Tráfego HTTP', icon: 'monitoring', path: 'Traffic', optional: 'Ler o tráfego do proxy reverso',
     about: 'O log de acesso do proxy reverso, lido para medir o tráfego por aplicação, rota e tela.',
     fields: [
-      { key: 'AccessLog', label: 'Log de acesso', kind: 'text', wide: true, fallback: 'C:\\nginx\\logs\\access.zapmq.log' },
+      { key: 'AccessLog', label: 'Log de acesso', kind: 'text', wide: true, example: 'C:\\nginx\\logs\\access.zapmq.log' },
       { key: 'ReopenCommand', label: 'Comando para o proxy reabrir o log', kind: 'text', wide: true, hint: 'Usado ao girar o arquivo. Vazio: o próprio Worker Control renomeia.' },
       { key: 'RotateAtMb', label: 'Girar o log ao chegar a (MB)', kind: 'number', fallback: '100' },
       { key: 'KeepFiles', label: 'Logs girados guardados', kind: 'number', fallback: '5' },
@@ -97,20 +99,9 @@ const SECTIONS: Section[] = [
     id: 'proxy', title: 'Proxy reverso', icon: 'dns', path: 'Proxy',
     about: 'Onde está o NGINX. Vazio: ele é procurado ao lado do log de acesso.',
     fields: [
-      { key: 'Config', label: 'Arquivo de configuração', kind: 'text', wide: true, fallback: 'C:\\nginx\\conf\\nginx.conf' },
-      { key: 'Executable', label: 'Executável', kind: 'text', wide: true, fallback: 'C:\\nginx\\nginx.exe' },
-      { key: 'Service', label: 'Serviço do Windows', kind: 'text', fallback: 'nginx' },
-    ],
-  },
-  {
-    id: 'worker-control', title: 'Worker Control', icon: 'precision_manufacturing', path: null,
-    about: 'Como o Worker Control chega ao ZapMQ e por quanto tempo guarda o que aconteceu. Os padrões dos grupos ficam em Micro serviços → Configurar.',
-    fields: [
-      { key: 'ZapMQHost', label: 'Máquina do ZapMQ', kind: 'text', fallback: 'localhost' },
-      { key: 'ZapMQPort', label: 'Porta do ZapMQ', kind: 'number', fallback: '5679' },
-      { key: 'EventRetentionDays', label: 'Histórico de eventos (dias)', kind: 'number', fallback: '30' },
-      { key: 'HealthRetentionHours', label: 'Medições de saúde (horas)', kind: 'number', fallback: '24' },
-      { key: 'Services.SuggestFrom', label: 'Pastas onde procurar serviços para acompanhar', kind: 'list' },
+      { key: 'Config', label: 'Arquivo de configuração', kind: 'text', wide: true, example: 'C:\\nginx\\conf\\nginx.conf' },
+      { key: 'Executable', label: 'Executável', kind: 'text', wide: true, example: 'C:\\nginx\\nginx.exe' },
+      { key: 'Service', label: 'Serviço do Windows', kind: 'text', example: 'nginx' },
     ],
   },
 ];
@@ -153,6 +144,11 @@ export class SettingsPage implements OnInit {
   /** Passwords typed now, which the file only gets when saved. */
   private readonly typed = new Map<string, string>();
 
+  /** Where the file of the environment is, on the machine of the Worker Control. */
+  protected readonly location = signal('');
+  /** How many parameters were in their default and were filled with it, to be written. */
+  protected readonly filled = signal(0);
+
   protected readonly section = computed(() => SECTIONS.find((section) => section.id === this.current()) ?? null);
 
   protected readonly frontends = computed(() => (this.config()?.['Frontends'] as Frontend[] | undefined) ?? []);
@@ -162,17 +158,76 @@ export class SettingsPage implements OnInit {
   }
 
   protected load(): void {
-    this.api.workerConfig().subscribe({
-      next: (answer) => {
-        this.config.set(structuredClone(answer.Config));
+    forkJoin({
+      environment: this.api.environment(),
+      // What is worked out from the machine stands for what is not written: the folders, the names of the sites, the proxy.
+      defaults: this.api.applicationDefaults().pipe(catchError(() => of(null))),
+      proxy: this.api.proxy().pipe(catchError(() => of(null))),
+    }).subscribe({
+      next: ({ environment, defaults, proxy }) => {
+        const config = structuredClone(environment.Config) as WorkerConfig;
+        this.config.set(config);
+        this.location.set(environment.File);
         this.typed.clear();
-        this.dirty.set(false);
         this.problem.set('');
         this.refusal.set('');
+        const filled = this.fill(defaults, proxy);
+        this.filled.set(filled);
+        this.dirty.set(filled > 0);
       },
       error: (failure: HttpErrorResponse) =>
-        failure.status !== 401 && this.problem.set(failure.error?.error ?? 'Não foi possível ler a configuração do Worker Control.'),
+        failure.status !== 401 && this.problem.set(failure.status === 501 ? 'O Worker Control instalado é anterior a este recurso (existe a partir da versão 2.21).' : (failure.error?.error ?? 'Não foi possível ler a configuração do Worker Control.')),
     });
+  }
+
+  /**
+   * Writes in the copy being edited what is in use without being written: the defaults, and
+   * what was worked out from the machine. Saved, they stay in the file as they are now.
+   */
+  private fill(defaults: ApplicationDefaults | null, proxy: ProxyState | null): number {
+    let count = 0;
+    const put = (section: Section, key: string, value: unknown) => {
+      if (value === null || value === undefined || value === '') {
+        return;
+      }
+      const field = section.fields.find((candidate) => candidate.key === key)!;
+      const current = this.read(section, key);
+      if (current === undefined || current === null || current === '') {
+        this.set(section, field, field.kind === 'list' ? String(value) : value, false);
+        count++;
+      }
+    };
+    for (const section of SECTIONS) {
+      if (!this.present(section)) {
+        continue;
+      }
+      for (const field of section.fields) {
+        if (field.fallback !== undefined) {
+          put(section, field.key, field.kind === 'bool' ? field.fallback === 'true' : field.kind === 'number' ? Number(field.fallback) : field.fallback);
+        }
+      }
+      if (section.id === 'aplicacoes' && defaults) {
+        put(section, 'CreateFolders.worker', defaults.Folders['worker']);
+        put(section, 'CreateFolders.api', defaults.Folders['api']);
+        put(section, 'CreateFolders.service', defaults.Folders['service']);
+        put(section, 'SiteName', defaults.SiteName);
+      }
+      if (section.id === 'proxy' && proxy?.Configured) {
+        put(section, 'Config', proxy.Config);
+        put(section, 'Executable', proxy.Executable);
+        put(section, 'Service', proxy.Service?.Name);
+      }
+    }
+    return count;
+  }
+
+  /** What is written for a field, as it is in the file; undefined when nothing is. */
+  private read(section: Section, key: string): unknown {
+    let at: unknown = this.holder(section, false);
+    for (const part of key.split('.')) {
+      at = at && typeof at === 'object' ? (at as Record<string, unknown>)[part] : undefined;
+    }
+    return at;
   }
 
   private holder(section: Section, create: boolean): Record<string, unknown> | null {
@@ -226,7 +281,7 @@ export class SettingsPage implements OnInit {
     return !!holder && typeof holder[field.key] === 'string' && (holder[field.key] as string).length > 0;
   }
 
-  protected set(section: Section, field: Field, raw: unknown): void {
+  protected set(section: Section, field: Field, raw: unknown, touched = true): void {
     const parts = field.key.split('.');
     let at = this.holder(section, true)!;
     for (const part of parts.slice(0, -1)) {
@@ -260,7 +315,9 @@ export class SettingsPage implements OnInit {
     if (parts.length > 1 && at !== this.holder(section, false) && !Object.keys(at).length) {
       delete this.holder(section, false)![parts[0]];
     }
-    this.touch();
+    if (touched) {
+      this.touch();
+    }
   }
 
   protected addFrontend(): void {
@@ -312,8 +369,8 @@ export class SettingsPage implements OnInit {
     this.saving.set(true);
     this.refusal.set('');
     try {
-      await firstValueFrom(this.api.saveWorkerConfig(config));
-      this.snack.open('Configuração gravada. O Worker Control já está usando.', undefined, { duration: 3500 });
+      await firstValueFrom(this.api.saveEnvironment(config as Record<string, unknown>));
+      this.snack.open('Configurações gravadas. O Worker Control já está usando.', undefined, { duration: 3500 });
       this.load();
     } catch (failure) {
       this.refusal.set((failure as HttpErrorResponse).error?.error ?? 'O Worker Control não aceitou a configuração.');

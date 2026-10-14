@@ -130,6 +130,56 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
     });
   }
 
+  /** The objects picked to go to the area together, kept across pages and filters. */
+  protected readonly picked = signal<ReadonlyMap<string, CatalogObject & { database: string }>>(new Map());
+  protected readonly adding = signal(false);
+
+  protected key(item: CatalogObject): string {
+    return `${this.page()?.Database ?? ''}|${item.Kind}|${item.Schema}|${item.Name}`;
+  }
+
+  protected pick(item: CatalogObject, on: boolean): void {
+    const key = this.key(item);
+    const database = this.page()?.Database ?? '';
+    this.picked.update((all) => {
+      const next = new Map(all);
+      if (on) {
+        next.set(key, { ...item, database });
+      } else {
+        next.delete(key);
+      }
+      return next;
+    });
+  }
+
+  protected allPicked(items: CatalogObject[]): boolean {
+    return items.length > 0 && items.every((item) => this.picked().has(this.key(item)));
+  }
+
+  protected somePicked(items: CatalogObject[]): boolean {
+    return !this.allPicked(items) && items.some((item) => this.picked().has(this.key(item)));
+  }
+
+  protected pickAll(items: CatalogObject[], on: boolean): void {
+    for (const item of items) {
+      this.pick(item, on);
+    }
+  }
+
+  protected clearPicked(): void {
+    this.picked.set(new Map());
+  }
+
+  protected async addPicked(): Promise<void> {
+    this.adding.set(true);
+    try {
+      await this.transport.addMany([...this.picked().values()].map((item) => ({ database: item.database, kind: item.Kind, schema: item.Schema, name: item.Name })));
+      this.clearPicked();
+    } finally {
+      this.adding.set(false);
+    }
+  }
+
   protected more(): void {
     this.limit.update((limit) => limit + PAGE);
     this.refresh();

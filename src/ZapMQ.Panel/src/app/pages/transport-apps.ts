@@ -63,6 +63,76 @@ export class TransportAppsPage implements OnInit {
     this.load();
   }
 
+  /** The targets picked to be packed together, by kind and name. */
+  protected readonly picked = signal<ReadonlySet<string>>(new Set());
+
+  protected key(target: TransportTarget): string {
+    return `${target.Kind}:${target.Name}`;
+  }
+
+  protected emptySet(): ReadonlySet<string> {
+    return new Set();
+  }
+
+  protected pick(target: TransportTarget, on: boolean): void {
+    this.picked.update((all) => {
+      const next = new Set(all);
+      if (on) {
+        next.add(this.key(target));
+      } else {
+        next.delete(this.key(target));
+      }
+      return next;
+    });
+  }
+
+  private pickable(items: TransportTarget[]): TransportTarget[] {
+    return items.filter((target) => !target.Problem);
+  }
+
+  protected allPicked(items: TransportTarget[]): boolean {
+    const usable = this.pickable(items);
+    return usable.length > 0 && usable.every((target) => this.picked().has(this.key(target)));
+  }
+
+  protected somePicked(items: TransportTarget[]): boolean {
+    return !this.allPicked(items) && items.some((target) => this.picked().has(this.key(target)));
+  }
+
+  protected pickAll(items: TransportTarget[], on: boolean): void {
+    for (const target of this.pickable(items)) {
+      this.pick(target, on);
+    }
+  }
+
+  /** The picked ones that have a new version waiting in the inbox. */
+  protected readonly pickedIncoming = computed(() => (this.targets() ?? []).filter((target) => target.Incoming && this.picked().has(this.key(target))));
+
+  /**
+   * Everything picked goes into the area, one after the other: what is running now, or the new
+   * version left in the inbox. What fails is said, and the rest goes on.
+   */
+  protected async packPicked(fromInbox: boolean): Promise<void> {
+    const chosen = fromInbox ? this.pickedIncoming() : (this.targets() ?? []).filter((target) => this.picked().has(this.key(target)));
+    this.busy.set(true);
+    const failed: string[] = [];
+    let done = 0;
+    for (const target of chosen) {
+      try {
+        await firstValueFrom(fromInbox ? this.api.addIncoming(target.Kind, target.Name) : this.api.addRunning(target.Kind, target.Name));
+        done++;
+        this.pick(target, false);
+      } catch (failure) {
+        failed.push(`${target.Name}: ${uploadProblem(failure, 'recusado')}`);
+      }
+    }
+    this.busy.set(false);
+    this.transport.refresh();
+    this.load();
+    const message = `${done} ${done === 1 ? 'foi' : 'foram'} para a expedição${failed.length ? `; não ${failed.length === 1 ? 'foi' : 'foram'}: ${failed.join(' · ')}` : ''}`;
+    this.snack.open(message, done ? 'Ver a expedição' : 'Fechar', { duration: failed.length ? 15000 : 5000 }).onAction().subscribe(() => done && void this.router.navigate(['/transporte']));
+  }
+
   /** What the application is running right now goes into the area. */
   protected running(target: TransportTarget): Promise<void> {
     return this.place(this.api.addRunning(target.Kind, target.Name), `${target.Name}: a versão que está rodando foi para a expedição`);

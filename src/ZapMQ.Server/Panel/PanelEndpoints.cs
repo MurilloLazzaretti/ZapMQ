@@ -412,6 +412,12 @@ public static class PanelEndpoints
         workers.MapPut("/config", (ConfigRequest body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
             Forward(client, context, "SetConfig", request => request["Config"] = body.Config?.DeepClone(), loggers, "Worker Control: configuration replaced"));
 
+        // The settings of the environment, in a file of their own beside the configuration of the supervisor.
+        workers.MapGet("/environment", (WorkerControlClient client, HttpContext context) => Forward(client, context, "GetEnvironment"));
+
+        workers.MapPut("/environment", (ConfigRequest body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "SetEnvironment", request => request["Config"] = body.Config?.DeepClone(), loggers, "Worker Control: settings of the environment replaced"));
+
         workers.MapPost("/groups/{group}/enabled", (string group, EnabledRequest body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
             Forward(client, context, "SetGroupEnabled", request =>
             {

@@ -18,6 +18,8 @@
       <div class="bar">
         @if (refusal()) {
           <span class="refused"><mat-icon svgIcon="error" /> {{ refusal() }}</span>
+        } @else if (filled()) {
+          <span class="pill warn" matTooltip="Valores que estavam sendo usados sem estar escritos: os padrões e o que foi deduzido desta máquina. Gravando, ficam no arquivo como estão agora.">{{ filled() }} parâmetros em uso preenchidos para gravar</span>
         } @else {
           <span class="pill warn">alterações não gravadas</span>
         }
@@ -42,11 +44,14 @@
         @switch (current()) {
           @case ('ambiente') {
             <h2>Ambiente</h2>
-            <p class="muted about">O que é do próprio ZapMQ fica no <code>appsettings.json</code> dele, ao lado do executável, e só muda com o serviço parado.</p>
+            <p class="muted about">
+              Estas configurações ficam em <code>{{ location() || 'Environment.json' }}</code>, na máquina do Worker Control. As dele próprio (onde está o ZapMQ, os grupos, os serviços acompanhados) ficam no <code>ConfigWorkers.json</code>, em <a routerLink="/workers/configuracao">Micro serviços → Configurar</a>.
+              O que é do próprio ZapMQ fica no <code>appsettings.json</code> dele, ao lado do executável, e só muda com o serviço parado.
+            </p>
             <dl>
               <div><dt>Nome do ambiente</dt><dd>{{ transport.summary()?.environment || '—' }}</dd><span class="muted">ZapMQ:Transport:Environment</span></div>
               <div><dt>Versão do ZapMQ</dt><dd>{{ auth.version() }}</dd></div>
-              <div><dt>Worker Control</dt><dd>{{ file.ZapMQHost }}:{{ file.ZapMQPort }}</dd><span class="muted">de onde ele fala com o ZapMQ</span></div>
+              <div><dt>Arquivo</dt><dd class="mono">{{ location() || 'Environment.json' }}</dd><span class="muted">na máquina do Worker Control</span></div>
             </dl>
             <h3>Outras configurações</h3>
             <ul class="links">
@@ -112,7 +117,7 @@
                       @case ('list') {
                         <mat-form-field class="wide">
                           <mat-label>{{ field.label }}</mat-label>
-                          <textarea matInput class="mono" rows="4" [ngModel]="value(item, field)" (ngModelChange)="set(item, field, $event)" [placeholder]="field.fallback ?? ''" spellcheck="false"></textarea>
+                          <textarea matInput class="mono" rows="4" [ngModel]="value(item, field)" (ngModelChange)="set(item, field, $event)" [placeholder]="field.fallback ?? field.example ?? ''" spellcheck="false"></textarea>
                           @if (field.hint) { <mat-hint>{{ field.hint }}</mat-hint> }
                         </mat-form-field>
                       }
@@ -126,7 +131,7 @@
                       @default {
                         <mat-form-field [class.wide]="field.wide">
                           <mat-label>{{ field.label }}</mat-label>
-                          <input matInput [type]="field.kind === 'number' ? 'number' : 'text'" [class.mono]="field.wide" [ngModel]="value(item, field)" (ngModelChange)="set(item, field, $event)" [placeholder]="field.fallback ?? ''" spellcheck="false" />
+                          <input matInput [type]="field.kind === 'number' ? 'number' : 'text'" [class.mono]="field.wide" [ngModel]="value(item, field)" (ngModelChange)="set(item, field, $event)" [placeholder]="field.fallback ?? field.example ?? ''" spellcheck="false" />
                           @if (field.hint) { <mat-hint>{{ field.hint }}</mat-hint> }
                         </mat-form-field>
                       }

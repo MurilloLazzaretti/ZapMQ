@@ -36,11 +36,15 @@
 
       @for (section of sections(); track section.kind) {
         <div class="section">
-          <h2><mat-icon [svgIcon]="targetIcon(section.kind)" /> {{ targetName(section.kind, true) }} <span class="muted">{{ section.items.length }}</span></h2>
+          <h2>
+            <input type="checkbox" class="pick" [checked]="allPicked(section.items)" [indeterminate]="somePicked(section.items)" (change)="pickAll(section.items, $any($event.target).checked)" [attr.aria-label]="'Selecionar todos: ' + targetName(section.kind, true)" />
+            <mat-icon [svgIcon]="targetIcon(section.kind)" /> {{ targetName(section.kind, true) }} <span class="muted">{{ section.items.length }}</span>
+          </h2>
           <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Upload versão</em>. <em>Empacotar</em> leva a versão que está rodando agora.</p>
           <ul>
             @for (target of section.items; track target.Name) {
-              <li>
+              <li [class.picked]="picked().has(key(target))">
+                <input type="checkbox" class="pick" [checked]="picked().has(key(target))" (change)="pick(target, $any($event.target).checked)" [disabled]="!!target.Problem" [attr.aria-label]="'Selecionar ' + target.Name" />
                 <a class="who" [routerLink]="['/workers/aplicacoes', target.Kind, target.Name]" matTooltip="Pastas e arquivos de configuração, em Processos e serviços">
                   <strong>{{ targetLabel(target) }}</strong>
                   @if (target.Version) { <span class="pill">{{ target.Version }}</span> }
@@ -63,6 +67,17 @@
         <div class="empty"><mat-icon svgIcon="search" /><strong>{{ all.length ? 'Nenhuma aplicação com esse filtro' : 'O Worker Control não conhece nada que possa ser transportado nesta máquina' }}</strong></div>
       }
     </section>
+    @if (picked().size) {
+      <div class="selection" role="region" aria-label="Selecionados">
+        <strong>{{ picked().size }} {{ picked().size === 1 ? 'selecionada' : 'selecionadas' }}</strong>
+        <button mat-button (click)="picked.set(emptySet())" [disabled]="busy()">Limpar</button>
+        <span class="spacer"></span>
+        @if (pickedIncoming().length) {
+          <button mat-stroked-button (click)="packPicked(true)" [disabled]="busy()" matTooltip="As que têm versão nova na pasta de entrada: essa versão vai para a expedição">Versão nova na entrada ({{ pickedIncoming().length }})</button>
+        }
+        <button mat-flat-button (click)="packPicked(false)" [disabled]="busy()" matTooltip="Empacota a versão que está rodando agora de cada uma e coloca na expedição">{{ busy() ? 'Empacotando…' : 'Empacotar ' + picked().size }}</button>
+      </div>
+    }
     <p class="muted note">Arquivos de configuração (<code>appsettings*.json</code>, <code>web.config</code>, <code>*.ini</code>, <code>environment.js</code>, <code>env.json</code>, bancos locais e logs) nunca entram no pacote nem são substituídos no destino. Eles são editados em <a routerLink="/workers/aplicacoes">Processos e serviços → Aplicações</a>.</p>
   } @else {
     <section class="panel empty"><span>Perguntando ao Worker Control o que há nesta máquina…</span></section>
