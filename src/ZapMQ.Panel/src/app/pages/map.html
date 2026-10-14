@@ -78,7 +78,7 @@
         </div>
       }
 
-      <div class="viewport" #viewport (wheel)="wheel($event)" (pointerdown)="press($event)" (pointermove)="move($event)" (pointerup)="release()" (pointerleave)="release()" (click)="select(null)">
+      <div class="viewport" #viewport (wheel)="wheel($event)" (pointerdown)="press($event)" (pointermove)="move($event)" (pointerup)="release($event)" (pointercancel)="release($event)" (pointerleave)="release($event)" (click)="select(null)">
         @if (drawing(); as drawing) {
           <div class="stage" [style.width.px]="drawing.width" [style.height.px]="drawing.height" [style.transform]="'translate(' + zoom().x + 'px,' + zoom().y + 'px) scale(' + zoom().k + ')'">
             @for (column of drawing.columns; track column.title) {
@@ -140,7 +140,7 @@
         } @else {
           <p class="muted waiting">Montando o mapa…</p>
         }
-        <span class="tip muted">arraste para mover · Ctrl + rolagem para aproximar</span>
+        <span class="tip muted">arraste para mover · Ctrl + rolagem ou dois dedos para aproximar</span>
       </div>
     </section>
 

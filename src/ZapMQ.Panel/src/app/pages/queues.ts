@@ -105,8 +105,16 @@ const INTERNAL = /^(\d+)(SS|TR)?$|^WorkerControl/;
         } @else {
           <div class="empty">
             <mat-icon svgIcon="inbox" />
-            <strong>{{ all().length ? 'Nenhuma fila com esse nome' : 'Nenhuma fila no momento' }}</strong>
-            <span>Uma fila aparece aqui quando recebe a primeira mensagem ou quando alguém a define.</span>
+            @if (!all().length) {
+              <strong>Nenhuma fila no momento</strong>
+              <span>Uma fila aparece aqui quando recebe a primeira mensagem ou quando alguém a define.</span>
+            } @else if (filter().trim()) {
+              <strong>Nenhuma fila com esse nome</strong>
+              <span>Nenhuma das {{ all().length }} filas tem "{{ filter().trim() }}" no nome{{ scope() === 'work' ? ' entre as de trabalho' : '' }}.</span>
+            } @else {
+              <strong>Nenhuma fila de trabalho</strong>
+              <span>As {{ all().length }} filas que existem são internas, do ZapMQ e do Worker Control. <a href="" (click)="$event.preventDefault(); scope.set('all')">Ver todas</a></span>
+            }
           </div>
         }
       </section>

@@ -61,6 +61,8 @@ a { color: var(--mat-sys-primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 code, pre, .mono { font-family: var(--zap-mono); font-size: 0.86em; }
+// A path or a name in the middle of a text breaks where it has to, instead of going past the screen.
+code { overflow-wrap: anywhere; }
 
 ::selection { background: color-mix(in srgb, var(--mat-sys-primary) 28%, transparent); }
 
@@ -72,6 +74,8 @@ code, pre, .mono { font-family: var(--zap-mono); font-size: 0.86em; }
   max-width: 1680px;
   margin: 0 auto;
   display: grid;
+  // One column no wider than the screen: what is wider (a row of tabs, a table) scrolls in itself.
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--zap-gap);
 }
 

@@ -22,6 +22,9 @@ const KINDS: Record<PartKind, string> = {
 };
 const SMALLEST = 0.3;
 const BIGGEST = 1.6;
+/** On a phone the drawing does not fit readably, so it starts at this size, from its left, and is dragged. */
+const NARROW = 600;
+const READABLE = 0.75;
 
 /**
  * The environment in one drawing: what comes in on the left, the applications that answer,
@@ -43,6 +46,9 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   /** Until somebody moves or zooms, the drawing keeps fitting the screen by itself. */
   private touched = false;
   private drag: { x: number; y: number; left: number; top: number; moved: boolean } | null = null;
+  /** The fingers on the screen, to zoom with two. */
+  private readonly fingers = new Map<number, { x: number; y: number }>();
+  private pinch: number | null = null;
 
   protected readonly width = PART_WIDTH;
   protected readonly height = PART_HEIGHT;
@@ -278,6 +284,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
     // By itself it fits the width, which keeps the names readable, and what is below is a drag away; asked for, it shows everything.
     const wide = (size.width - 16) / drawing.width;
+    if (!byHand && size.width < NARROW && wide < READABLE) {
+      this.zoom.set({ k: READABLE, x: 8, y: 8 });
+      return;
+    }
     const k = Math.max(SMALLEST, Math.min(1, byHand ? Math.min(wide, (size.height - 16) / drawing.height) : wide));
     this.zoom.set({ k, x: Math.max(8, (size.width - drawing.width * k) / 2), y: Math.max(8, (size.height - drawing.height * k) / 2) });
   }
@@ -307,11 +317,30 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     if (event.button !== 0) {
       return;
     }
+    if (event.pointerType === 'touch') {
+      this.fingers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (this.fingers.size === 2) {
+        this.pinch = this.spread();
+        this.drag = null;
+        return;
+      }
+    }
     const now = this.zoom();
     this.drag = { x: event.clientX, y: event.clientY, left: now.x, top: now.y, moved: false };
   }
 
   protected move(event: PointerEvent): void {
+    if (this.fingers.has(event.pointerId)) {
+      this.fingers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (this.pinch !== null && this.fingers.size === 2) {
+        const spread = this.spread();
+        const [a, b] = [...this.fingers.values()];
+        const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+        this.scale(spread / this.pinch, { x: (a.x + b.x) / 2 - box.left, y: (a.y + b.y) / 2 - box.top });
+        this.pinch = spread;
+        return;
+      }
+    }
     const drag = this.drag;
     if (!drag || !(event.buttons & 1)) {
       return;
@@ -326,7 +355,19 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.zoom.update((now) => ({ ...now, x: drag.left + dx, y: drag.top + dy }));
   }
 
-  protected release(): void {
+  /** How far apart the two fingers are. */
+  private spread(): number {
+    const [a, b] = [...this.fingers.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y) || 1;
+  }
+
+  protected release(event?: PointerEvent): void {
+    if (event) {
+      this.fingers.delete(event.pointerId);
+      if (this.fingers.size < 2) {
+        this.pinch = null;
+      }
+    }
     // After the click that ends a drag has been thrown away.
     setTimeout(() => (this.drag = null));
   }

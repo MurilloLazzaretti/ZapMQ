@@ -24,6 +24,7 @@
 .group {
   padding: 18px 20px 12px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   transition: opacity 150ms;
 
@@ -41,6 +42,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
     border-top: 1px solid var(--zap-border);
     padding-top: 8px;
     .spacer { flex: 1; }
@@ -82,6 +84,8 @@
 .legend { margin: 0; font: var(--mat-sys-body-small); }
 
 @media (max-width: 480px) {
+  // A trace there is nothing of yet takes no room on a phone.
+  .group footer .hidden { display: none; }
   .workers li { grid-template-columns: auto auto minmax(0, 1fr) auto auto; }
   // Processor and keep-alive stay in the health dialog; memory is what tells the most at a glance.
   .workers .metric:nth-of-type(4), .workers .metric:nth-of-type(6) { display: none; }
@@ -114,5 +118,8 @@
 }
 
 @media (max-width: 760px) {
+  // The text takes the line; the button goes under it.
   .unprotected { flex-wrap: wrap; }
+  .unprotected div { flex: 1 1 220px; }
+  .unprotected button { margin-left: 38px; }
 }
