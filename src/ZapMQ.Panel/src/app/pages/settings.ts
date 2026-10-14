@@ -329,6 +329,24 @@ export class SettingsPage implements OnInit {
 
   protected readonly downloads = computed(() => (this.config()?.['Downloads'] as Download[] | undefined) ?? []);
 
+  /** What the reverse proxy needs to serve each folder, once it was made ready. */
+  protected readonly prepared = signal<Record<number, { created: boolean; snippet: string }>>({});
+
+  protected async prepare(index: number): Promise<void> {
+    const area = this.downloads()[index];
+    try {
+      const answer = await firstValueFrom(this.api.prepareDownloads({ name: area.Name, root: area.Root, files: area.Files, versionsFile: area.VersionsFile }));
+      this.prepared.update((all) => ({ ...all, [index]: { created: answer.Created, snippet: answer.Snippet } }));
+    } catch (failure) {
+      this.snack.open((failure as HttpErrorResponse).error?.error ?? 'O Worker Control não preparou a pasta.', 'Fechar', { duration: 9000 });
+    }
+  }
+
+  protected copy(text: string): void {
+    void navigator.clipboard?.writeText(text);
+    this.snack.open('Trecho copiado', undefined, { duration: 2000 });
+  }
+
   protected addDownload(): void {
     (this.config() as Record<string, unknown>)['Downloads'] = [...this.downloads(), { Name: '', Root: '' }];
     this.touch();

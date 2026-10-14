@@ -79,6 +79,14 @@
                   <mat-form-field><mat-label>Arquivo de versões</mat-label><input matInput class="mono" [ngModel]="area.VersionsFile ?? ''" (ngModelChange)="setDownload(index, 'VersionsFile', $event)" placeholder="versions.json" spellcheck="false" /></mat-form-field>
                 </div>
                 <button mat-icon-button class="remove" (click)="removeDownload(index)" matTooltip="Deixar de tratar esta pasta como distribuição" aria-label="Remover"><mat-icon svgIcon="delete" /></button>
+                <div class="serve">
+                  <button mat-stroked-button (click)="prepare(index)" [disabled]="!area.Name || !area.Root" matTooltip="Cria a pasta e o arquivo de versões, se ainda não existirem, e mostra o trecho do NGINX que serve a pasta"><mat-icon svgIcon="dns" /> Preparar a pasta e o NGINX</button>
+                  @if (prepared()[index]; as ready) {
+                    <p class="muted">{{ ready.created ? 'A pasta foi criada.' : 'A pasta já existia e ficou como estava.' }} Para os arquivos serem baixados pelo NGINX, inclua este trecho no bloco <code>server</code> do site e aplique em <a routerLink="/workers/proxy">Processos e serviços → Proxy reverso</a> (o NGINX testa antes de valer):</p>
+                    <pre class="mono">{{ ready.snippet }}</pre>
+                    <button mat-button (click)="copy(ready.snippet)"><mat-icon svgIcon="content_copy" /> Copiar</button>
+                  }
+                </div>
               </div>
             } @empty {
               <p class="muted">Nenhuma pasta de distribuição.</p>

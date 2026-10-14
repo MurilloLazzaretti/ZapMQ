@@ -117,3 +117,13 @@ dl {
   .layout { grid-template-columns: minmax(0, 1fr); }
   .subjects { position: static; display: flex; flex-wrap: wrap; }
 }
+
+.serve {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+
+  p { margin: 4px 0 0; }
+  pre { width: 100%; margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--mat-sys-surface-container-low); font-size: 12.5px; overflow: auto; }
+}

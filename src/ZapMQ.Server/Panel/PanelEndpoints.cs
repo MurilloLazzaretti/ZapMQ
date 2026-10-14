@@ -418,6 +418,16 @@ public static class PanelEndpoints
         workers.MapPut("/environment", (ConfigRequest body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
             Forward(client, context, "SetEnvironment", request => request["Config"] = body.Config?.DeepClone(), loggers, "Worker Control: settings of the environment replaced"));
 
+        // A folder of downloads made ready: the folder and its list of versions, and what the reverse proxy needs to serve it.
+        workers.MapPost("/downloads/prepare", (DownloadPrepareRequest body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+            Forward(client, context, "DownloadPrepare", request =>
+            {
+                request["Name"] = body.Name;
+                request["Root"] = body.Root;
+                request["Files"] = body.Files;
+                request["VersionsFile"] = body.VersionsFile;
+            }, loggers, $"Worker Control: folder of downloads {body.Name} made ready in {body.Root}"));
+
         workers.MapPost("/groups/{group}/enabled", (string group, EnabledRequest body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
             Forward(client, context, "SetGroupEnabled", request =>
             {
@@ -748,6 +758,8 @@ public static class PanelEndpoints
     }
 
     public sealed record LoginRequest(string? User, string? Password);
+
+    public sealed record DownloadPrepareRequest(string? Name, string? Root, string? Files, string? VersionsFile);
 
     public sealed record ProxyFileBody(string? Path, string? Content, string? Sha256);
 

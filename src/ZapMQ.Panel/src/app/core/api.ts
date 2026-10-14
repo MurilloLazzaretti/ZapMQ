@@ -170,6 +170,11 @@ export class Api {
     return this.http.get<{ Text: string; Config: Record<string, unknown>; File: string }>('api/workers/environment');
   }
 
+  /** Makes a folder of downloads ready, and says what the reverse proxy needs to serve it. */
+  prepareDownloads(area: { name: string; root: string; files?: string; versionsFile?: string }): Observable<{ Created: boolean; Folder: string; Snippet: string }> {
+    return this.http.post<{ Created: boolean; Folder: string; Snippet: string }>('api/workers/downloads/prepare', area);
+  }
+
   saveEnvironment(config: Record<string, unknown>): Observable<unknown> {
     return this.http.put('api/workers/environment', { config });
   }

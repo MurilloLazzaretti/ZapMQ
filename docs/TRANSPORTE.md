@@ -129,6 +129,11 @@ parar nada, e o endereço de download continua o mesmo. Um arquivo que ainda nã
 primeira vez que um pacote o traz. A versão de cada um fica no `versions.json` da pasta, para o
 aplicativo consultar. O site que serve a pasta deixa de aparecer como API.
 
+Quem serve a pasta é o NGINX, sem site no servidor web: **Preparar a pasta e o NGINX**, na mesma
+tela, cria a pasta e o `versions.json` quando ainda não existem e mostra o trecho `location` que a
+serve em `/<nome>/`, com o tipo dos arquivos. O trecho é incluído pela aba do proxy reverso, que
+testa a configuração antes de recarregar.
+
 ### 4.1 Alvo que ainda não existe
 
 Um item de arquivos cujo alvo não existe no destino é uma **instalação**, e a aprovação muda:
