@@ -258,3 +258,6 @@ pre.json {
 .mat-mdc-dialog-container { --mat-dialog-container-shape: 24px; }
 .mat-mdc-snack-bar-container { --mat-snack-bar-container-shape: 12px; }
 mat-icon svg { width: 100%; height: 100%; fill: currentColor; }
+
+/* The hint of a part of the map says several things, one on each line. */
+.map-hint .mdc-tooltip__surface { max-width: 380px; white-space: pre-line; text-align: left; }

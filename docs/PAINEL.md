@@ -120,33 +120,37 @@ Gráficos: vazão e pendentes na última hora e nas últimas 24 horas. Para isso
 
 ### 4.2 Mapa
 
-O parque em um desenho: quem publica em qual fila, quem consome, e em que estado cada parte está.
+O ambiente em um desenho, da esquerda para a direita: **Entrada** (a aplicação web e o proxy
+reverso), **APIs**, **Micro serviços**, **Serviços e infraestrutura** (os serviços do Windows, os
+clientes do ZapMQ que não são de nenhum componente conhecido, o próprio ZapMQ e o Worker Control)
+e o **Banco de dados**.
 
-- **Nós:** aplicações (uma por nome de executável, com o número de instâncias), filas, exchanges e o próprio Worker Control.
-- **Ligações:** aplicação → fila (publica) e fila → aplicação (consome), com a vazão recente na espessura da linha.
-- **Estado nas cores:** aplicação com instâncias faltando ou grupo instável; fila acumulando; fila com mensagens mortas recentes; fila sem consumidor.
-- **Detalhe ao clicar:** abre a tela da fila, do grupo ou da aplicação.
+- **Cada componente** mostra o estado (no ar, em parte, fora do ar, desabilitado), uma linha com
+  o que importa dele (quantos processos, as portas, o estado do serviço) e, quando usa filas,
+  quais consome (↓) e em quantas publica (↑). As filas não são desenhadas: estão dentro de quem as
+  usa, na dica ao apontar e no painel ao clicar.
+- **O banco** aparece em cada componente como um selo: verde e pulsando quando o componente usou
+  o banco no último minuto, cinza quando tem conexão aberta e parada, ausente quando não tem
+  conexão. Vem de quem está conectado na instância, processo a processo (`sys.dm_exec_sessions`:
+  máquina, processo, programa, quantas sessões, quantas em uso, há quanto tempo sem pedir nada).
+  Nenhum dado das tabelas é lido. Quem está conectado e não é de nenhum componente (outra máquina,
+  uma ferramenta) aparece no painel do banco.
+- **As linhas**: HTTP (do proxy para quem recebe, com o ritmo e os erros do período), mensagens
+  (de quem publica em uma fila para quem a consome, com o nome das filas) e banco. As que tiveram
+  movimento há pouco andam; as de mensagens e de banco podem ser desligadas.
+- **Uma API** está no ar quando os sites dela e os pools estão iniciados; sem processo, está só
+  ociosa. Parte dos sites parada é aviso; todos, fora do ar.
+- **Localizar** procura no nome dos componentes e das filas: diz quem consome e quem publica em
+  cada fila encontrada, destaca esses componentes e leva até eles.
+- **Zoom**: os botões, ou Ctrl + rolagem; arrastar move. Ao abrir, o desenho cabe na largura;
+  "Ver tudo" encaixa o desenho inteiro.
+- **O painel ao lado** lista o que pede atenção e, com um componente escolhido, tudo o que se sabe
+  dele: o banco, o HTTP, as filas com pendentes e mortas, com quem fala, e o atalho para a tela dele.
 
-De onde vêm os dados:
-
-| Informação | Como o servidor sabe |
-|---|---|
-| Aplicação conectada, máquina, processo | Saudação do protocolo v2 |
-| Filas que ela consome | Vínculos da conexão v2 |
-| Filas em que ela publica | O servidor passa a registrar, por conexão v2, em quais filas ela publicou recentemente |
-| A que grupo do Worker Control ela pertence | Cruzamento do número do processo com o estado do Worker Control |
-| Clientes v1 (Delphi, DLL antiga) | Só o endereço de rede e as filas que consultam ou em que publicam. Aparecem como "cliente v1" por endereço; um worker Delphi conhecido do Worker Control aparece pelo grupo dele |
-
-Filas de uso interno (keep-alive, safe stop e trace de cada processo) são recolhidas dentro do nó da aplicação, para o desenho mostrar as filas de trabalho.
-
-Como ficou: o desenho é em colunas (quem publica, filas, quem consome, supervisão), feito com HTML e SVG próprios em vez do ECharts, que continua nos gráficos; assim os nós são botões comuns, com o tema e a acessibilidade do resto do painel. A vazão de cada ligação é medida pelo navegador entre uma leitura e outra (janela de um minuto). O servidor lembra quem publicou em cada fila por até 24 horas; a tela escolhe olhar 15 minutos, 1 hora ou 24 horas. Ao clicar, abre-se um resumo com as ligações do nó e o atalho para a tela dele. Uma fila é dita "acumulando" quando passa 30 segundos com mensagens esperando sem diminuir.
-
-Com muitas filas, o desenho se resume de duas formas, as duas na barra do mapa:
-
-- **Agrupar filas iguais** (ligado por padrão): filas que têm exatamente os mesmos publicadores e os mesmos consumidores são desenhadas como uma só, uma pilha com a quantidade, a partir de três. Clicar na pilha lista as filas e permite mostrá-las separadas. Uma fila com algo errado nunca entra em pilha: aparece sozinha, com a cor do problema.
-- **Só filas com movimento:** deixa de fora as filas em que nada foi publicado no período escolhido e que não têm nada pendente nem problema. A barra diz quantas ficaram ocultas.
-
-Há também um campo para localizar uma aplicação ou uma fila pelo nome, inclusive uma fila que está dentro de uma pilha. As colunas das pontas (o proxy e o Worker Control) são mais estreitas, e um nome com pontos que não cabe perde o começo, não o fim, que é o que distingue um do outro.
+O mapa junta o que o broker sabe (aplicações, filas, quem publica e consome), o `Status` do Worker
+Control (grupos e serviços), o `Landscape` (APIs com seus sites, aplicações web e conexões do
+banco por processo, do Worker Control 2.19) e o tráfego por destino do proxy. Cada aplicação do
+broker é atribuída a um componente pelo processo que a abriu.
 
 ### 4.3 Filas
 

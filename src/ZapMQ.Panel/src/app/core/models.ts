@@ -544,6 +544,22 @@ export interface ParkMap {
   links: MapLink[];
 }
 
+/** What the Worker Control adds to the drawing of the environment. */
+export interface Landscape {
+  Machine: string;
+  Apis: { Name: string; Folder: string | null; Version: string | null; Sites: { Name: string; Port: number | null; Started: boolean | null; ProcessIds: number[] }[] }[];
+  Frontends: { Name: string; BaseUrl: string | null; Problem: string | null; Modules: number }[];
+  /** Null when no database is looked after. */
+  Database: {
+    Name: string | null;
+    Server: string | null;
+    Online: boolean | null;
+    Error: string | null;
+    /** Who is connected, process by process. Null when that may not be read. */
+    Clients: { Host: string; ProcessId: number; Program: string; Sessions: number; Running: number; IdleSeconds: number | null }[] | null;
+  } | null;
+}
+
 // ── Trace ──────────────────────────────────────────────────────────────────
 
 export interface TraceLine {

@@ -2,316 +2,262 @@
   <header class="head">
     <div>
       <h1>Mapa</h1>
-      <p class="muted">Quem publica em cada fila, quem consome, e como cada parte está agora.</p>
+      <p class="muted">O ambiente em um desenho: o que entra, as aplicações que respondem, os processos por trás delas e o banco, cada um com o seu estado.</p>
     </div>
     <span class="spacer"></span>
     <mat-button-toggle-group [value]="minutes()" (change)="window($event.value)" hideSingleSelectionIndicator aria-label="Período considerado">
-      <mat-button-toggle [value]="15" matTooltip="Ligações com atividade nos últimos 15 minutos">15 min</mat-button-toggle>
-      <mat-button-toggle [value]="60" matTooltip="Ligações com atividade na última hora">1 h</mat-button-toggle>
-      <mat-button-toggle [value]="1440" matTooltip="Ligações com atividade nas últimas 24 horas">24 h</mat-button-toggle>
+      <mat-button-toggle [value]="15" matTooltip="Tráfego e mensagens dos últimos 15 minutos">15 min</mat-button-toggle>
+      <mat-button-toggle [value]="60" matTooltip="Tráfego e mensagens da última hora">1 h</mat-button-toggle>
+      <mat-button-toggle [value]="1440" matTooltip="Tráfego e mensagens das últimas 24 horas">24 h</mat-button-toggle>
     </mat-button-toggle-group>
   </header>
 
   @if (problem()) {
-    <section class="panel empty">
-      <mat-icon svgIcon="cloud_off" />
-      <strong>Sem resposta do ZapMQ</strong>
-      <span>{{ problem() }}</span>
-    </section>
+    <div class="notice danger" role="alert"><mat-icon svgIcon="cloud_off" /><span>Sem resposta do ZapMQ: {{ problem() }}</span></div>
+  }
+  @if (partial()) {
+    <div class="notice" role="status"><mat-icon svgIcon="info" /><span>O Worker Control instalado é anterior à versão 2.19 e não informa as APIs nem as conexões do banco. O mapa mostra o que dá para saber sem isso.</span></div>
   }
 
   <div class="layout">
     <section class="panel drawing">
       <div class="summary">
-        <span class="pill"><mat-icon svgIcon="deployed_code" /> {{ totals().applications | num }} aplicações · {{ totals().instances | num }} instâncias</span>
-        <span class="pill"><mat-icon svgIcon="stacks" /> {{ totals().queues | num }} filas</span>
-        <span class="pill"><mat-icon svgIcon="bolt" /> {{ rate(totals().perMinute) }}</span>
-        @if (hidden()) {
-          <span class="pill" matTooltip="Filas em que nada foi publicado no período escolhido">{{ hidden() | num }} filas paradas ocultas</span>
+        <span class="pill" [class.ok]="totals().apis && totals().apisUp === totals().apis" [class.warn]="totals().apisUp < totals().apis"><mat-icon svgIcon="deployed_code" /> {{ totals().apisUp }} de {{ totals().apis }} APIs no ar</span>
+        <span class="pill" [class.ok]="totals().workers && totals().workersUp === totals().workers" [class.warn]="totals().workersUp < totals().workers"><mat-icon svgIcon="memory" /> {{ totals().workersUp }} de {{ totals().workers }} micro serviços</span>
+        @if (totals().services) {
+          <span class="pill" [class.ok]="totals().servicesUp === totals().services" [class.warn]="totals().servicesUp < totals().services"><mat-icon svgIcon="settings_applications" /> {{ totals().servicesUp }} de {{ totals().services }} serviços</span>
         }
-        @if (!status()) {
-          <span class="pill warn" matTooltip="Sem o Worker Control, o mapa não sabe quais processos deveriam estar no ar"><mat-icon svgIcon="cloud_off" /> Worker Control sem resposta</span>
+        @if (totals().database; as database) {
+          <span class="pill" [class.ok]="database.tone === 'ok'" [class.danger]="database.tone === 'danger'" matTooltip="Componentes com conexão aberta no banco, e quantos usaram o banco no último minuto">
+            <mat-icon svgIcon="database" /> {{ database.tone === 'danger' ? 'banco fora do ar' : totals().onDatabase + ' ligados ao banco · ' + totals().usingDatabase + ' em uso' }}
+          </span>
         }
-        <span class="spacer"></span>
-        @if (park()?.columns?.[0]?.column === -1) {
-          <span class="legend"><i class="line http"></i> encaminha</span>
+        @if (attention().length) {
+          <span class="pill danger"><mat-icon svgIcon="warning" /> {{ attention().length }} pedindo atenção</span>
         }
-        <span class="legend"><i class="line publish"></i> publica</span>
-        <span class="legend"><i class="line consume"></i> consome</span>
-        <span class="legend"><i class="line supervise"></i> supervisiona</span>
       </div>
 
       <div class="controls">
         <label class="search">
           <mat-icon svgIcon="search" />
-          <input type="search" placeholder="Localizar aplicação ou fila" [ngModel]="search()" (ngModelChange)="find($event)" aria-label="Localizar no mapa" />
+          <input type="search" placeholder="Localizar componente ou fila" [ngModel]="search()" (ngModelChange)="search.set($event)" aria-label="Localizar no mapa" />
         </label>
         <span class="spacer"></span>
-        <button type="button" class="chip" [class.on]="activeOnly()" [attr.aria-pressed]="activeOnly()" (click)="activeOnly.set(!activeOnly())" matTooltip="Mostra só as filas em que algo foi publicado no período, e as que têm algum problema">
-          <mat-icon [svgIcon]="activeOnly() ? 'check_circle' : 'visibility'" /> Só filas com movimento
+        <button type="button" class="chip" [class.on]="messageLines()" [attr.aria-pressed]="messageLines()" (click)="messageLines.set(!messageLines())" matTooltip="Quem publica em uma fila ligado a quem a consome">
+          <i class="line message"></i> Mensagens
         </button>
-        <button type="button" class="chip" [class.on]="bundling()" [attr.aria-pressed]="bundling()" (click)="bundling.set(!bundling())" matTooltip="Desenha como uma só as filas usadas exatamente pelas mesmas aplicações">
-          <mat-icon [svgIcon]="bundling() ? 'check_circle' : 'stacks'" /> Agrupar filas iguais
+        <button type="button" class="chip" [class.on]="databaseLines()" [attr.aria-pressed]="databaseLines()" (click)="databaseLines.set(!databaseLines())" matTooltip="Quem tem conexão aberta no banco. Cheia quando está em uso, tracejada quando está parada">
+          <i class="line database"></i> Banco
         </button>
-        @if (bundling() && opened()) {
-          <button mat-button (click)="collapseAll()">Reagrupar</button>
-        }
+        <span class="legend"><i class="line http"></i> HTTP</span>
+        <div class="zoom" role="group" aria-label="Zoom">
+          <button mat-icon-button (click)="scale(1 / 1.25)" matTooltip="Afastar" aria-label="Afastar"><mat-icon svgIcon="zoom_out" /></button>
+          <span class="num">{{ percent() }}%</span>
+          <button mat-icon-button (click)="scale(1.25)" matTooltip="Aproximar" aria-label="Aproximar"><mat-icon svgIcon="zoom_in" /></button>
+          <button mat-icon-button (click)="fit()" matTooltip="Ver tudo" aria-label="Ver tudo"><mat-icon svgIcon="fit_screen" /></button>
+        </div>
       </div>
 
-      <div class="scroll" #canvas>
-        <div class="canvas" (click)="select(null)">
-          @if (park(); as park) {
-            <div class="stage" [style.width.px]="park.width" [style.height.px]="park.height">
-              @for (column of park.columns; track column.column) {
-                <span class="column" [style.left.px]="column.x" [style.width.px]="column.width">{{ title(column.column) }}</span>
-              }
-
-              <svg [attr.width]="park.width" [attr.height]="park.height" [attr.viewBox]="'0 0 ' + park.width + ' ' + park.height" aria-hidden="true">
-                <defs>
-                  <marker id="head-publish" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="head publish" d="M0,0 L10,5 L0,10 z" /></marker>
-                  <marker id="head-http" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="head http" d="M0,0 L10,5 L0,10 z" /></marker>
-                  <marker id="head-consume" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="head consume" d="M0,0 L10,5 L0,10 z" /></marker>
-                </defs>
-                @for (edge of park.edges; track edge.id) {
-                  <path
-                    class="edge"
-                    [class]="'edge ' + edge.kind"
-                    [class.active]="edge.active"
-                    [class.stale]="edge.stale"
-                    [class.dim]="edgeDimmed(edge)"
-                    [attr.d]="edge.path"
-                    [attr.stroke-width]="stroke(edge)"
-                    [attr.marker-end]="edge.kind === 'supervise' ? null : 'url(#head-' + edge.kind + ')'"
-                  />
-                }
-              </svg>
-
-              @for (node of park.nodes; track node.id) {
-                <button
-                  type="button"
-                  class="node"
-                  [class]="'node ' + node.kind + ' ' + node.tone"
-                  [class.selected]="selectedId() === node.id"
-                  [class.dim]="dimmed(node.id)"
-                  [style.left.px]="node.x"
-                  [style.top.px]="node.y"
-                  [style.width.px]="node.width ?? park.nodeWidth"
-                  [style.height.px]="nodeHeight"
-                  [attr.aria-pressed]="selectedId() === node.id"
-                  [matTooltip]="node.reasons.join(' ')"
-                  (click)="select(node); $event.stopPropagation()"
-                >
-                  <span class="mark"><mat-icon [svgIcon]="icon(node)" /></span>
-                  <span class="text">
-                    <strong [class.tail]="node.kind === 'application' && node.label.includes('.')"><bdi>{{ node.label }}</bdi></strong>
-                    <small>{{ node.detail }}</small>
-                  </span>
-                  @if (node.figure !== null) {
-                    <span class="figure">{{ node.figure | num: 'compact' }}</span>
-                  }
-                </button>
-              }
+      @if (found(); as hits) {
+        <div class="hits" role="status">
+          @if (!hits.ids.size) {
+            <span class="muted">Nada com "{{ search() }}" no nome de um componente nem de uma fila.</span>
+          }
+          @for (queue of hits.queues.slice(0, 6); track queue.name) {
+            <div class="hit">
+              <mat-icon svgIcon="stacks" /><strong class="mono">{{ queue.name }}</strong>
+              @if (queue.consumes.length) { <span class="muted">consumida por</span> @for (part of queue.consumes; track part.id) { <button type="button" (click)="go(part)">{{ part.label }}</button> } }
+              @if (queue.publishes.length) { <span class="muted">· publicada por</span> @for (part of queue.publishes; track part.id) { <button type="button" (click)="go(part)">{{ part.label }}</button> } }
+              @if (!queue.consumes.length) { <span class="pill warn">ninguém consumindo</span> }
             </div>
-
-            @if (!park.nodes.length) {
-              <div class="empty">
-                <mat-icon svgIcon="hub" />
-                <strong>Nada para desenhar ainda</strong>
-                <span>Assim que alguma aplicação se conectar ou publicar, ela aparece aqui.</span>
-              </div>
-            }
+          }
+          @if (hits.queues.length > 6) { <span class="muted">e mais {{ hits.queues.length - 6 }} filas; refine a busca.</span> }
+          @if (hits.named.length) {
+            <div class="hit"><mat-icon svgIcon="my_location" /><span class="muted">Componentes:</span> @for (part of hits.named.slice(0, 10); track part.id) { <button type="button" (click)="go(part)">{{ part.label }}</button> }</div>
           }
         </div>
+      }
+
+      <div class="viewport" #viewport (wheel)="wheel($event)" (pointerdown)="press($event)" (pointermove)="move($event)" (pointerup)="release()" (pointerleave)="release()" (click)="select(null)">
+        @if (drawing(); as drawing) {
+          <div class="stage" [style.width.px]="drawing.width" [style.height.px]="drawing.height" [style.transform]="'translate(' + zoom().x + 'px,' + zoom().y + 'px) scale(' + zoom().k + ')'">
+            @for (column of drawing.columns; track column.title) {
+              <span class="column" [style.left.px]="column.x" [style.width.px]="width">{{ column.title }} <b>{{ column.count }}</b></span>
+            }
+
+            <svg [attr.width]="drawing.width" [attr.height]="drawing.height" [attr.viewBox]="'0 0 ' + drawing.width + ' ' + drawing.height" aria-hidden="true">
+              <defs>
+                <marker id="arrow-http" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="head http" d="M0,0 L10,5 L0,10 z" /></marker>
+                <marker id="arrow-message" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="head message" d="M0,0 L10,5 L0,10 z" /></marker>
+              </defs>
+              @for (wire of drawing.wires; track wire.id) {
+                @if (shown(wire)) {
+                  <path class="wire" [class]="'wire ' + wire.kind" [class.active]="wire.active" [class.dim]="wireDimmed(wire)" [attr.d]="wire.path" [attr.marker-end]="wire.kind === 'database' ? null : 'url(#arrow-' + wire.kind + ')'" />
+                }
+              }
+            </svg>
+
+            @for (part of drawing.parts; track part.id) {
+              <button
+                type="button"
+                class="part"
+                [class]="'part ' + part.kind + ' ' + part.tone"
+                [class.selected]="selectedId() === part.id"
+                [class.dim]="dimmed(part)"
+                [class.found]="found()?.ids?.has(part.id)"
+                [style.left.px]="part.x"
+                [style.top.px]="part.y"
+                [style.width.px]="width"
+                [style.height.px]="height"
+                [attr.aria-pressed]="selectedId() === part.id"
+                [matTooltip]="hint(part)"
+                matTooltipClass="map-hint"
+                matTooltipShowDelay="350"
+                (click)="select(part); $event.stopPropagation()"
+              >
+                <span class="mark"><mat-icon [svgIcon]="icon(part)" /></span>
+                <span class="text">
+                  <strong><bdi>{{ part.label }}</bdi></strong>
+                  <small>{{ part.detail }}</small>
+                  @if (part.consumes.length || part.publishes.length) {
+                    <small class="queues">{{ queuesLine(part) }}</small>
+                  } @else if (part.http?.count) {
+                    <small class="queues">{{ rate(part.http!.perMinute) }}@if (part.http!.errors) { · {{ part.http!.errors }} com erro }</small>
+                  }
+                </span>
+                <span class="signs">
+                  <span class="dot" [class]="'dot ' + part.tone"></span>
+                  @if (part.database; as link) {
+                    <mat-icon class="db" [class.active]="link.active" svgIcon="database" />
+                  }
+                </span>
+              </button>
+            }
+          </div>
+        } @else {
+          <p class="muted waiting">Montando o mapa…</p>
+        }
+        <span class="tip muted">arraste para mover · Ctrl + rolagem para aproximar</span>
       </div>
     </section>
 
-    <aside class="panel side" [class.picked]="selected() !== null">
-      @if (selected(); as node) {
+    <aside class="panel side" [class.picked]="selected()">
+      @if (selected(); as part) {
         <header>
-          <span class="mark" [class]="'mark ' + node.tone"><mat-icon [svgIcon]="icon(node)" /></span>
-          <div class="who">
-            <strong>{{ node.label }}</strong>
-            <span class="muted">{{ node.detail }}</span>
-          </div>
+          <span class="mark" [class]="'mark ' + part.tone"><mat-icon [svgIcon]="icon(part)" /></span>
+          <div class="who"><strong>{{ part.label }}</strong><span class="muted">{{ kind(part) }} · {{ part.detail }}</span></div>
           <button mat-icon-button (click)="select(null)" aria-label="Fechar"><mat-icon svgIcon="close" /></button>
         </header>
 
-        @for (reason of node.reasons; track reason) {
-          <p class="reason" [class]="'reason ' + node.tone"><mat-icon svgIcon="warning" /> {{ reason }}</p>
+        @for (reason of part.reasons; track $index) {
+          <p class="reason" [class.danger]="part.tone === 'danger'"><mat-icon svgIcon="warning" /> <span>{{ reason }}</span></p>
         }
 
-        @if (node.bundle; as queues) {
-          <p class="muted note">Filas com os mesmos publicadores e os mesmos consumidores, desenhadas como uma só.</p>
-          <ul class="lines bundled">
-            @for (queue of queues; track queue.name) {
-              <li>
-                <a [routerLink]="['/filas', queue.name]"><i class="line publish"></i> <span class="truncate">{{ queue.name }}</span></a>
-                <span class="muted num">{{ queue.pending ? (queue.pending | num) + ' pend.' : 'vazia' }}</span>
-              </li>
-            }
-          </ul>
-        }
-
-        @if (node.queue; as queue) {
-          <dl>
-            <div><dt>Pendentes</dt><dd>{{ queue.pending | num }}</dd></div>
-            <div><dt>Em processamento</dt><dd>{{ queue.processing | num }}</dd></div>
-            <div><dt>Consumidores</dt><dd>{{ queue.consumers | num }}</dd></div>
-            <div><dt>Mensagens mortas</dt><dd>{{ queue.deadLetters | num }}</dd></div>
-          </dl>
-        }
-
-        @if (node.http; as http) {
-          <h3>{{ node.kind === 'proxy' ? 'Encaminhou no período' : 'Recebe do proxy' }}</h3>
-          <dl>
-            <div><dt>Requisições</dt><dd>{{ http.count | num }}</dd></div>
-            <div><dt>Por minuto</dt><dd>{{ rate(http.perMinute).replace('/min', '') }}</dd></div>
-            <div><dt>Erros do servidor</dt><dd>{{ share(http.serverErrors, http.count) }}</dd></div>
-            <div><dt>P95</dt><dd>{{ ms(http.p95) }}</dd></div>
-          </dl>
-          @if (node.kind !== 'proxy') {
-            <p class="muted note">Como <span class="mono">{{ http.apps.join(', ') }}</span>, em <span class="mono">{{ http.upstreams.join(', ') }}</span>.</p>
+        @if (part.kind !== 'database' && totals().database) {
+          <h3>Banco de dados</h3>
+          @if (part.database; as link) {
+            <dl>
+              <div><dt>Conexões abertas</dt><dd>{{ link.sessions | num }}</dd></div>
+              <div><dt>Em uso agora</dt><dd>{{ link.running | num }}</dd></div>
+              <div><dt>Último pedido</dt><dd>{{ idle(link.idle) }}</dd></div>
+              <div><dt>Situação</dt><dd [class.good]="link.active">{{ link.active ? 'trafegando' : 'conectado, parado' }}</dd></div>
+            </dl>
+            @if (link.programs.length) { <p class="note muted">Identifica-se como: {{ link.programs.join(', ') }}</p> }
+          } @else {
+            <p class="note muted">Nenhuma conexão aberta no banco por processos deste componente.</p>
           }
         }
 
-        @if (node.services?.length) {
-          <p class="muted note">
-            É o serviço do Windows
-            @for (service of node.services; track service.Name) {
-              <strong>{{ service.DisplayName || service.Name }}</strong>{{ $last ? '' : ', ' }}
-            }.
-          </p>
-        }
-
-        @if (node.kind !== 'queue' && node.groups.length && node.kind !== 'supervisor') {
+        @if (part.http?.count) {
+          <h3>HTTP no período</h3>
           <dl>
-            <div><dt>No ar</dt><dd>{{ up(node) | num }}</dd></div>
-            <div>
-              <dt>{{ node.groups.length === 1 ? 'Grupo' : 'Grupos' }}</dt>
-              <dd class="names">
-                @for (group of node.groups; track group.Name) {
-                  <span>{{ group.Name }}</span>
-                }
-              </dd>
-            </div>
+            <div><dt>Requisições</dt><dd>{{ part.http!.count | num }}</dd></div>
+            <div><dt>Ritmo</dt><dd>{{ rate(part.http!.perMinute) }}</dd></div>
+            <div><dt>Com erro (5xx)</dt><dd [class.bad]="part.http!.errors">{{ part.http!.errors | num }}</dd></div>
+            @if (part.http!.p95) { <div><dt>95% em até</dt><dd>{{ part.http!.p95 | num }} ms</dd></div> }
           </dl>
         }
 
-        @if (node.kind === 'supervisor' && status(); as now) {
-          <dl>
-            <div><dt>Versão</dt><dd>{{ now.Version }}</dd></div>
-            <div><dt>Máquina</dt><dd>{{ now.Service.Machine }}</dd></div>
-            <div><dt>Grupos</dt><dd>{{ now.Groups.length | num }}</dd></div>
-            <div><dt>Mantém</dt><dd>{{ lines().supervise.length | num }}</dd></div>
-          </dl>
-        }
-
-        @if (node.application && node.kind !== 'supervisor' && node.application.instances.length) {
-          <h3>Instâncias</h3>
-          <ul class="instances">
-            @for (instance of node.application.instances; track instance.host + instance.pid) {
-              <li>
-                <span class="dot" [class.ok]="!instance.busy" [class.warn]="instance.busy" [matTooltip]="instance.busy ? 'Processando uma mensagem' : 'Livre'"></span>
-                <span class="mono">{{ instance.pid }}</span>
-                <span class="muted truncate">{{ instance.host }}</span>
+        @if (part.consumes.length) {
+          <h3>Consome</h3>
+          <ul class="queues">
+            @for (queue of part.consumes; track queue.name) {
+              <li><a [routerLink]="['/filas', queue.name]" class="mono">{{ queue.name }}</a>
+                @if (queue.active) { <span class="pill ok">ativa</span> }
+                @if (queue.paused) { <span class="pill warn">pausada</span> }
+                @if (queue.pending) { <span class="pill">{{ queue.pending | num }} pendentes</span> }
+                @if (queue.deadLetters) { <span class="pill danger">{{ queue.deadLetters | num }} mortas</span> }
               </li>
             }
           </ul>
-          @if (node.application.internalQueues) {
-            <p class="muted note">Mais {{ node.application.internalQueues | num }} filas próprias (keep-alive, parada e trace), que não são desenhadas.</p>
-          }
         }
-
-        @if (lines().http.length) {
-          <h3>{{ node.kind === 'proxy' ? 'Encaminha para' : 'Recebe de' }}</h3>
-          <ul class="lines">
-            @for (line of lines().http; track line.edge.id) {
-              <li>
-                <button type="button" (click)="select(line.node)"><i class="line http"></i> <span class="truncate">{{ line.node.label }}</span></button>
-                <span class="muted num">{{ rate(line.edge.rate) }}</span>
+        @if (part.publishes.length) {
+          <h3>Publica em</h3>
+          <ul class="queues">
+            @for (queue of part.publishes; track queue.name) {
+              <li><a [routerLink]="['/filas', queue.name]" class="mono">{{ queue.name }}</a>
+                @if (queue.active) { <span class="pill ok">ativa</span> }
+                @if (queue.unattended) { <span class="pill warn">ninguém consumindo</span> }
               </li>
             }
           </ul>
         }
 
-        @if (lines().publish.length) {
-          <h3>{{ node.kind === 'queue' ? 'Quem publica' : 'Publica em' }}</h3>
-          <ul class="lines">
-            @for (line of lines().publish; track line.edge.id) {
+        @if (talks().length) {
+          <h3>Fala com</h3>
+          <ul class="talks">
+            @for (talk of talks(); track talk.wire.id) {
               <li>
-                <button type="button" (click)="select(line.node)"><i class="line publish"></i> <span class="truncate">{{ line.node.label }}</span></button>
-                <span class="muted num" [matTooltip]="line.edge.link?.lastSeen ? 'Última vez ' + (line.edge.link?.lastSeen | ago) : ''">{{ rate(line.edge.rate) }}</span>
+                <button type="button" (click)="go(talk.other)"><mat-icon [svgIcon]="talk.out ? 'arrow_upward' : 'arrow_downward'" /> <strong>{{ talk.other.label }}</strong></button>
+                <span class="muted">{{ talk.wire.kind === 'http' ? 'HTTP · ' : '' }}{{ talk.wire.queues.length > 1 ? talk.wire.queues.join(', ') : talk.wire.note }}</span>
               </li>
             }
           </ul>
         }
 
-        @if (lines().consume.length) {
-          <h3>{{ node.kind === 'queue' ? 'Quem consome' : 'Consome de' }}</h3>
-          <ul class="lines">
-            @for (line of lines().consume; track line.edge.id) {
-              <li>
-                <button type="button" (click)="select(line.node)"><i class="line consume"></i> <span class="truncate">{{ line.node.label }}</span></button>
-                <span class="muted num">{{ rate(line.edge.rate) }}</span>
-              </li>
+        @if (part.kind === 'database' && drawing()?.strangers?.length) {
+          <h3>Outros conectados</h3>
+          <ul class="queues">
+            @for (stranger of drawing()!.strangers.slice(0, 12); track $index) {
+              <li><span>{{ stranger.program || 'sem nome' }} <span class="muted">· {{ stranger.host || 'máquina desconhecida' }}</span></span><span class="pill">{{ stranger.sessions }}</span></li>
             }
+          </ul>
+          <p class="note muted">Conexões que não são de nenhum componente desenhado: outra máquina, uma ferramenta, ou um processo que o Worker Control não acompanha.</p>
+        }
+
+        @if (part.facts.length) {
+          <h3>Detalhes</h3>
+          <ul class="facts">
+            @for (fact of part.facts; track $index) { <li><span class="muted">{{ fact.label }}</span><span class="mono">{{ fact.value }}</span></li> }
           </ul>
         }
 
-        @if (node.kind === 'supervisor' && lines().supervise.length) {
-          <h3>Mantém no ar</h3>
-          <ul class="lines">
-            @for (line of lines().supervise; track line.edge.id) {
-              <li>
-                <button type="button" (click)="select(line.node)"><span class="dot" [class]="'dot ' + line.node.tone"></span> <span class="truncate">{{ line.node.label }}</span></button>
-                <span class="muted num">{{ line.node.detail }}</span>
-              </li>
-            }
-          </ul>
+        @if (part.link; as link) {
+          <footer><a mat-stroked-button [routerLink]="link.path"><mat-icon svgIcon="open_in_new" /> {{ link.label }}</a></footer>
         }
-
-        <footer>
-          @if (node.bundle) {
-            <button mat-flat-button (click)="expand(node)"><mat-icon svgIcon="stacks" /> Mostrar separadas</button>
-          } @else if (node.queue) {
-            <a mat-flat-button [routerLink]="['/filas', node.queue.name]"><mat-icon svgIcon="open_in_new" /> Abrir a fila</a>
-          } @else if (node.kind === 'proxy' || (node.http && !node.groups.length)) {
-            <a mat-flat-button routerLink="/trafego"><mat-icon svgIcon="open_in_new" /> Abrir o tráfego</a>
-          } @else if (node.kind === 'supervisor' || node.groups.length) {
-            <a mat-flat-button routerLink="/workers"><mat-icon svgIcon="open_in_new" /> Abrir no Worker Control</a>
-          }
-          @if (node.application && node.kind !== 'supervisor') {
-            <a mat-button routerLink="/aplicacoes">Ver conexões</a>
-          }
-        </footer>
       } @else {
-        <header>
-          <div class="who">
-            <strong>Atenção</strong>
-            <span class="muted">O que não está como deveria</span>
-          </div>
-        </header>
-        @if (attention().length) {
-          <ul class="lines attention">
-            @for (node of attention(); track node.id) {
-              <li>
-                <button type="button" (click)="select(node)">
-                  <span class="dot" [class]="'dot ' + node.tone"></span>
-                  <span class="stack">
-                    <span class="truncate">{{ node.label }}</span>
-                    <small class="muted">{{ node.reasons[0] }}</small>
-                  </span>
-                </button>
-              </li>
-            }
-          </ul>
-        } @else {
-          <div class="calm">
-            <mat-icon svgIcon="verified" />
-            <span>Tudo como esperado.</span>
-          </div>
-        }
-        <p class="muted note">Toque em uma aplicação ou fila para ver com quem ela conversa.</p>
+        <header><div class="who"><strong>{{ attention().length ? 'O que pede atenção' : 'Tudo no ar' }}</strong><span class="muted">Clique em um componente para ver com quem ele fala.</span></div></header>
+        <ul class="attention">
+          @for (part of attention(); track part.id) {
+            <li>
+              <button type="button" (click)="go(part)">
+                <span class="dot" [class]="'dot ' + part.tone"></span>
+                <span class="what"><strong>{{ part.label }}</strong><span class="muted">{{ part.reasons[0] || part.detail }}</span></span>
+              </button>
+            </li>
+          } @empty {
+            <li class="muted calm">Nenhum componente com problema agora.</li>
+          }
+        </ul>
+        <h3>Como ler</h3>
+        <ul class="key">
+          <li><span class="dot ok"></span> no ar</li>
+          <li><span class="dot warn"></span> em parte, ou com aviso</li>
+          <li><span class="dot danger"></span> fora do ar</li>
+          <li><mat-icon class="db active" svgIcon="database" /> usando o banco agora</li>
+          <li><mat-icon class="db" svgIcon="database" /> conectado ao banco, parado</li>
+          <li><span class="arrows">↓ ↑</span> filas que consome e em que publica</li>
+        </ul>
       }
     </aside>
   </div>

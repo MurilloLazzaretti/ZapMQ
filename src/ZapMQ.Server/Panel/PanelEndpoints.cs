@@ -404,6 +404,9 @@ public static class PanelEndpoints
 
         workers.MapGet("/status", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Status"));
 
+        // What the drawing of the environment needs beyond the status: applications of the web server and who is connected to the database.
+        workers.MapGet("/landscape", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Landscape"));
+
         workers.MapGet("/config", (WorkerControlClient client, HttpContext context) => Forward(client, context, "GetConfig"));
 
         workers.MapPut("/config", (ConfigRequest body, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>

@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
@@ -7,137 +8,153 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 import { Api } from '../core/api';
-import { AgoPipe, NumPipe } from '../core/format';
-import { ParkMap, TrafficUpstreams, WorkerControlStatus } from '../core/models';
-import { Column, NODE_HEIGHT, ParkEdge, ParkNode, assemble, linkKey, place } from '../core/park';
-import { FormsModule } from '@angular/forms';
+import { NumPipe } from '../core/format';
+import { PART_HEIGHT, PART_WIDTH, Part, PartKind, Wire, assemble, place, rate } from '../core/landscape';
+import { Landscape, ParkMap, TrafficUpstreams, WorkerControlStatus } from '../core/models';
 
-const TITLES: Record<Column, string> = { [-1]: 'Entrada', 0: 'Publicam', 1: 'Filas', 2: 'Consomem', 3: 'Supervisão' };
-const ICONS = { application: 'deployed_code', queue: 'stacks', supervisor: 'precision_manufacturing', group: 'memory', proxy: 'dns', bundle: 'stacks' } as const;
-const RATE = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
-const RATE_WHOLE = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
-
-/** How long a queue has to keep messages waiting before it is said to be accumulating. */
-const WAITING_SAMPLES = 6;
-/** Over how long the rate of a link is measured. */
-const RATE_WINDOW = 60_000;
+const ICONS: Record<PartKind, string> = {
+  web: 'web', proxy: 'dns', api: 'deployed_code', worker: 'memory', service: 'settings_applications',
+  client: 'lan', broker: 'stacks', supervisor: 'precision_manufacturing', database: 'database',
+};
+const KINDS: Record<PartKind, string> = {
+  web: 'Aplicação web', proxy: 'Proxy reverso', api: 'API', worker: 'Micro serviço', service: 'Serviço do Windows',
+  client: 'Cliente do ZapMQ', broker: 'Mensageria', supervisor: 'Supervisor', database: 'Banco de dados',
+};
+const SMALLEST = 0.3;
+const BIGGEST = 1.6;
 
 /**
- * Everything that talks through the broker, in one drawing: who publishes on the left, the
- * queues in the middle, who consumes on the right, and the Worker Control over what it keeps
- * running.
+ * The environment in one drawing: what comes in on the left, the applications that answer,
+ * the processes behind them and the database on the right, each with how it stands now and
+ * what it is talking to. The queues are not drawn: each part says which ones it uses.
  */
 @Component({
   selector: 'zap-map',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, NumPipe, AgoPipe],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, NumPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './map.html',
   styleUrl: './map.scss',
 })
 export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly api = inject(Api);
-  private readonly canvas = viewChild<ElementRef<HTMLElement>>('canvas');
+  private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private timer: ReturnType<typeof setInterval> | null = null;
   private observer: ResizeObserver | null = null;
+  /** Until somebody moves or zooms, the drawing keeps fitting the screen by itself. */
+  private touched = false;
+  private drag: { x: number; y: number; left: number; top: number; moved: boolean } | null = null;
 
-  /** What each link had counted, lately, to tell how fast it is going. */
-  private readonly counted = new Map<string, { at: number; count: number }[]>();
-  /** The last pending counts of each queue. */
-  private readonly pending = new Map<string, number[]>();
-
-  protected readonly nodeHeight = NODE_HEIGHT;
+  protected readonly width = PART_WIDTH;
+  protected readonly height = PART_HEIGHT;
   protected readonly minutes = signal(60);
-  protected readonly map = signal<ParkMap | null>(null);
-  protected readonly status = signal<WorkerControlStatus | null>(null);
-  /** Where the reverse proxy sends its requests; null while the Worker Control does not say. */
-  private readonly upstreams = signal<TrafficUpstreams | null>(null);
+  private readonly map = signal<ParkMap | null>(null);
+  private readonly status = signal<WorkerControlStatus | null>(null);
+  private readonly land = signal<Landscape | null>(null);
+  private readonly traffic = signal<TrafficUpstreams | null>(null);
+  protected readonly loaded = signal(false);
   protected readonly problem = signal('');
+  /** The Worker Control did not say what there is on the machine: the drawing is only of the messaging. */
+  protected readonly partial = signal(false);
   protected readonly selectedId = signal<string | null>(null);
-  private readonly available = signal(0);
-  private readonly rates = signal<ReadonlyMap<string, number>>(new Map());
-  private readonly waiting = signal<ReadonlySet<string>>(new Set());
-
-  /** Only the queues something was published in during the period, unless something is wrong with them. */
-  protected readonly activeOnly = signal(false);
-  /** Queues used by exactly the same applications are drawn as one. */
-  protected readonly bundling = signal(true);
-  private readonly expanded = signal<ReadonlySet<string>>(new Set());
-  protected readonly opened = computed(() => this.expanded().size);
   protected readonly search = signal('');
+  protected readonly databaseLines = signal(true);
+  protected readonly messageLines = signal(true);
+  protected readonly zoom = signal({ k: 1, x: 0, y: 0 });
+  private readonly size = signal({ width: 0, height: 0 });
 
-  private readonly assembled = computed(() => {
-    const map = this.map();
-    return map
-      ? assemble(map, this.status(), this.rates(), this.waiting(), Date.now(), this.upstreams(), { activeOnly: this.activeOnly(), bundle: this.bundling(), expanded: this.expanded() })
-      : null;
-  });
+  protected readonly drawing = computed(() => (this.loaded() ? place(assemble(this.map(), this.status(), this.land(), this.traffic(), Date.now())) : null));
 
-  /** Queues left out for having had nothing published in them. */
-  protected readonly hidden = computed(() => this.assembled()?.hidden ?? 0);
+  protected readonly selected = computed(() => this.drawing()?.parts.find((part) => part.id === this.selectedId()) ?? null);
 
-  protected readonly park = computed(() => {
-    const assembled = this.assembled();
-    if (!assembled || !this.available()) {
-      return null;
-    }
-    // Placing writes on the nodes; each look gets its own.
-    return place(assembled.nodes.map((node) => ({ ...node })), assembled.edges.map((edge) => ({ ...edge })), this.available());
-  });
-
-  protected readonly selected = computed(() => this.park()?.nodes.find((node) => node.id === this.selectedId()) ?? null);
-
-  /** The selected node and everything joined to it; null when nothing is selected. */
-  protected readonly related = computed(() => {
+  /** The selected part and everything joined to it; null when nothing is selected. */
+  private readonly related = computed(() => {
     const selected = this.selected();
-    const park = this.park();
-    if (!selected || !park) {
+    const drawing = this.drawing();
+    if (!selected || !drawing) {
       return null;
     }
     const ids = new Set([selected.id]);
-    for (const edge of park.edges) {
-      if (edge.from === selected.id) {
-        ids.add(edge.to);
-      } else if (edge.to === selected.id) {
-        ids.add(edge.from);
+    for (const wire of drawing.wires) {
+      if (wire.from === selected.id) {
+        ids.add(wire.to);
+      } else if (wire.to === selected.id) {
+        ids.add(wire.from);
       }
     }
     return ids;
   });
 
+  /** What was typed, found in the names of the parts and of the queues they use. */
+  protected readonly found = computed(() => {
+    const wanted = this.search().trim().toLowerCase();
+    const parts = this.drawing()?.parts ?? [];
+    if (wanted.length < 2) {
+      return null;
+    }
+    const ids = new Set<string>();
+    const queues = new Map<string, { name: string; consumes: Part[]; publishes: Part[] }>();
+    for (const part of parts) {
+      if (part.label.toLowerCase().includes(wanted) || part.id.toLowerCase().includes(wanted)) {
+        ids.add(part.id);
+      }
+      for (const [list, side] of [[part.consumes, 'consumes'], [part.publishes, 'publishes']] as const) {
+        for (const queue of list) {
+          if (queue.name.toLowerCase().includes(wanted)) {
+            ids.add(part.id);
+            const entry = queues.get(queue.name) ?? queues.set(queue.name, { name: queue.name, consumes: [], publishes: [] }).get(queue.name)!;
+            entry[side].push(part);
+          }
+        }
+      }
+    }
+    return { ids, queues: [...queues.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')), named: parts.filter((part) => part.label.toLowerCase().includes(wanted)) };
+  });
+
   /** What asks for attention, the worst first. */
   protected readonly attention = computed(() =>
-    (this.park()?.nodes ?? [])
-      .filter((node) => node.tone === 'danger' || node.tone === 'warn')
+    (this.drawing()?.parts ?? [])
+      .filter((part) => part.tone === 'danger' || part.tone === 'warn')
       .sort((a, b) => (a.tone === b.tone ? a.label.localeCompare(b.label, 'pt-BR') : a.tone === 'danger' ? -1 : 1)),
   );
 
   protected readonly totals = computed(() => {
-    const map = this.map();
+    const parts = this.drawing()?.parts ?? [];
+    const of = (...kinds: PartKind[]) => parts.filter((part) => kinds.includes(part.kind));
+    const up = (list: Part[]) => list.filter((part) => part.tone === 'ok').length;
     return {
-      applications: map?.applications.length ?? 0,
-      instances: map?.applications.reduce((total, application) => total + application.instances.length, 0) ?? 0,
-      queues: map?.queues.length ?? 0,
-      perMinute: [...this.rates().entries()].filter(([key]) => key.startsWith('publish|')).reduce((total, [, rate]) => total + rate, 0),
+      apis: of('api').length, apisUp: up(of('api')),
+      workers: of('worker').length, workersUp: up(of('worker')),
+      services: of('service').length, servicesUp: up(of('service')),
+      onDatabase: parts.filter((part) => part.database).length,
+      usingDatabase: parts.filter((part) => part.database?.active).length,
+      database: parts.find((part) => part.kind === 'database') ?? null,
     };
   });
 
-  /** The lines of the selected node, for its panel: what it publishes in and what it consumes. */
-  protected readonly lines = computed(() => {
+  /** What joins the selected part to the others, in words, for its panel. */
+  protected readonly talks = computed(() => {
     const selected = this.selected();
-    const park = this.park();
-    if (!selected || !park) {
-      return { publish: [], consume: [], supervise: [], http: [] };
+    const drawing = this.drawing();
+    if (!selected || !drawing) {
+      return [];
     }
-    const label = new Map(park.nodes.map((node) => [node.id, node]));
-    const other = (edge: ParkEdge) => label.get(edge.from === selected.id ? edge.to : edge.from)!;
-    const mine = park.edges.filter((edge) => edge.from === selected.id || edge.to === selected.id);
-    const list = (kind: ParkEdge['kind']) =>
-      mine
-        .filter((edge) => edge.kind === kind)
-        .map((edge) => ({ edge, node: other(edge) }))
-        .sort((a, b) => a.node.label.localeCompare(b.node.label, 'pt-BR'));
-    return { publish: list('publish'), consume: list('consume'), supervise: list('supervise'), http: list('http') };
+    const name = new Map(drawing.parts.map((part) => [part.id, part]));
+    return drawing.wires
+      .filter((wire) => wire.kind !== 'database' && (wire.from === selected.id || wire.to === selected.id))
+      .map((wire) => ({ wire, other: name.get(wire.from === selected.id ? wire.to : wire.from)!, out: wire.from === selected.id }))
+      .sort((a, b) => a.other.label.localeCompare(b.other.label, 'pt-BR'));
   });
+
+  constructor() {
+    // The first time there is something to draw, and whenever the space changes while nobody moved it.
+    effect(() => {
+      const drawing = this.drawing();
+      const size = this.size();
+      if (drawing && size.width && !this.touched) {
+        untracked(() => this.fit(false));
+      }
+    });
+  }
 
   ngOnInit(): void {
     this.refresh();
@@ -145,9 +162,9 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    const element = this.canvas()?.nativeElement;
+    const element = this.viewport()?.nativeElement;
     if (element) {
-      this.observer = new ResizeObserver(([entry]) => this.available.set(Math.floor(entry.contentRect.width)));
+      this.observer = new ResizeObserver(([entry]) => this.size.set({ width: Math.floor(entry.contentRect.width), height: Math.floor(entry.contentRect.height) }));
       this.observer.observe(element);
     }
   }
@@ -159,61 +176,83 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.observer?.disconnect();
   }
 
-  protected title(column: Column): string {
-    return TITLES[column];
+  protected icon(part: Part): string {
+    return ICONS[part.kind];
   }
 
-  protected icon(node: ParkNode): string {
-    return node.application?.protocol === 'v1' ? 'lan' : ICONS[node.kind];
+  protected kind(part: Part): string {
+    return KINDS[part.kind];
   }
 
-  protected rate(value: number): string {
-    return value > 0 ? `${(value >= 100 ? RATE_WHOLE : RATE).format(value)}/min` : '—';
+  protected rate(perMinute: number): string {
+    return rate(perMinute);
   }
 
-  /** Thicker the more goes through. */
-  protected stroke(edge: ParkEdge): number {
-    return edge.kind === 'supervise' ? 1 : edge.kind === 'http' ? 1.25 + Math.min(2.75, Math.log10(1 + edge.rate) * 1.2) : 1.25 + Math.min(2.75, Math.log10(1 + edge.rate) * 0.9);
+  /** The line of a part about its queues: the names while they fit, how many when they do not. */
+  protected queuesLine(part: Part): string {
+    const wanted = this.search().trim().toLowerCase();
+    // What was searched for comes first, so that it is seen on the part itself.
+    const pick = (list: Part['consumes']) => (wanted.length >= 2 ? [...list].sort((a, b) => Number(b.name.toLowerCase().includes(wanted)) - Number(a.name.toLowerCase().includes(wanted))) : list);
+    const names = (list: Part['consumes']) => (list.length <= 2 ? pick(list).map((queue) => queue.name).join(', ') : `${pick(list)[0].name} +${list.length - 1}`);
+    return [part.consumes.length ? `↓ ${names(part.consumes)}` : '', part.publishes.length ? `↑ ${part.publishes.length <= 1 ? names(part.publishes) : part.publishes.length + ' filas'}` : ''].filter(Boolean).join('   ');
   }
 
-  protected dimmed(id: string): boolean {
+  /** Everything about a part in a few lines, for whoever only points at it. */
+  protected hint(part: Part): string {
+    return [
+      `${KINDS[part.kind]} · ${part.detail}`,
+      ...part.reasons,
+      part.consumes.length ? `Consome: ${part.consumes.map((queue) => queue.name).join(', ')}` : '',
+      part.publishes.length ? `Publica em: ${part.publishes.map((queue) => queue.name).join(', ')}` : '',
+      part.database ? `Banco: ${part.database.sessions} conexões${part.database.active ? ', em uso' : ', sem uso agora'}` : '',
+      part.http?.count ? `HTTP: ${rate(part.http.perMinute)}${part.http.errors ? `, ${part.http.errors} com erro` : ''}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  protected idle(seconds: number | null): string {
+    return seconds === null ? 'não se sabe' : seconds < 60 ? `há ${seconds} s` : seconds < 3600 ? `há ${Math.round(seconds / 60)} min` : `há ${Math.round(seconds / 3600)} h`;
+  }
+
+  protected dimmed(part: Part): boolean {
+    const found = this.found();
+    if (found) {
+      return !found.ids.has(part.id);
+    }
     const related = this.related();
-    return related !== null && !related.has(id);
+    return related !== null && !related.has(part.id);
   }
 
-  protected edgeDimmed(edge: ParkEdge): boolean {
+  protected shown(wire: Wire): boolean {
     const selected = this.selectedId();
-    return this.related() !== null && edge.from !== selected && edge.to !== selected;
+    if (selected && (wire.from === selected || wire.to === selected)) {
+      return true;
+    }
+    return wire.kind === 'database' ? this.databaseLines() : wire.kind === 'message' ? this.messageLines() : true;
   }
 
-  /** Draws the queues of a bundle one by one. */
-  protected expand(node: ParkNode): void {
-    this.expanded.update((expanded) => new Set([...expanded, node.id]));
-    this.selectedId.set(null);
+  protected wireDimmed(wire: Wire): boolean {
+    const selected = this.selectedId();
+    const found = this.found();
+    if (selected) {
+      return wire.from !== selected && wire.to !== selected;
+    }
+    return !!found && !(found.ids.has(wire.from) && found.ids.has(wire.to));
   }
 
-  protected collapseAll(): void {
-    this.expanded.set(new Set());
-  }
-
-  /** Picks what was typed: an application, a queue, or the bundle a queue is in. */
-  protected find(text: string): void {
-    this.search.set(text);
-    const wanted = text.trim().toLowerCase();
-    if (!wanted) {
-      this.selectedId.set(null);
+  protected select(part: Part | null): void {
+    if (this.drag?.moved) {
       return;
     }
-    const nodes = this.park()?.nodes ?? [];
-    const found =
-      nodes.find((node) => node.label.toLowerCase() === wanted) ??
-      nodes.find((node) => node.label.toLowerCase().includes(wanted)) ??
-      nodes.find((node) => node.bundle?.some((queue) => queue.name.toLowerCase().includes(wanted)));
-    this.selectedId.set(found?.id ?? null);
+    this.selectedId.set(part && part.id !== this.selectedId() ? part.id : null);
   }
 
-  protected select(node: ParkNode | null): void {
-    this.selectedId.set(node && node.id !== this.selectedId() ? node.id : null);
+  /** Brings a part to the middle of what is seen, and picks it. */
+  protected go(part: Part): void {
+    const size = this.size();
+    const k = Math.max(this.zoom().k, 0.8);
+    this.touched = true;
+    this.zoom.set({ k, x: size.width / 2 - (part.x + PART_WIDTH / 2) * k, y: size.height / 2 - (part.y + PART_HEIGHT / 2) * k });
+    this.selectedId.set(part.id);
   }
 
   protected window(minutes: number): void {
@@ -221,69 +260,97 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.refresh();
   }
 
-  protected ms(value: number | null): string {
-    return value === null ? '—' : value >= 1000 ? `${RATE.format(value / 1000)} s` : `${Math.round(value)} ms`;
+  /** The whole drawing in what there is of screen, never bigger than it is. */
+  protected fit(byHand = true): void {
+    const drawing = this.drawing();
+    const size = this.size();
+    if (!drawing || !size.width || !size.height) {
+      return;
+    }
+    if (byHand) {
+      this.touched = false;
+    }
+    // By itself it fits the width, which keeps the names readable, and what is below is a drag away; asked for, it shows everything.
+    const wide = (size.width - 16) / drawing.width;
+    const k = Math.max(SMALLEST, Math.min(1, byHand ? Math.min(wide, (size.height - 16) / drawing.height) : wide));
+    this.zoom.set({ k, x: Math.max(8, (size.width - drawing.width * k) / 2), y: Math.max(8, (size.height - drawing.height * k) / 2) });
   }
 
-  protected share(part: number, whole: number): string {
-    return whole ? RATE.format((part / whole) * 100) + '%' : '0%';
+  /** Closer or farther, keeping still the point that is at the middle (or under the pointer). */
+  protected scale(factor: number, at?: { x: number; y: number }): void {
+    const now = this.zoom();
+    const size = this.size();
+    const point = at ?? { x: size.width / 2, y: size.height / 2 };
+    const k = Math.max(SMALLEST, Math.min(BIGGEST, now.k * factor));
+    this.touched = true;
+    this.zoom.set({ k, x: point.x - ((point.x - now.x) / now.k) * k, y: point.y - ((point.y - now.y) / now.k) * k });
   }
 
-  protected up(node: ParkNode): number {
-    return node.groups.reduce((total, group) => total + group.Workers.filter((worker) => worker.State === 'Up').length, 0);
+  protected wheel(event: WheelEvent): void {
+    event.preventDefault();
+    const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    if (event.ctrlKey || event.metaKey) {
+      this.scale(Math.exp(-event.deltaY * 0.0022), { x: event.clientX - box.left, y: event.clientY - box.top });
+      return;
+    }
+    this.touched = true;
+    this.zoom.update((now) => ({ ...now, x: now.x - event.deltaX, y: now.y - event.deltaY }));
+  }
+
+  protected press(event: PointerEvent): void {
+    if (event.button !== 0) {
+      return;
+    }
+    const now = this.zoom();
+    this.drag = { x: event.clientX, y: event.clientY, left: now.x, top: now.y, moved: false };
+  }
+
+  protected move(event: PointerEvent): void {
+    const drag = this.drag;
+    if (!drag || !(event.buttons & 1)) {
+      return;
+    }
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 5) {
+      return;
+    }
+    drag.moved = true;
+    this.touched = true;
+    this.zoom.update((now) => ({ ...now, x: drag.left + dx, y: drag.top + dy }));
+  }
+
+  protected release(): void {
+    // After the click that ends a drag has been thrown away.
+    setTimeout(() => (this.drag = null));
+  }
+
+  protected percent(): number {
+    return Math.round(this.zoom().k * 100);
   }
 
   private refresh(): void {
     forkJoin({
-      map: this.api.map(this.minutes()),
-      // The map is still worth seeing without the Worker Control.
+      map: this.api.map(this.minutes()).pipe(catchError((failure: HttpErrorResponse) => of(failure))),
+      // The drawing is still worth seeing without the Worker Control: it says so, and shows the rest.
       status: this.api.workerStatus().pipe(catchError(() => of(null))),
-      upstreams: this.api.trafficUpstreams(this.minutes()).pipe(catchError(() => of(null))),
-    }).subscribe({
-      next: ({ map, status, upstreams }) => {
-        this.measure(map);
-        this.status.set(status);
-        this.upstreams.set(upstreams);
+      land: this.api.landscape().pipe(catchError(() => of(null))),
+      traffic: this.api.trafficUpstreams(this.minutes()).pipe(catchError(() => of(null))),
+    }).subscribe(({ map, status, land, traffic }) => {
+      if (map instanceof HttpErrorResponse) {
+        if (map.status !== 401) {
+          this.problem.set(map.error?.error ?? 'Não foi possível falar com o serviço do ZapMQ.');
+        }
+        this.map.set(null);
+      } else {
         this.map.set(map);
         this.problem.set('');
-      },
-      error: (failure: HttpErrorResponse) => failure.status !== 401 && this.problem.set(failure.error?.error ?? 'Não foi possível falar com o serviço do ZapMQ.'),
-    });
-  }
-
-  private measure(map: ParkMap): void {
-    const now = Date.now();
-    const delivered = new Map(map.queues.map((queue) => [queue.name, queue.delivered]));
-    const rates = new Map<string, number>();
-    const seen = new Set<string>();
-
-    for (const link of map.links) {
-      const key = linkKey(link);
-      seen.add(key);
-      // A connection that only listens has no count of its own: what the queue delivered stands for it.
-      const count = link.kind === 'consume' && link.bound ? (delivered.get(link.queue) ?? 0) : link.count;
-      const samples = (this.counted.get(key) ?? []).filter((sample) => now - sample.at <= RATE_WINDOW);
-      samples.push({ at: now, count });
-      this.counted.set(key, samples);
-      const first = samples[0];
-      const elapsed = now - first.at;
-      rates.set(key, elapsed > 0 ? Math.max(0, ((count - first.count) / elapsed) * 60_000) : 0);
-    }
-    [...this.counted.keys()].filter((key) => !seen.has(key)).forEach((key) => this.counted.delete(key));
-
-    const waiting = new Set<string>();
-    const live = new Set<string>();
-    for (const queue of map.queues) {
-      live.add(queue.name);
-      const samples = [...(this.pending.get(queue.name) ?? []), queue.pending].slice(-WAITING_SAMPLES);
-      this.pending.set(queue.name, samples);
-      if (samples.length === WAITING_SAMPLES && samples.every((value) => value > 0) && samples[samples.length - 1] >= samples[0]) {
-        waiting.add(queue.name);
       }
-    }
-    [...this.pending.keys()].filter((name) => !live.has(name)).forEach((name) => this.pending.delete(name));
-
-    this.rates.set(rates);
-    this.waiting.set(waiting);
+      this.status.set(status);
+      this.land.set(land);
+      this.traffic.set(traffic);
+      this.partial.set(!!status && !land);
+      this.loaded.set(true);
+    });
   }
 }

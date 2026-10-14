@@ -91,6 +91,10 @@ import upload from '@material-symbols/svg-400/rounded/upload.svg';
 import playlistAdd from '@material-symbols/svg-400/rounded/playlist_add.svg';
 import eventIcon from '@material-symbols/svg-400/rounded/event.svg';
 import taskAlt from '@material-symbols/svg-400/rounded/task_alt.svg';
+import zoomIn from '@material-symbols/svg-400/rounded/zoom_in.svg';
+import zoomOut from '@material-symbols/svg-400/rounded/zoom_out.svg';
+import fitScreen from '@material-symbols/svg-400/rounded/fit_screen.svg';
+import myLocation from '@material-symbols/svg-400/rounded/my_location.svg';
 import shieldLock from '@material-symbols/svg-400/rounded/shield_lock.svg';
 import doneAll from '@material-symbols/svg-400/rounded/done_all.svg';
 import database from '@material-symbols/svg-400/rounded/database.svg';
@@ -102,7 +106,7 @@ const ICONS: Record<string, string> = {
   terminal, download, vertical_align_bottom: verticalAlignBottom, wrap_text: wrapText, delete_sweep: deleteSweep,
   stop, folder, autorenew, settings_applications: settingsApplications,
   web, widgets, publish,
-  local_shipping: localShipping, inventory_2: inventory, upload, playlist_add: playlistAdd, event: eventIcon, task_alt: taskAlt, shield_lock: shieldLock, done_all: doneAll,
+  local_shipping: localShipping, inventory_2: inventory, upload, playlist_add: playlistAdd, event: eventIcon, task_alt: taskAlt, zoom_in: zoomIn, zoom_out: zoomOut, fit_screen: fitScreen, my_location: myLocation, shield_lock: shieldLock, done_all: doneAll,
   password, manage_accounts: manageAccounts,
   database, hard_drive: hardDrive, lock, table, code, key, account_tree: accountTree,
   monitoring, timer, group, filter_alt: filterAlt,

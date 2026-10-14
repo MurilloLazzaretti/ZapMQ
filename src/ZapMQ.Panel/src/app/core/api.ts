@@ -7,7 +7,7 @@ import {
   AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
-  HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
+  HealthSample, InstalledService, ParkMap, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
 
 /**
@@ -150,6 +150,11 @@ export class Api {
   /** Makes an administration key and hands it to the Worker Control; only the master may. */
   protectWorkerControl(): Observable<{ hasKey: boolean }> {
     return this.http.post<{ hasKey: boolean }>('api/workers/protection', null);
+  }
+
+  /** The applications of the web server and who is connected to the database, for the drawing of the environment. */
+  landscape(): Observable<Landscape> {
+    return this.http.get<Landscape>('api/workers/landscape');
   }
 
   workerStatus(): Observable<WorkerControlStatus> {
