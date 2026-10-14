@@ -128,7 +128,8 @@ export function assemble(map: ParkMap | null, status: WorkerControlStatus | null
   for (const api of land?.Apis ?? []) {
     const known = api.Sites.filter((site) => site.Started !== null);
     const stopped = known.filter((site) => site.Started === false);
-    const ids = [...new Set(api.Sites.flatMap((site) => site.ProcessIds))];
+    // The worker processes of the web server, and what they started from the folder of the application.
+    const ids = [...new Set([...api.Sites.flatMap((site) => site.ProcessIds), ...(api.ProcessIds ?? [])])];
     const ports = api.Sites.map((site) => site.Port).filter((port): port is number => port !== null);
     const tone: Tone = !known.length ? 'neutral' : stopped.length === known.length ? 'danger' : stopped.length ? 'warn' : 'ok';
     part('api', `api:${api.Name}`, api.Name, `${plural(api.Sites.length, 'instância', 'instâncias')}${ports.length ? ' · ' + (ports.length > 2 ? `${ports[0]}–${ports[ports.length - 1]}` : ports.join(', ')) : ''}${tone === 'ok' && !ids.length ? ' · ociosa' : ''}`, tone, {

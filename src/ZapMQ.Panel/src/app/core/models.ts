@@ -547,7 +547,7 @@ export interface ParkMap {
 /** What the Worker Control adds to the drawing of the environment. */
 export interface Landscape {
   Machine: string;
-  Apis: { Name: string; Folder: string | null; Version: string | null; Sites: { Name: string; Port: number | null; Started: boolean | null; ProcessIds: number[] }[] }[];
+  Apis: { Name: string; Folder: string | null; Version: string | null; /** The processes running from its folder. */ ProcessIds?: number[]; Sites: { Name: string; Port: number | null; Started: boolean | null; ProcessIds: number[] }[] }[];
   Frontends: { Name: string; BaseUrl: string | null; Problem: string | null; Modules: number }[];
   /** Null when no database is looked after. */
   Database: {
