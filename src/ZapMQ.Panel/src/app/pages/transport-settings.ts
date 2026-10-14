@@ -32,7 +32,7 @@ import { TransportTabs } from '../shared/transport-tabs';
         <section class="panel">
           <div class="panel-head"><h2>Pastas de entrada</h2><span class="hint">onde uma versão nova é deixada no servidor, por tipo de aplicação</span></div>
           <form (ngSubmit)="save()">
-            @for (kind of kinds; track kind) {
+            @for (kind of kinds(); track kind) {
               <label>
                 <span class="kind"><mat-icon [svgIcon]="targetIcon(kind)" /> {{ targetName(kind, true) }}</span>
                 <input type="text" [name]="kind" [attr.data-kind]="kind" [attr.aria-label]="'Pasta de entrada de ' + targetName(kind, true)" [(ngModel)]="paths[kind]" [placeholder]="defaults[kind]" spellcheck="false" autocomplete="off" />
@@ -52,7 +52,7 @@ import { TransportTabs } from '../shared/transport-tabs';
           <div class="keep">
             @for (pattern of now.Keep; track pattern) { <span class="pill mono">{{ pattern }}</span> }
           </div>
-          <p class="muted note pad">São guardadas as últimas {{ now.KeepVersions }} cópias de cada aplicação substituída. Estes dois ajustes ficam em <code>Transport</code>, no <code>ConfigWorkers.json</code>.</p>
+          <p class="muted note pad">São guardadas as últimas {{ now.KeepVersions }} cópias de cada aplicação substituída. Estes dois ajustes ficam em <code>Transport</code>, no <code>Environment.json</code>.</p>
         </section>
       } @else {
         <section class="panel empty"><span>Lendo…</span></section>
@@ -84,7 +84,8 @@ export class TransportSettingsPage implements OnInit {
   private readonly api = inject(Api);
   private readonly snack = inject(MatSnackBar);
 
-  protected readonly kinds = TARGET_KINDS;
+  /** The kinds that have an inbox, as the Worker Control says: files for download are not left in one. */
+  protected readonly kinds = signal<string[]>([]);
   protected readonly targetName = targetName;
   protected readonly targetIcon = targetIcon;
   protected readonly settings = signal<TransportSettings | null>(null);
@@ -101,7 +102,7 @@ export class TransportSettingsPage implements OnInit {
   protected async save(): Promise<void> {
     this.busy.set(true);
     try {
-      await firstValueFrom(this.api.setInboxes(Object.fromEntries(this.kinds.map((kind) => [kind, (this.paths[kind] ?? '').trim()]))));
+      await firstValueFrom(this.api.setInboxes(Object.fromEntries(this.kinds().map((kind) => [kind, (this.paths[kind] ?? '').trim()]))));
       this.snack.open('Pastas de entrada salvas', undefined, { duration: 2500 });
       // The Worker Control reads its configuration again in a moment.
       setTimeout(() => this.load(), 1500);
@@ -115,8 +116,9 @@ export class TransportSettingsPage implements OnInit {
   private load(): void {
     this.api.transportSettings().subscribe({
       next: (settings) => {
+        this.kinds.set(TARGET_KINDS.filter((kind) => settings.Inboxes[kind]));
         this.settings.set(settings);
-        for (const kind of this.kinds) {
+        for (const kind of this.kinds()) {
           const inbox = settings.Inboxes[kind];
           this.paths[kind] = inbox.Said ? inbox.Path : '';
           this.defaults[kind] = inbox.Said ? '' : inbox.Path;
