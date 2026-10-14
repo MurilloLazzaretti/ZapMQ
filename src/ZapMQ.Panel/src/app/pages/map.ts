@@ -22,6 +22,10 @@ const KINDS: Record<PartKind, string> = {
 };
 const SMALLEST = 0.3;
 const BIGGEST = 1.6;
+/** How often the map is read again, in seconds, and what is offered. Each reading asks the Worker Control to look at the whole machine. */
+const EVERY_KEY = 'zapmq.map.every';
+const EVERY_DEFAULT = 30;
+export const EVERY_CHOICES = [10, 30, 60, 120, 300];
 /** On a phone the drawing does not fit readably, so it starts at this size, from its left, and is dragged. */
 const NARROW = 600;
 const READABLE = 0.75;
@@ -53,6 +57,12 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly width = PART_WIDTH;
   protected readonly height = PART_HEIGHT;
   protected readonly minutes = signal(60);
+  protected readonly everyChoices = EVERY_CHOICES;
+  protected readonly every = signal(MapPage.savedEvery());
+  /** When the map on the screen was read. */
+  protected readonly readAt = signal<Date | null>(null);
+  /** A reading is under way: another one waits for it instead of piling up. */
+  protected readonly reading = signal(false);
   private readonly map = signal<ParkMap | null>(null);
   private readonly status = signal<WorkerControlStatus | null>(null);
   private readonly land = signal<Landscape | null>(null);
@@ -164,7 +174,43 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit(): void {
     this.refresh();
-    this.timer = setInterval(() => this.refresh(), 5000);
+    this.schedule();
+  }
+
+  /** Reads again every so many seconds, as chosen on the screen and remembered by this browser. */
+  protected setEvery(seconds: number): void {
+    this.every.set(seconds);
+    try {
+      localStorage.setItem(EVERY_KEY, String(seconds));
+    } catch {
+      // Without storage it is only for this visit.
+    }
+    this.schedule();
+  }
+
+  protected refreshNow(): void {
+    this.refresh();
+    this.schedule();
+  }
+
+  private schedule(): void {
+    if (this.timer) {
+      clearInterval(this.timer);
+    }
+    this.timer = setInterval(() => this.refresh(), this.every() * 1000);
+  }
+
+  private static savedEvery(): number {
+    try {
+      const saved = Number(localStorage.getItem(EVERY_KEY));
+      return EVERY_CHOICES.includes(saved) ? saved : EVERY_DEFAULT;
+    } catch {
+      return EVERY_DEFAULT;
+    }
+  }
+
+  protected everyLabel(seconds: number): string {
+    return seconds < 60 ? `${seconds} s` : `${seconds / 60} min`;
   }
 
   ngAfterViewInit(): void {
@@ -377,6 +423,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private refresh(): void {
+    if (this.reading()) {
+      return;
+    }
+    this.reading.set(true);
     forkJoin({
       map: this.api.map(this.minutes()).pipe(catchError((failure: HttpErrorResponse) => of(failure))),
       // The drawing is still worth seeing without the Worker Control: it says so, and shows the rest.
@@ -398,6 +448,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.traffic.set(traffic);
       this.partial.set(!!status && !land);
       this.loaded.set(true);
+      this.readAt.set(new Date());
+      this.reading.set(false);
     });
   }
 }

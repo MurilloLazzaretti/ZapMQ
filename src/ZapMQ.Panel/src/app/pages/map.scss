@@ -337,3 +337,26 @@
 @media (prefers-reduced-motion: reduce) {
   .wire.active, .db.active { animation: none; }
 }
+
+// How often the map is read again.
+.every {
+  display: flex;
+  align-items: center;
+  gap: 4px 8px;
+  flex-wrap: wrap;
+
+  label { display: inline-flex; align-items: center; gap: 8px; color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-label-large); }
+  select {
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--zap-border);
+    border-radius: 999px;
+    background: var(--zap-surface);
+    color: var(--mat-sys-on-surface);
+    font: var(--mat-sys-body-medium);
+  }
+  .at { font: var(--mat-sys-body-small); }
+  .spin { animation: map-spin 1s linear infinite; }
+}
+
+@keyframes map-spin { to { transform: rotate(360deg); } }

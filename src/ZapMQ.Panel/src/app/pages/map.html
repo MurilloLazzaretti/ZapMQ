@@ -10,6 +10,18 @@
       <mat-button-toggle [value]="60" matTooltip="Tráfego e mensagens da última hora">1 h</mat-button-toggle>
       <mat-button-toggle [value]="1440" matTooltip="Tráfego e mensagens das últimas 24 horas">24 h</mat-button-toggle>
     </mat-button-toggle-group>
+    <div class="every">
+      <label matTooltip="Cada leitura pede ao Worker Control que olhe a máquina inteira: sites, processos e conexões do banco">
+        Atualizar a cada
+        <select [ngModel]="every()" (ngModelChange)="setEvery(+$event)" aria-label="Atualizar a cada">
+          @for (seconds of everyChoices; track seconds) {
+            <option [ngValue]="seconds">{{ everyLabel(seconds) }}</option>
+          }
+        </select>
+      </label>
+      <button mat-icon-button (click)="refreshNow()" [disabled]="reading()" matTooltip="Atualizar agora" aria-label="Atualizar agora"><mat-icon svgIcon="refresh" [class.spin]="reading()" /></button>
+      @if (readAt(); as at) { <span class="muted at">lido às {{ at.toLocaleTimeString('pt-BR') }}</span> }
+    </div>
   </header>
 
   @if (problem()) {
