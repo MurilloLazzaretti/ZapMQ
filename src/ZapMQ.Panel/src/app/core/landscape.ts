@@ -209,11 +209,23 @@ export function assemble(map: ParkMap | null, status: WorkerControlStatus | null
   }
   const queues = new Map<string, MapQueue>((map?.queues ?? []).map((queue) => [queue.name, queue]));
   const partOf = new Map<string, Part>();
-  for (const application of map?.applications ?? []) {
-    const local = application.instances.find((instance) => (!machine || !instance.host || same(instance.host, machine)) && owner.has(instance.pid));
+  const byName = new Map<string, Part>();
+  const localOf = (application: NonNullable<typeof map>['applications'][number]) =>
+    application.instances.find((instance) => (!machine || !instance.host || same(instance.host, machine)) && owner.has(instance.pid));
+  // The ones with a process of their own first: one heard of only in the past is joined to them by its name.
+  const applications = [...(map?.applications ?? [])].sort((a, b) => Number(!localOf(a)) - Number(!localOf(b)));
+  for (const application of applications) {
+    const local = localOf(application);
     let found = local ? owner.get(local.pid)! : null;
     if (found?.kind === 'supervisor') {
       // What the Worker Control says through the broker is its own business, not the environment's.
+      continue;
+    }
+    if (!found && !application.instances.length && byName.get(application.name.toLowerCase())) {
+      // A process that spoke the other protocol for a while (a wrapper of 2.x falls back to 1.x until it
+      // connects again) is the same component, and what it did then counts on it. Its protocol does not:
+      // it is not speaking it now.
+      partOf.set(application.id, byName.get(application.name.toLowerCase())!);
       continue;
     }
     if (!found) {
@@ -225,6 +237,7 @@ export function assemble(map: ParkMap | null, status: WorkerControlStatus | null
       found.protocols = [...found.protocols, application.protocol].sort();
     }
     partOf.set(application.id, found);
+    byName.set(application.name.toLowerCase(), found);
   }
 
   const consumers = new Map<string, Set<string>>();
