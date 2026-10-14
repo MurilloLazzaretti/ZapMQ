@@ -1,8 +1,8 @@
 <div class="page">
   <header class="head">
     <div>
-      <h1>Configuração</h1>
-      <p class="muted">O <code>ConfigWorkers.json</code> do Worker Control. O que for gravado passa a valer na hora.</p>
+      <h1>Micro serviços</h1>
+      <p class="muted">Como cada grupo roda: executável, quantidade de processos, prazos, reforço e reciclagem. O que for gravado passa a valer na hora.</p>
     </div>
     <span class="spacer"></span>
     <zap-worker-tabs />
@@ -17,11 +17,15 @@
     </section>
   }
 
+  <div class="views">
+    <zap-group-views />
+  </div>
+
   @if (config(); as file) {
     <div class="bar">
       <mat-button-toggle-group [value]="mode()" (change)="switchMode($event.value)" hideSingleSelectionIndicator aria-label="Forma de editar">
-        <mat-button-toggle value="form"><mat-icon svgIcon="tune" /> Formulários</mat-button-toggle>
-        <mat-button-toggle value="text"><mat-icon svgIcon="data_object" /> Arquivo</mat-button-toggle>
+        <mat-button-toggle value="form"><mat-icon svgIcon="tune" /> Por grupo</mat-button-toggle>
+        <mat-button-toggle value="text" matTooltip="O ConfigWorkers.json inteiro, como texto"><mat-icon svgIcon="data_object" /> Arquivo inteiro</mat-button-toggle>
       </mat-button-toggle-group>
       <span class="spacer"></span>
       @if (dirty()) {

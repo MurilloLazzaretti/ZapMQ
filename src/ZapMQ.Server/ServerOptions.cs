@@ -51,6 +51,12 @@ public sealed class ServerOptions
     /// </summary>
     public string PanelUsersFile { get; set; } = "users.json";
 
+    /// <summary>
+    /// Where the key this ZapMQ seals what it asks of the Worker Control with is kept. Empty
+    /// keeps it beside the file of the users.
+    /// </summary>
+    public string WorkerControlKeyFile { get; set; } = "";
+
     public TransportOptions Transport { get; set; } = new();
 
     public V2Options V2 { get; set; } = new();

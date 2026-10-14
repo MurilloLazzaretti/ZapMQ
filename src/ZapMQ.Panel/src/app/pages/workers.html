@@ -1,12 +1,15 @@
 <div class="page">
   <header class="head">
     <div>
-      <h1>Processos</h1>
+      <h1>Micro serviços</h1>
       @if (status(); as now) {
         <p class="muted">
           {{ now.Service.Machine }} · versão {{ now.Version }} · no ar há {{ now.Service.StartedAt | since }}
           @if (!now.Service.ZapMQ.Healthy) {
             <span class="pill warn">sem contato estável com o ZapMQ</span>
+          }
+          @if (now.Protected) {
+            <span class="pill ok" matTooltip="O Worker Control só atende pedidos cifrados com a chave que divide com este ZapMQ. Quem apenas alcança o ZapMQ não consegue pedir nada a ele, nem ler o que é pedido."><mat-icon svgIcon="shield_lock" /> administração protegida</span>
           }
         </p>
       }
@@ -17,6 +20,9 @@
       <button mat-icon-button [matMenuTriggerFor]="serviceMenu" aria-label="Ações do serviço"><mat-icon svgIcon="more_vert" /></button>
       <mat-menu #serviceMenu="matMenu" xPosition="before">
         <button mat-menu-item (click)="detach()"><mat-icon svgIcon="power_settings_new" /> Parar o serviço, mantendo os processos</button>
+        @if (auth.master() && status()?.Protected) {
+          <button mat-menu-item (click)="protect(true)"><mat-icon svgIcon="shield_lock" /> Trocar a chave de administração</button>
+        }
       </mat-menu>
     }
   </header>
@@ -29,6 +35,25 @@
       <span>Esta tela tenta de novo sozinha.</span>
     </section>
   }
+
+  @if (status()?.Protected === false) {
+    <div class="unprotected" role="alert">
+      <mat-icon svgIcon="warning" />
+      <div>
+        <strong>A administração do Worker Control está sem proteção.</strong>
+        Qualquer programa que alcance a porta do ZapMQ consegue pedir a ele o que este painel pede: parar processos, trocar arquivos, aplicar scripts, criar serviços.
+        @if (!auth.master()) { Só o usuário master pode protegê-la. }
+      </div>
+      @if (auth.master()) {
+        <button mat-flat-button (click)="protect(false)" [disabled]="busy() === '*'"><mat-icon svgIcon="shield_lock" /> Proteger agora</button>
+      }
+    </div>
+  }
+
+  <div class="views">
+    <zap-group-views />
+    <span class="muted">Os grupos de processos que o Worker Control mantém no ar.</span>
+  </div>
 
   @if (status(); as now) {
     <section class="grid stats">
@@ -104,6 +129,7 @@
               <button mat-icon-button (click)="resize(group, 1)" [disabled]="busy() === group.Name" aria-label="Um processo a mais"><mat-icon svgIcon="add" /></button>
             </div>
             <span class="spacer"></span>
+            <a mat-icon-button [routerLink]="['/workers/configuracao']" [queryParams]="{ grupo: group.Name }" matTooltip="Configurar o grupo" [attr.aria-label]="'Configurar ' + group.Name"><mat-icon svgIcon="tune" /></a>
             <a mat-button [routerLink]="['/workers/trace-grupo', group.Name]" [class.hidden]="!group.Workers.length" matTooltip="O trace de todos os processos do grupo, juntos">
               <mat-icon svgIcon="terminal" /> Trace
             </a>

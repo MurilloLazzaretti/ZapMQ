@@ -716,13 +716,26 @@ public static class PanelEndpoints
         api.MapGet("/map", (int? minutes, Broker broker, V2Connections connections) =>
             Results.Json(ParkMap.Build(broker, connections, TimeSpan.FromMinutes(Math.Clamp(minutes ?? 60, 1, (int)Broker.ActivityMemory.TotalMinutes)))));
 
-        // ── Who is connected ────────────────────────────────────────────────
+        // ── Who may ask the Worker Control ──────────────────────────────────
 
-        api.MapGet("/connections", (Broker broker, V2Connections connections) => Results.Json(new
+        // Whether this ZapMQ seals what it asks; whether the Worker Control demands it comes in its status.
+        api.MapGet("/workers/protection", (WorkerControlClient worker) => Results.Json(new { hasKey = worker.HasKey }));
+
+        // Makes a key and hands it to the Worker Control, which from then on only takes what is sealed with it.
+        api.MapPost("/workers/protection", async (WorkerControlClient worker, PanelUserStore users, HttpContext context, ILoggerFactory loggers) =>
         {
-            v2 = connections.All().OrderBy(connection => connection.ClientName, StringComparer.OrdinalIgnoreCase).ThenBy(connection => connection.Id, StringComparer.Ordinal).Select(Describe),
-            v1 = V1Clients(broker)
-        }));
+            var login = (string)context.Items[PanelHost.UserItem]!;
+            if (users.Find(login) is not { Master: true })
+                return Results.Json(new { error = "Só o usuário master protege a fila de administração" }, statusCode: StatusCodes.Status403Forbidden);
+            var answer = await worker.ProtectAsync(login, context.RequestAborted);
+            if (!answer.Reached)
+                return Results.Json(new { error = answer.Problem, code = "unreachable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+            if (!answer.Ok)
+                return Results.Json(new { error = answer.ErrorCode == "unknown-command" ? "O Worker Control instalado é anterior a este recurso (existe a partir da versão 2.18)." : answer.ErrorMessage, code = answer.ErrorCode },
+                    statusCode: answer.ErrorCode == "unknown-command" ? StatusCodes.Status501NotImplemented : StatusCodes.Status409Conflict);
+            loggers.CreateLogger("ZapMQ.Panel").LogInformation("The administration queue of the Worker Control is now protected with a new key (by {User})", login);
+            return Results.Json(new { hasKey = true });
+        });
     }
 
     public sealed record LoginRequest(string? User, string? Password);

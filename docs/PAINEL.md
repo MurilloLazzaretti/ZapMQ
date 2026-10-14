@@ -74,6 +74,32 @@ Rotas: `POST api/password` (a própria senha); `GET` e `POST api/users`, `PUT ap
 
 Autenticação do protocolo de mensageria continua fora do escopo.
 
+### 3.1 A administração do Worker Control
+
+O painel pede ao Worker Control, pela fila `WorkerControlAdmin`, tudo o que muda a máquina: parar
+processos, trocar arquivos, aplicar scripts, criar serviços. Sem proteção, qualquer programa que
+alcance a porta do ZapMQ poderia pedir o mesmo.
+
+- **Proteger.** Em Processos e serviços → Micro serviços, o usuário master usa **Proteger agora**.
+  O ZapMQ gera uma chave (256 bits), entrega-a ao Worker Control e os dois a guardam: o ZapMQ em
+  `workercontrol.key`, ao lado do arquivo de usuários (`ZapMQ:WorkerControlKeyFile` diz outro
+  lugar); o Worker Control em `admin.key`, na pasta de dados dele, cifrada para a máquina.
+- **A partir daí** cada pedido vai cifrado e autenticado (AES-256-GCM) com a hora e uma
+  identidade: quem apenas alcança o broker não consegue pedir, nem ler o que é pedido, nem
+  reenviar um pedido que viu passar. A resposta volta cifrada e amarrada à pergunta. Pedido que
+  não venha assim é recusado pelo Worker Control.
+- **Trocar a chave**: no menu da mesma tela; a nova vai cifrada com a atual.
+- **Desfazer ou recuperar**: apagar `admin.key` na pasta de dados do Worker Control e reiniciá-lo.
+  Ele volta a aceitar pedidos sem chave até ser protegido de novo.
+- **O que fica de fora**: os dois comandos do protocolo 1.x (`CurrentWorkers` e `ReloadConfig`)
+  continuam atendidos sem chave, para o Management Studio antigo. A entrega da primeira chave
+  passa pelo broker sem cifra; quem estivesse lendo a fila naquele instante a veria.
+- Os relógios das duas máquinas precisam estar a menos de 10 minutos um do outro.
+
+**Enquanto se espera.** Um pedido que demora mais de meio segundo acende uma linha fina sob a
+barra do topo e o texto "aguardando o Worker Control…" ou "aguardando o ZapMQ…", conforme quem
+está para responder.
+
 ## 4. Telas
 
 ### 4.1 Visão geral
@@ -139,13 +165,18 @@ Reenviar pede confirmação e lembra a regra do ambiente: a mensagem pode já te
 
 ### 4.5 Aplicações conectadas
 
-As conexões v2: aplicação, processo, máquina, versão do wrapper, desde quando, filas vinculadas, se está processando algo. Os clientes v1 ativos, por endereço.
+Não há tela própria: quem está conectado aparece no **Mapa** (4.2) e, por fila, em quem a consome e quem publica nela.
 
 ### 4.6 Exchanges
 
 Declarar um exchange e as filas que recebem cópia do que é publicado nele. Entra junto com o recurso no servidor (seção 5.4).
 
 ### 4.7 Worker Control
+
+A área **Processos e serviços** tem cinco abas: **Micro serviços**, **Serviços do Windows**,
+**Aplicações**, **Proxy reverso** e **Histórico**. Em Micro serviços ficam juntos os dois lados dos
+grupos: **Acompanhar** (o que está rodando) e **Configurar** (como cada grupo roda); o cartão de
+cada grupo leva direto à configuração dele.
 
 - **Grupos e workers ao vivo:** estado, quantidade desejada e por quê (base, boost, escala pela fila), reciclagem em andamento, grupo instável.
 - **Por worker:** tempo no ar, processador, memória e tempo de resposta do keep-alive, com gráfico das últimas horas.

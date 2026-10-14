@@ -84,6 +84,11 @@ public static class ServerHost
         {
             Path = Path.GetFullPath(options.QueueDefinitionsFile, AppContext.BaseDirectory)
         });
+        builder.Services.AddSingleton(services => new AdminKeyStore(
+            options.WorkerControlKeyFile is { Length: > 0 } keyFile
+                ? Path.GetFullPath(keyFile, AppContext.BaseDirectory)
+                : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(options.PanelUsersFile, AppContext.BaseDirectory))!, "workercontrol.key"),
+            services.GetRequiredService<ILogger<AdminKeyStore>>()));
         builder.Services.AddSingleton<WorkerControlClient>();
         builder.Services.AddSingleton<TraceHub>();
         builder.Services.AddSingleton<MessageTap>();

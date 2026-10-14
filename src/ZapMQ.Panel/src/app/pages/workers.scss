@@ -88,3 +88,31 @@
 }
 
 .hidden { visibility: hidden; }
+
+.views {
+  display: flex;
+  align-items: center;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.unprotected {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--zap-warn-container);
+  color: var(--zap-warn);
+
+  > mat-icon { flex: none; }
+  div { flex: 1; min-width: 0; }
+  strong { display: block; }
+  button { flex: none; }
+}
+
+@media (max-width: 760px) {
+  .unprotected { flex-wrap: wrap; }
+}

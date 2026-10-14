@@ -4,6 +4,7 @@ import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
 import { routes } from './app.routes';
 import { sessionInterceptor } from './core/auth';
+import { waitingInterceptor } from './core/waiting';
 import { provideIcons } from './core/icons';
 import { provideCharts } from './shared/chart';
 
@@ -11,7 +12,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding(), withInMemoryScrolling({ scrollPositionRestoration: 'top' })),
-    provideHttpClient(withFetch(), withInterceptors([sessionInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([sessionInterceptor, waitingInterceptor])),
     provideIcons(),
     provideCharts(),
     { provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { appearance: 'outline', subscriptSizing: 'dynamic' } },

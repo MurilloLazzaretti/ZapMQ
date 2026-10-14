@@ -145,11 +145,6 @@ public class MapTests(ServerFixture server) : IClassFixture<ServerFixture>
         // A queue somebody defined is drawn even with nothing going through it.
         Assert.False((bool)map["queues"]!.Single(item => (string)item["name"]! == definition)["exists"]!);
 
-        var clients = JObject.Parse(await server.Admin.GetStringAsync("api/connections"))["v1"]!;
-        var known = clients.Single(item => (string?)item["application"] == "Legacy.Service");
-        Assert.Equal(4321, (int)known["pid"]!);
-        Assert.Contains(queue, known["publishes"]!.Select(item => (string)item!));
-
         var detail = JObject.Parse(await server.Admin.GetStringAsync($"api/queues/{queue}"));
         Assert.Equal(("v1", "Legacy.Service", "4321"), ((string)detail["publishers"]![0]!["protocol"]!, (string)detail["publishers"]![0]!["application"]!, (string)detail["publishers"]![0]!["pid"]!));
     }

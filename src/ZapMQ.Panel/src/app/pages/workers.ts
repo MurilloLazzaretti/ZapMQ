@@ -10,11 +10,13 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
 import { Observable, firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
+import { Auth } from '../core/auth';
 import { NumPipe, SincePipe } from '../core/format';
 import { Worker, WorkerControlStatus, WorkerGroup } from '../core/models';
 import { confirm } from '../shared/dialogs';
 import { Stat } from '../shared/stat';
 import { WorkerHealthDialog } from '../shared/worker-health';
+import { GroupViews } from '../shared/group-views';
 import { WorkerTabs } from '../shared/worker-tabs';
 
 const STATES: Record<string, { label: string; tone: string }> = {
@@ -27,7 +29,7 @@ const STATES: Record<string, { label: string; tone: string }> = {
 /** The groups the Worker Control keeps running, and their processes, as they are right now. */
 @Component({
   selector: 'zap-workers',
-  imports: [RouterLink, MatButtonModule, MatIconModule, MatMenuModule, MatSlideToggleModule, MatTooltipModule, Stat, WorkerTabs, NumPipe, SincePipe],
+  imports: [RouterLink, MatButtonModule, MatIconModule, MatMenuModule, MatSlideToggleModule, MatTooltipModule, Stat, WorkerTabs, GroupViews, NumPipe, SincePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './workers.html',
   styleUrl: './workers.scss',
@@ -36,6 +38,7 @@ export class WorkersPage implements OnInit, OnDestroy {
   private readonly api = inject(Api);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
+  protected readonly auth = inject(Auth);
   private timer: ReturnType<typeof setInterval> | null = null;
 
   protected readonly status = signal<WorkerControlStatus | null>(null);
@@ -135,6 +138,21 @@ export class WorkersPage implements OnInit, OnDestroy {
 
   protected health(group: WorkerGroup, worker: Worker): void {
     this.dialog.open(WorkerHealthDialog, { data: { group: group.Name, pid: worker.ProcessId }, maxWidth: '760px', width: 'calc(100vw - 32px)' });
+  }
+
+  /** Hands the Worker Control a key: from then on it only takes what this ZapMQ seals with it. */
+  protected async protect(again: boolean): Promise<void> {
+    const sure = await confirm(this.dialog, {
+      title: again ? 'Trocar a chave de administração?' : 'Proteger a administração do Worker Control?',
+      message: again
+        ? 'Uma chave nova é gerada e entregue ao Worker Control, cifrada com a atual. A anterior deixa de valer.'
+        : 'O ZapMQ gera uma chave e a entrega ao Worker Control. A partir daí ele só atende pedidos cifrados com ela: quem apenas alcança a porta do ZapMQ não consegue mais pedir nada a ele, nem ler o que o painel pede.',
+      warning: again ? undefined : 'A chave fica guardada nos dois serviços. Para desfazer, apague o arquivo admin.key na pasta de dados do Worker Control e reinicie-o.',
+      action: again ? 'Trocar a chave' : 'Proteger',
+    });
+    if (sure) {
+      await this.run(this.api.protectWorkerControl(), again ? 'Chave de administração trocada' : 'A administração do Worker Control está protegida', '*');
+    }
   }
 
   /** For changing the Worker Control itself: it leaves, and what it was running stays. */

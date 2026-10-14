@@ -6,7 +6,7 @@ import {
   PanelUser,
   AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
-  Connection, DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, V1Client,
+  DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
   HealthSample, InstalledService, ParkMap, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
 
@@ -141,14 +141,16 @@ export class Api {
     return this.http.delete<{ discarded: number }>(`api/dead-letters/${encodeURIComponent(queue)}`);
   }
 
-  connections(): Observable<{ v2: Connection[]; v1: V1Client[] }> {
-    return this.http.get<{ v2: Connection[]; v1: V1Client[] }>('api/connections');
-  }
   map(minutes: number): Observable<ParkMap> {
     return this.http.get<ParkMap>('api/map', { params: { minutes } });
   }
 
   // ── Worker Control ───────────────────────────────────────────────────────
+
+  /** Makes an administration key and hands it to the Worker Control; only the master may. */
+  protectWorkerControl(): Observable<{ hasKey: boolean }> {
+    return this.http.post<{ hasKey: boolean }>('api/workers/protection', null);
+  }
 
   workerStatus(): Observable<WorkerControlStatus> {
     return this.http.get<WorkerControlStatus>('api/workers/status');

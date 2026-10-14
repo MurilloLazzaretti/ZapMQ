@@ -42,6 +42,7 @@
 
   <mat-sidenav-content class="content">
     <header class="bar">
+      <span class="progress" [class.on]="waiting.who()" aria-hidden="true"></span>
       <button mat-icon-button (click)="toggleNavigation()" aria-label="Navegação">
         <mat-icon svgIcon="menu" />
       </button>
@@ -51,6 +52,10 @@
       }
 
       <span class="spacer"></span>
+
+      <span class="waiting" [class.on]="waiting.who()" role="status" aria-live="polite">
+        @if (waiting.who()) { <span class="spin" aria-hidden="true"></span><span class="text">aguardando o {{ waiting.who() }}…</span> }
+      </span>
 
       <span class="live" [class.on]="live.connected()" [matTooltip]="live.connected() ? 'Recebendo atualizações do serviço' : 'Sem contato com o serviço; tentando de novo'">
         <span class="dot" [class.ok]="live.connected()" [class.danger]="!live.connected()"></span>

@@ -163,10 +163,6 @@ public class PanelTests(ServerFixture server) : IClassFixture<ServerFixture>
         Assert.Equal(3, (int)messages[1]!["body"]!["n"]!);
         // Looking does not consume.
         Assert.Equal(2, (int)(await Get($"api/queues/{queue}"))["snapshot"]!["pending"]!);
-
-        var connections = await Get("api/connections");
-        Assert.Contains(connections["v2"]!, item => (string?)item["application"] == "billing-service" && item["queues"]!.Any(bound => (string?)bound == queue) && (bool)item["busy"]!);
-        Assert.Contains(connections["v1"]!, item => item["publishes"]!.Any(name => (string?)name == queue));
     }
 
     [Fact]

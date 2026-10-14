@@ -123,6 +123,60 @@ nav {
   .spacer { flex: 1; }
 }
 
+.progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.2s;
+
+  &.on { opacity: 1; }
+  &.on::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: 35%;
+    background: var(--mat-sys-primary);
+    animation: slide 1.2s ease-in-out infinite;
+  }
+}
+
+.waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-medium);
+  white-space: nowrap;
+
+  .spin {
+    width: 12px;
+    height: 12px;
+    border: 2px solid color-mix(in srgb, var(--mat-sys-primary) 25%, transparent);
+    border-top-color: var(--mat-sys-primary);
+    border-radius: 50%;
+    animation: turn 0.8s linear infinite;
+  }
+}
+
+@keyframes slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(290%); }
+}
+
+@keyframes turn {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress.on::before { animation: none; width: 100%; opacity: 0.6; }
+  .waiting .spin { animation: none; }
+}
+
 .live {
   display: inline-flex;
   align-items: center;
@@ -164,7 +218,7 @@ nav {
 main { flex: 1; min-width: 0; }
 
 @media (max-width: 599.98px) {
-  .live .text, .user .text { display: none; }
+  .live .text, .user .text, .waiting .text { display: none; }
   .live { padding: 8px; }
   .user { min-width: 0; padding: 0 8px; }
 }

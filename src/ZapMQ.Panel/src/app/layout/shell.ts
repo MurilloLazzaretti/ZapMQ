@@ -13,6 +13,7 @@ import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router
 import { map } from 'rxjs';
 import { Auth } from '../core/auth';
 import { Live } from '../core/live';
+import { Waiting } from '../core/waiting';
 import { Theme } from '../core/theme';
 import { PasswordDialog } from '../shared/user-dialogs';
 import { Transport } from '../core/transport';
@@ -44,6 +45,7 @@ export class Shell implements OnInit, OnDestroy {
   private readonly snack = inject(MatSnackBar);
   protected readonly auth = inject(Auth);
   protected readonly live = inject(Live);
+  protected readonly waiting = inject(Waiting);
   protected readonly theme = inject(Theme);
   private readonly transport = inject(Transport);
 

@@ -9,10 +9,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { BoostWindow, GroupConfig, WorkerConfig } from '../core/models';
 import { confirm } from '../shared/dialogs';
+import { GroupViews } from '../shared/group-views';
 import { WorkerTabs } from '../shared/worker-tabs';
 
 const DAYS = [
@@ -29,7 +32,7 @@ const short = (day: string) => day.slice(0, 3).toLowerCase();
  */
 @Component({
   selector: 'zap-worker-config',
-  imports: [FormsModule, MatButtonModule, MatButtonToggleModule, MatFormFieldModule, MatInputModule, MatIconModule, MatSlideToggleModule, WorkerTabs],
+  imports: [FormsModule, MatButtonModule, MatButtonToggleModule, MatFormFieldModule, MatInputModule, MatIconModule, MatSlideToggleModule, MatTooltipModule, WorkerTabs, GroupViews],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './worker-config.html',
   styleUrl: './worker-config.scss',
@@ -38,6 +41,8 @@ export class WorkerConfigPage implements OnInit {
   private readonly api = inject(Api);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
+  /** The group somebody came here to set up. */
+  private wanted = inject(ActivatedRoute).snapshot.queryParamMap.get('grupo');
 
   protected readonly days = DAYS;
   protected readonly mode = signal<'form' | 'text'>('form');
@@ -65,6 +70,11 @@ export class WorkerConfigPage implements OnInit {
         this.text = this.original;
         this.config.set(structuredClone(answer.Config));
         this.selected.update((index) => Math.min(index, answer.Config.WorkerGroups.length - 1));
+        const asked = this.wanted === null ? -1 : answer.Config.WorkerGroups.findIndex((group) => group.Name === this.wanted);
+        if (asked >= 0) {
+          this.selected.set(asked);
+        }
+        this.wanted = null;
         this.dirty.set(false);
         this.problem.set('');
         this.refusal.set('');

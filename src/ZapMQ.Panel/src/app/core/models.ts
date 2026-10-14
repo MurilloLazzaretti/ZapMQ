@@ -155,16 +155,6 @@ export interface Connection {
   queues: string[];
 }
 
-export interface V1Client {
-  address: string;
-  /** The name of the process, when the client is on the machine of the broker. */
-  application: string | null;
-  pid: number | null;
-  lastSeen: string;
-  consumes: string[];
-  publishes: string[];
-}
-
 export interface QueueDetail {
   name: string;
   exists: boolean;
@@ -252,6 +242,8 @@ export interface WorkerControlStatus {
   Groups: WorkerGroup[];
   /** Windows services that are watched. Absent when the Worker Control is older than that. */
   Services?: MonitoredService[];
+  /** It only takes what is sealed with its administration key. Absent when the Worker Control is older than that. */
+  Protected?: boolean;
 }
 
 // ── Traffic ────────────────────────────────────────────────────────────────
