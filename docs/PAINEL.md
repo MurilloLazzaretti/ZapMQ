@@ -129,6 +129,8 @@ e o **Banco de dados**.
   o que importa dele (quantos processos, as portas, o estado do serviço) e, quando usa filas,
   quais consome (↓) e em quantas publica (↑). As filas não são desenhadas: estão dentro de quem as
   usa, na dica ao apontar e no painel ao clicar.
+- **O protocolo** com que cada componente fala com o ZapMQ aparece como uma etiqueta: `v2`, ou
+  `v1` (em destaque) para quem ainda usa o wrapper 1.x.
 - **O banco** aparece em cada componente como um selo: verde e pulsando quando o componente usou
   o banco no último minuto, cinza quando tem conexão aberta e parada, ausente quando não tem
   conexão. Vem de quem está conectado na instância, processo a processo (`sys.dm_exec_sessions`:

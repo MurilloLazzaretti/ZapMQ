@@ -127,6 +127,9 @@
                 </span>
                 <span class="signs">
                   <span class="dot" [class]="'dot ' + part.tone"></span>
+                  @for (protocol of part.protocols; track protocol) {
+                    <span class="protocol" [class.old]="protocol === 'v1'">{{ protocol }}</span>
+                  }
                   @if (part.database; as link) {
                     <mat-icon class="db" [class.active]="link.active" svgIcon="database" />
                   }
@@ -176,6 +179,14 @@
             <div><dt>Com erro (5xx)</dt><dd [class.bad]="part.http!.errors">{{ part.http!.errors | num }}</dd></div>
             @if (part.http!.p95) { <div><dt>95% em até</dt><dd>{{ part.http!.p95 | num }} ms</dd></div> }
           </dl>
+        }
+
+        @if (part.protocols.length) {
+          <h3>Mensageria</h3>
+          <p class="note">
+            @for (protocol of part.protocols; track protocol) { <span class="protocol" [class.old]="protocol === 'v1'">{{ protocol }}</span> }
+            <span class="muted">{{ protocolWords(part) }}</span>
+          </p>
         }
 
         @if (part.consumes.length) {
@@ -257,6 +268,8 @@
           <li><mat-icon class="db active" svgIcon="database" /> usando o banco agora</li>
           <li><mat-icon class="db" svgIcon="database" /> conectado ao banco, parado</li>
           <li><span class="arrows">↓ ↑</span> filas que consome e em que publica</li>
+          <li><span class="protocol">v2</span> fala com o ZapMQ pelo protocolo 2.x</li>
+          <li><span class="protocol old">v1</span> fala pelo protocolo 1.x</li>
         </ul>
       }
     </aside>

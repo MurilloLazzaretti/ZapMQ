@@ -225,7 +225,17 @@
   strong { font: var(--mat-sys-label-large); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   small { color: var(--mat-sys-on-surface-variant); font: var(--mat-sys-body-small); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   small.queues { font-family: var(--zap-mono); font-size: 11px; opacity: 0.9; }
-  .signs { display: grid; justify-items: center; gap: 8px; }
+  .signs { display: grid; justify-items: center; gap: 4px; }
+}
+
+.protocol {
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+  font: 600 10px/15px var(--zap-mono);
+
+  &.old { background: var(--zap-warn-container); color: var(--zap-warn); }
 }
 
 .db {
@@ -284,6 +294,8 @@
   &.danger { background: var(--zap-danger-container); color: var(--zap-danger); }
   mat-icon { width: 18px; height: 18px; flex: none; }
 }
+
+.side .note .protocol { margin-right: 6px; }
 
 .side .queues li, .side .facts li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 3px 0; min-width: 0; }
 .side .queues a { overflow-wrap: anywhere; }

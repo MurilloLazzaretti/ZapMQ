@@ -53,6 +53,8 @@ export interface Part {
   /** What is wrong, in words; empty when nothing is. */
   reasons: string[];
   processIds: number[];
+  /** How it talks to the broker: the protocol of 1.x, of 2.x, or both when it has programs of each. Empty when it does not. */
+  protocols: ('v1' | 'v2')[];
   consumes: PartQueue[];
   publishes: PartQueue[];
   database: PartDatabase | null;
@@ -111,7 +113,7 @@ export function assemble(map: ParkMap | null, status: WorkerControlStatus | null
   const wires: Wire[] = [];
   const machine = land?.Machine ?? status?.Service.Machine ?? null;
   const part = (kind: PartKind, id: string, label: string, detail: string, tone: Tone, more: Partial<Part> = {}): Part => {
-    const made: Part = { id, kind, label, detail, tone, reasons: [], processIds: [], consumes: [], publishes: [], database: null, http: null, facts: [], link: null, x: 0, y: 0, ...more };
+    const made: Part = { id, kind, label, detail, tone, reasons: [], processIds: [], protocols: [], consumes: [], publishes: [], database: null, http: null, facts: [], link: null, x: 0, y: 0, ...more };
     parts.push(made);
     return made;
   };
@@ -215,9 +217,12 @@ export function assemble(map: ParkMap | null, status: WorkerControlStatus | null
       continue;
     }
     if (!found) {
-      found = part('client', `client:${application.id}`, application.name, `${plural(application.instances.length, 'instância', 'instâncias')}${application.protocol === 'v1' ? ' · protocolo 1.x' : ''}`, application.instances.length ? 'ok' : 'off', {
+      found = part('client', `client:${application.id}`, application.name, plural(application.instances.length, 'instância', 'instâncias'), application.instances.length ? 'ok' : 'off', {
         facts: application.instances.map((instance) => ({ label: instance.host || 'máquina', value: `processo ${instance.pid}` })),
       });
+    }
+    if (!found.protocols.includes(application.protocol)) {
+      found.protocols = [...found.protocols, application.protocol].sort();
     }
     partOf.set(application.id, found);
   }
@@ -348,6 +353,10 @@ export function assemble(map: ParkMap | null, status: WorkerControlStatus | null
 const RATE = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
 export function rate(perMinute: number): string {
+  // A handful in the whole period is not nothing.
+  if (perMinute > 0 && perMinute < 0.1) {
+    return 'menos de 0,1/min';
+  }
   return `${RATE.format(perMinute >= 100 ? Math.round(perMinute) : perMinute)}/min`;
 }
 

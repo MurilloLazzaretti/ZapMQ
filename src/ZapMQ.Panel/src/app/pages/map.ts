@@ -201,12 +201,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   protected hint(part: Part): string {
     return [
       `${KINDS[part.kind]} · ${part.detail}`,
+      part.protocols.length ? `ZapMQ: ${this.protocolWords(part)}` : '',
       ...part.reasons,
       part.consumes.length ? `Consome: ${part.consumes.map((queue) => queue.name).join(', ')}` : '',
       part.publishes.length ? `Publica em: ${part.publishes.map((queue) => queue.name).join(', ')}` : '',
       part.database ? `Banco: ${part.database.sessions} conexões${part.database.active ? ', em uso' : ', sem uso agora'}` : '',
       part.http?.count ? `HTTP: ${rate(part.http.perMinute)}${part.http.errors ? `, ${part.http.errors} com erro` : ''}` : '',
     ].filter(Boolean).join('\n');
+  }
+
+  /** How a part talks to the broker, in words. */
+  protected protocolWords(part: Part): string {
+    return part.protocols.length > 1 ? 'tem programas no protocolo 1.x e no 2.x' : part.protocols[0] === 'v1' ? 'protocolo 1.x (wrapper antigo)' : 'protocolo 2.x';
   }
 
   protected idle(seconds: number | null): string {
