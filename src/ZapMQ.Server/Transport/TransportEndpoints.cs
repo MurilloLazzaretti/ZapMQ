@@ -47,7 +47,7 @@ public static class TransportEndpoints
 
     public sealed record CloseRequest(string? Name, string? Description, List<string>? Items, bool KeepOrder);
 
-    public sealed record ApproveRequest(DateTimeOffset? At, bool Force = false);
+    public sealed record ApproveRequest(DateTimeOffset? At, bool Force = false, Dictionary<int, InstallChoice>? Installs = null);
 
     public sealed record RevertRequest(bool Force = false);
 
@@ -91,12 +91,12 @@ public static class TransportEndpoints
         items = record.Manifest.Items.Select(item => new
         {
             item.Number, item.Kind, item.Action, item.ObjectKind, item.Variety, item.Schema, item.Name, item.Title, item.Database, item.Fingerprint, item.Base, item.Size,
-            item.Version, files = item.Files.Count, uses = item.Uses.Count
+            item.Version, files = item.Files.Count, uses = item.Uses.Count, install = item.Install, chosen = record.Installs.GetValueOrDefault(item.Number)
         }),
         history = record.History,
         // What was there before is given with the item, when it is asked for.
         results = record.Results.Select(result => new { result.Number, result.Status, result.Did, result.Problem, result.Batch, result.Line, result.Messages, result.At, result.Backup, hasPrevious = result.Previous is not null,
-            result.Reverted, result.RevertProblem, result.RevertedAt, result.RevertMessages, result.RevertBackup })
+            result.Reverted, result.RevertProblem, result.RevertedAt, result.RevertMessages, result.RevertBackup, result.Installed })
     };
 
     public static void MapTransport(this IEndpointRouteBuilder routes)
@@ -288,7 +288,7 @@ public static class TransportEndpoints
 
         api.MapPost("/packages/{id}/approve", (string id, ApproveRequest request, TransportService transport, TransportStore store, HttpContext context, ILoggerFactory loggers) => Guarded(async () =>
         {
-            var record = await transport.Approve(id, request.At, request.Force, User(context), context.RequestAborted);
+            var record = await transport.Approve(id, request.At, request.Force, User(context), context.RequestAborted, request.Installs);
             loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: package {Name} ({Id}) approved to be applied at {At} (by {User})", record.Manifest.Name, id, record.ApplyAt, User(context));
             return Results.Json(Detail(record, store));
         }));

@@ -32,7 +32,7 @@ public sealed record FileChange(string Path, string State, long Size);
 /// and changes the machine: taking the script of an object when a package is closed, comparing
 /// a package that arrived with what is here, and applying what was approved.
 /// </summary>
-public sealed class TransportService(TransportStore store, WorkerControlClient worker, TimeProvider time, ILogger<TransportService> logger)
+public sealed partial class TransportService(TransportStore store, WorkerControlClient worker, TimeProvider time, ILogger<TransportService> logger)
 {
     /// <summary>
     /// For how long an answer to "apply this" is waited for. A script may take minutes.
@@ -431,6 +431,8 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
                 item.Fingerprint = area_.Fingerprint;
                 item.Version = area_.Version;
                 item.Files = area_.Files;
+                // For an environment that does not have it yet: what it is here, without the secrets.
+                item.Install = await DescribeForInstall(item, by, cancellation);
                 items.Add((area_, item, await File.ReadAllBytesAsync(store.AreaFile(area_.Id), cancellation)));
                 continue;
             }
@@ -568,7 +570,8 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
                 try
                 {
                     if (await AgainstTarget(item, by, cancellation) is not { } found)
-                        checks.Add(new ItemCheck(item.Number, "missing", null, [], null));
+                        // What is not here can be installed when the package says what it is.
+                        checks.Add(new ItemCheck(item.Number, item.Install is not null && Installable.Contains(item.Kind) ? "install" : "missing", null, [], null));
                     else if (found.Target["Problem"]?.GetValue<string>() is { } problem)
                         checks.Add(new ItemCheck(item.Number, "unknown", found.Target["Version"]?.GetValue<string>(), [], problem));
                     else
@@ -656,21 +659,23 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// Approves a package to be applied now or at a given time. One that brings a table or a
     /// type this environment already has is not approved: applying it is sure to fail there.
     /// </summary>
-    public async Task<PackageRecord> Approve(string id, DateTimeOffset? at, bool force, string by, CancellationToken cancellation)
+    public async Task<PackageRecord> Approve(string id, DateTimeOffset? at, bool force, string by, CancellationToken cancellation, IReadOnlyDictionary<int, InstallChoice>? installs = null)
     {
         var waiting = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
         var checks = Waits(waiting) ? await Check(waiting, by, cancellation) : [];
         if (checks.FirstOrDefault(check => check.State == "missing") is { } absent)
         {
             var item = waiting.Manifest.Items.First(candidate => candidate.Number == absent.Number);
-            throw new TransportRefused($"O item {item.Number} ({item.Kind} {item.Name}) não existe neste ambiente. Instalar o que ainda não existe não é feito pelo transporte, por ora: instale-o aqui e aprove depois.", StatusCodes.Status409Conflict);
+            throw new TransportRefused($"O item {item.Number} ({item.Kind} {item.Name}) não existe neste ambiente, e o pacote não diz como instalá-lo (veio de uma versão anterior, ou o tipo não é instalado pelo transporte). Instale-o aqui e aprove depois.", StatusCodes.Status409Conflict);
         }
         if (checks.FirstOrDefault(check => check.State == "blocked") is { } blocked)
         {
             var item = waiting.Manifest.Items.First(candidate => candidate.Number == blocked.Number);
             throw new TransportRefused($"O item {item.Number} ({item.Schema}.{item.Name}) é uma tabela ou um type que já existe neste ambiente e não pode ser recriado. A mudança precisa vir como um script de alteração, em outro pacote.", StatusCodes.Status409Conflict);
         }
-        return Approve(id, at, force, by);
+        var chosen = CheckInstalls(waiting, checks, installs);
+        var approved = Approve(id, at, force, by);
+        return chosen.Count == 0 ? approved : Change(id, record => record.Installs = chosen);
     }
 
     /// <summary>
@@ -800,7 +805,9 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
 
             if (item.Kind != "database")
             {
-                if (string.IsNullOrEmpty(result.Backup))
+                if (result.Installed)
+                    steps.Add(new RevertStep(item.Number, "cannot", null, "Foi instalado por este pacote. Para tirá-lo, exclua a aplicação em Processos e serviços → Aplicações"));
+                else if (string.IsNullOrEmpty(result.Backup))
                     steps.Add(new RevertStep(item.Number, "cannot", null, "A cópia de como estava antes não foi guardada"));
                 else if (await AgainstTarget(item, by, cancellation) is not { } against)
                     steps.Add(new RevertStep(item.Number, "cannot", null, "Não existe mais neste ambiente"));
@@ -1072,7 +1079,10 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
             {
                 if (item.Kind != "database")
                 {
-                    await Replace(id, item, result, record.Force, by, cancellation);
+                    if (record.Installs.GetValueOrDefault(item.Number) is { } install && await AgainstTarget(item, by, cancellation) is null)
+                        await Install(id, item, install, result, by, cancellation);
+                    else
+                        await Replace(id, item, result, record.Force, by, cancellation);
                     result.At = time.GetUtcNow();
                     store.Update(id, applying => applying.Results.Add(result));
                     if (result.Status != "applied")

@@ -35,6 +35,15 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         public string? TargetProblem { get; set; }
 
         /// <summary>
+        /// What the machine says about itself to install a target elsewhere: sites with their ports, the files of
+        /// configuration of each target (as "kind:name") and of the proxy.
+        /// </summary>
+        public JObject Defaults { get; } = new() { ["Ok"] = true, ["Allowed"] = true, ["SiteName"] = "{name} {n}" };
+        public Dictionary<string, Dictionary<string, string>> Settings { get; } = [];
+        public Dictionary<string, JArray> Sites { get; } = [];
+        public Dictionary<string, string> ProxyFiles { get; } = [];
+
+        /// <summary>
         /// What was left in the inbox of the machine for a target, as "kind:name".
         /// </summary>
         public Dictionary<string, Dictionary<string, string>> Incoming { get; } = [];
@@ -92,7 +101,7 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                     return Targets.TryGetValue($"{request["Kind"]}:{request["Name"]}", out var files)
                         ? new JObject
                         {
-                            ["Ok"] = true, ["Target"] = new JObject { ["Kind"] = request["Kind"], ["Name"] = request["Name"], ["Version"] = "1.0", ["Problem"] = TargetProblem },
+                            ["Ok"] = true, ["Target"] = new JObject { ["Kind"] = request["Kind"], ["Name"] = request["Name"], ["Version"] = "1.0", ["Problem"] = TargetProblem, ["Paths"] = new JArray("D:\\Apps\\" + request["Name"]), ["Sites"] = Sites.GetValueOrDefault((string)request["Name"]!) ?? [] },
                             ["Files"] = new JArray(files.Select(file => new JObject { ["Path"] = file.Key, ["Size"] = file.Value.Length, ["Sha256"] = Sha(file.Value) }))
                         }
                         : new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "not-found", ["Message"] = "no such target" } };
@@ -112,7 +121,15 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                         Targets[$"{request["Kind"]}:{request["Name"]}"] = Deployed;
                     return OnApply?.Invoke(request) ?? new JObject { ["Ok"] = true, ["Applied"] = true, ["Did"] = "replaced", ["Backup"] = "/backup/there", ["Messages"] = new JArray("stopped", "replaced", "started") };
                 case "ApplicationDefaults":
-                    return new JObject { ["Ok"] = true, ["Allowed"] = true, ["SiteName"] = "{name} {n}" };
+                    return Defaults;
+                case "TransportFiles":
+                    return new JObject { ["Ok"] = true, ["Files"] = new JArray((Settings.GetValueOrDefault($"{request["Kind"]}:{request["Name"]}") ?? []).Keys.Select(path => new JObject { ["Instance"] = 0, ["Path"] = path })) };
+                case "TransportFile":
+                    return new JObject { ["Ok"] = true, ["Content"] = Settings[$"{request["Kind"]}:{request["Name"]}"][(string)request["Path"]!] };
+                case "Proxy":
+                    return new JObject { ["Ok"] = true, ["Configured"] = ProxyFiles.Count > 0, ["Files"] = new JArray(ProxyFiles.Keys.Select(path => new JObject { ["Path"] = path })) };
+                case "ProxyFile":
+                    return new JObject { ["Ok"] = true, ["Content"] = ProxyFiles[(string)request["Path"]!] };
                 case "ApplicationCreate":
                     lock (Applied)
                         Applied.Add(request);
@@ -732,7 +749,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using (await Serve(bare))
         {
             var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
-            Assert.Equal(["missing", "changes"], JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]!.Select(check => (string?)check["state"]));
+            // The package says what the worker is, so it can be installed here, but not without being told how.
+            Assert.Equal(["install", "changes"], JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]!.Select(check => (string?)check["state"]));
             var refused = await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }), HttpStatusCode.Conflict);
             Assert.Contains("não existe neste ambiente", (string?)refused["error"]);
         }
@@ -769,6 +787,78 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await WaitFor(failing, "Reverted");
         lock (here.Reverted)
             Assert.All(here.Reverted, request => Assert.True((bool)request["Force"]!));
+    }
+
+    [Fact]
+    public async Task An_application_this_environment_does_not_have_is_installed_from_the_package_with_its_secrets_filled_here()
+    {
+        var origin = new PretendDatabase();
+        origin.Targets["api:Orders"] = new() { ["Orders.Api.dll"] = "v2" };
+        origin.Sites["Orders"] = ["Orders 1", "Orders 2"];
+        origin.Defaults["Sites"] = new JArray(new JObject { ["Name"] = "Orders 1", ["Port"] = 9024 }, new JObject { ["Name"] = "Orders 2", ["Port"] = 9025 }, new JObject { ["Name"] = "Other 1", ["Port"] = 9030 });
+        origin.Settings["api:Orders"] = new()
+        {
+            ["appsettings.json"] = """{ "ConnectionStrings": { "Main": "Server=db;Database=Sales;User Id=app;Password=s3cr3t;" }, "Jwt": { "Secret": "abc", "Issuer": "Orders" }, "Port": 80 }""",
+            ["web.config"] = """<configuration><appSettings><add key="ApiPassword" value="xyz" /><add key="Mode" value="dev" /></appSettings></configuration>"""
+        };
+        origin.ProxyFiles["nginx.conf"] = """
+            http {
+              upstream orders { server 127.0.0.1:9024; server 127.0.0.1:9025; }
+              upstream other { server 127.0.0.1:9030; }
+              server {
+                location /api/orders/ { proxy_pass http://orders/; }
+                location /api/other/ { proxy_pass http://other/; }
+              }
+            }
+            """;
+        byte[] made;
+        await using (await Serve(origin))
+        {
+            await ClearArea();
+            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "api", name = "Orders" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Orders new" }), HttpStatusCode.Created);
+            var install = closed["items"]![0]!["install"]!;
+            Assert.Equal((2, "9024,9025"), ((int)install["instances"]!, string.Join(",", install["ports"]!.Select(port => (int)port))));
+            // No secret of here goes along.
+            var settings = install["settings"]!.ToDictionary(setting => (string)setting["path"]!, setting => (string)setting["content"]!);
+            Assert.DoesNotContain("s3cr3t", settings["appsettings.json"]);
+            Assert.DoesNotContain("abc", settings["appsettings.json"]);
+            Assert.Contains("Orders", settings["appsettings.json"]);
+            Assert.DoesNotContain("xyz", settings["web.config"]);
+            Assert.Contains("value=\"dev\"", settings["web.config"]);
+            Assert.Equal(["ConnectionStrings:Main (senha)", "Jwt:Secret"], install["settings"]![0]!["blanked"]!.Select(name => (string?)name));
+            // The lines of the proxy that are about it, and only those.
+            var proxy = (string)install["proxy"]!;
+            Assert.Contains("upstream orders", proxy);
+            Assert.Contains("location /api/orders/", proxy);
+            Assert.DoesNotContain("other", proxy);
+            made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
+        }
+
+        var here = new PretendDatabase();
+        await using var _ = await Serve(here);
+        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+        Assert.Equal("install", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!["state"]);
+        var refused = await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }), HttpStatusCode.Conflict);
+        Assert.Contains("informe como instalá-lo", (string?)refused["error"]);
+
+        var filled = """{ "ConnectionStrings": { "Main": "Server=qas;Password=other;" } }""";
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new
+        {
+            installs = new Dictionary<string, object> { ["1"] = new { folder = "E:\\Apps\\Orders", instances = 2, port = 19024, siteName = "{name} {n}", settings = new[] { new { path = "appsettings.json", content = filled } } } }
+        }));
+        var applied = await WaitFor(id, "Applied", "Partial", "Failed");
+        Assert.Equal(("Applied", true), ((string?)applied["package"]!["status"], (bool)applied["results"]![0]!["installed"]!));
+        JObject created;
+        lock (here.Applied)
+            created = here.Applied.Single(request => (string?)request["Command"] == "ApplicationCreate");
+        Assert.Equal(("api", "Orders", "E:\\Apps\\Orders", 2, 19024), ((string?)created["Kind"], (string?)created["Name"], (string?)created["Folder"], (int)created["Instances"]!, (int)created["Port"]!));
+        Assert.Equal(filled, (string?)created["Configs"]![0]!["Content"]);
+        Assert.Equal(new Dictionary<string, string> { ["Orders.Api.dll"] = "v2" }, here.Deployed);
+
+        // What was installed is not taken away by putting the package back.
+        var plan = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/revert"));
+        Assert.Equal("cannot", (string?)plan["steps"]![0]!["state"]);
     }
 
     [Fact]

@@ -97,6 +97,74 @@ public sealed class PackageItem
     /// </summary>
     public string? Version { get; set; }
     public List<FileReference> Files { get; set; } = [];
+
+    /// <summary>
+    /// What the target is where the package was made, for an environment that does not have it
+    /// yet to install it. Null when it could not be told, or is not of a kind that is installed.
+    /// </summary>
+    public InstallInfo? Install { get; set; }
+}
+
+/// <summary>
+/// How an application is set up where the package was made: suggestions for whoever installs it
+/// somewhere else, never values of that environment that would be wrong in another.
+/// </summary>
+public sealed class InstallInfo
+{
+    /// <summary>
+    /// The program, as a path inside the folder of the application.
+    /// </summary>
+    public string? Executable { get; set; }
+    /// <summary>
+    /// Processes of a group, or instances of an API.
+    /// </summary>
+    public int Instances { get; set; } = 1;
+    /// <summary>
+    /// The ports the instances of an API answer on there: only to show which lines of the proxy are theirs.
+    /// </summary>
+    public List<int> Ports { get; set; } = [];
+    public string? DisplayName { get; set; }
+    public string? StartType { get; set; }
+    /// <summary>
+    /// The files of configuration, with what looks like a secret left blank.
+    /// </summary>
+    public List<SettingTemplate> Settings { get; set; } = [];
+    /// <summary>
+    /// The lines of the reverse proxy that send requests to it there, as found in its configuration.
+    /// </summary>
+    public string? Proxy { get; set; }
+}
+
+public sealed class SettingTemplate
+{
+    public string Path { get; set; } = "";
+    public string Content { get; set; } = "";
+    /// <summary>
+    /// The names of what was left blank, for whoever fills it in.
+    /// </summary>
+    public List<string> Blanked { get; set; } = [];
+}
+
+/// <summary>
+/// What whoever approved said about an application this environment does not have yet.
+/// </summary>
+public sealed class InstallChoice
+{
+    public string Folder { get; set; } = "";
+    public string? Executable { get; set; }
+    public int Instances { get; set; } = 1;
+    public int Port { get; set; }
+    public string? SiteName { get; set; }
+    public bool SharedFolder { get; set; }
+    public string? DisplayName { get; set; }
+    public string? StartType { get; set; }
+    public List<SettingText> Settings { get; set; } = [];
+}
+
+public sealed class SettingText
+{
+    public string Path { get; set; } = "";
+    public string Content { get; set; } = "";
 }
 
 /// <summary>
@@ -130,6 +198,10 @@ public sealed class ItemResult
 {
     public int Number { get; set; }
     public string Status { get; set; } = "";
+    /// <summary>
+    /// The item made, here, an application that was not here before.
+    /// </summary>
+    public bool Installed { get; set; }
     public string? Did { get; set; }
     public string? Problem { get; set; }
     public int? Batch { get; set; }
@@ -206,6 +278,11 @@ public sealed class PackageRecord
     /// part of what happened there and is not deleted here any more.
     /// </summary>
     public List<Delivery> Deliveries { get; set; } = [];
+
+    /// <summary>
+    /// By item: how what this environment does not have yet is to be installed, as said when approving.
+    /// </summary>
+    public Dictionary<int, InstallChoice> Installs { get; set; } = [];
 }
 
 public sealed class Delivery
