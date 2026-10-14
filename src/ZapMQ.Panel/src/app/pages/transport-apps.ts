@@ -11,7 +11,7 @@ import { Api } from '../core/api';
 import { uploadProblem } from '../core/settings';
 import { AgoPipe } from '../core/format';
 import { AreaItem, TransportTarget } from '../core/models';
-import { TARGET_KINDS, Transport, targetIcon, targetName } from '../core/transport';
+import { targetLabel, TARGET_KINDS, Transport, targetIcon, targetName } from '../core/transport';
 import { TransportTabs } from '../shared/transport-tabs';
 
 /**
@@ -42,6 +42,7 @@ export class TransportAppsPage implements OnInit {
 
   protected readonly kinds = TARGET_KINDS;
   protected readonly targetName = targetName;
+  protected readonly targetLabel = targetLabel;
   protected readonly targetIcon = targetIcon;
 
   protected readonly counts = computed(() => Object.fromEntries(TARGET_KINDS.map((kind) => [kind, this.matching().filter((target) => target.Kind === kind).length])));

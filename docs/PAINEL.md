@@ -227,6 +227,17 @@ Acompanhar ao vivo o `Trace()` de um worker, a partir do menu do processo na tel
 - **Serviços Windows:** o cartão de um serviço acompanhado tem o item Trace, que segue o processo do serviço e os que ele iniciou. Só há o que ver quando o serviço usa o wrapper de worker; sem ele, a tela diz que o processo não atende pedidos de trace, e nada é enviado a ele.
 - **Processos com o trace antigo** (Delphi, ou wrapper .NET anterior ao 2.0): o serviço pede ao Worker Control, que abre o socket na máquina do processo e publica o que chega. A tela avisa que o trace está sendo repassado. Sem o Worker Control 2.1 no ar, a tela explica por que não há trace.
 
+### 4.12 Configurações
+
+Os parâmetros do ambiente em uma tela, por assunto: **Banco de dados** (a instância acompanhada,
+os bancos, o usuário e a senha, guardada cifrada para a máquina, e os limites dos alertas),
+**Aplicações** (as pastas em que as aplicações novas são criadas, o nome dos sites, a espera para
+parar, as cópias guardadas e os arquivos do ambiente), **Aplicação web** (cada aplicação, com a
+arquitetura: **MFE**, casca e módulos trocados separados, ou **monolito**, trocado inteiro),
+**Tráfego HTTP**, **Proxy reverso** e **Worker Control**. Tudo fica no `ConfigWorkers.json`, que o
+Worker Control confere antes de passar a usar; uma recusa aparece com o motivo. O que é do próprio
+ZapMQ (portas, nome do ambiente) continua no `appsettings.json` dele e é só mostrado.
+
 ## 5. O que o servidor ganha
 
 ### 5.1 API do painel

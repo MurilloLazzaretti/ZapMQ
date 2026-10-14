@@ -1,0 +1,147 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Configurações</h1>
+      <p class="muted">Os parâmetros do ambiente, por assunto. Ficam na configuração do Worker Control, que confere tudo antes de passar a usar.</p>
+    </div>
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="cloud_off" />
+      <strong>Sem resposta do Worker Control</strong>
+      <span>{{ problem() }}</span>
+      <button mat-stroked-button (click)="load()"><mat-icon svgIcon="refresh" /> Tentar de novo</button>
+    </section>
+  } @else if (config(); as file) {
+    @if (dirty() || refusal()) {
+      <div class="bar">
+        @if (refusal()) {
+          <span class="refused"><mat-icon svgIcon="error" /> {{ refusal() }}</span>
+        } @else {
+          <span class="pill warn">alterações não gravadas</span>
+        }
+        <span class="spacer"></span>
+        <button mat-button (click)="discard()" [disabled]="saving()">Descartar</button>
+        <button mat-flat-button (click)="save()" [disabled]="saving()"><mat-icon svgIcon="save" /> Gravar</button>
+      </div>
+    }
+
+    <div class="layout">
+      <nav class="panel subjects" aria-label="Assuntos">
+        <button type="button" [class.on]="current() === 'ambiente'" (click)="current.set('ambiente')"><mat-icon svgIcon="hub" /> Ambiente</button>
+        @for (item of sections; track item.id) {
+          <button type="button" [class.on]="current() === item.id" (click)="current.set(item.id)"><mat-icon [svgIcon]="item.icon" /> {{ item.title }}</button>
+          @if (item.id === 'aplicacoes') {
+            <button type="button" [class.on]="current() === 'web'" (click)="current.set('web')"><mat-icon svgIcon="web" /> Aplicação web</button>
+          }
+        }
+      </nav>
+
+      <section class="panel form">
+        @switch (current()) {
+          @case ('ambiente') {
+            <h2>Ambiente</h2>
+            <p class="muted about">O que é do próprio ZapMQ fica no <code>appsettings.json</code> dele, ao lado do executável, e só muda com o serviço parado.</p>
+            <dl>
+              <div><dt>Nome do ambiente</dt><dd>{{ transport.summary()?.environment || '—' }}</dd><span class="muted">ZapMQ:Transport:Environment</span></div>
+              <div><dt>Versão do ZapMQ</dt><dd>{{ auth.version() }}</dd></div>
+              <div><dt>Worker Control</dt><dd>{{ file.ZapMQHost }}:{{ file.ZapMQPort }}</dd><span class="muted">de onde ele fala com o ZapMQ</span></div>
+            </dl>
+            <h3>Outras configurações</h3>
+            <ul class="links">
+              <li><a routerLink="/workers/configuracao"><mat-icon svgIcon="memory" /> Micro serviços: os grupos e os padrões deles</a></li>
+              <li><a routerLink="/workers/servicos"><mat-icon svgIcon="settings_applications" /> Serviços do Windows acompanhados</a></li>
+              <li><a routerLink="/transporte/configuracao"><mat-icon svgIcon="inbox" /> Pastas de entrada do transporte</a></li>
+              <li><a routerLink="/workers/proxy"><mat-icon svgIcon="dns" /> Arquivos do NGINX</a></li>
+              @if (auth.master()) { <li><a routerLink="/usuarios"><mat-icon svgIcon="manage_accounts" /> Usuários do painel</a></li> }
+            </ul>
+          }
+          @case ('web') {
+            <div class="title">
+              <h2>Aplicação web</h2>
+              <span class="spacer"></span>
+              <button mat-button (click)="addFrontend()"><mat-icon svgIcon="add" /> Aplicação</button>
+            </div>
+            <p class="muted about">
+              <strong>MFE</strong>: uma casca que carrega módulos publicados à parte, listados no manifesto; a casca e cada módulo são trocados separados.
+              <strong>Monolito</strong>: uma aplicação só, trocada inteira.
+            </p>
+            @for (app of frontends(); track $index; let index = $index) {
+              <div class="app">
+                <div class="fields">
+                  <mat-form-field><mat-label>Nome</mat-label><input matInput [ngModel]="app.Name" (ngModelChange)="setFrontend(index, 'Name', $event)" spellcheck="false" /></mat-form-field>
+                  <mat-form-field>
+                    <mat-label>Arquitetura</mat-label>
+                    <mat-select [ngModel]="app.Mode || 'mfe'" (ngModelChange)="setFrontend(index, 'Mode', $event)">
+                      <mat-option value="mfe">MFE (casca e módulos)</mat-option>
+                      <mat-option value="monolith">Monolito</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field class="wide"><mat-label>Pasta</mat-label><input matInput class="mono" [ngModel]="app.Root" (ngModelChange)="setFrontend(index, 'Root', $event)" spellcheck="false" /><mat-hint>A pasta que o servidor web serve.</mat-hint></mat-form-field>
+                  <mat-form-field><mat-label>Endereço</mat-label><input matInput [ngModel]="app.BaseUrl ?? ''" (ngModelChange)="setFrontend(index, 'BaseUrl', $event)" placeholder="http://127.0.0.1" spellcheck="false" /><mat-hint>Para conferir se responde. Vazio: não confere.</mat-hint></mat-form-field>
+                  <mat-form-field><mat-label>Site (Host)</mat-label><input matInput [ngModel]="app.Host ?? ''" (ngModelChange)="setFrontend(index, 'Host', $event)" spellcheck="false" /><mat-hint>Quando o endereço é só o da máquina.</mat-hint></mat-form-field>
+                  @if ((app.Mode || 'mfe') === 'mfe') {
+                    <mat-form-field><mat-label>Manifesto dos módulos</mat-label><input matInput class="mono" [ngModel]="app.Manifest ?? ''" (ngModelChange)="setFrontend(index, 'Manifest', $event)" placeholder="assets/mf.manifest.json" spellcheck="false" /></mat-form-field>
+                  }
+                  <mat-form-field><mat-label>Arquivo de versão</mat-label><input matInput class="mono" [ngModel]="app.VersionFile ?? ''" (ngModelChange)="setFrontend(index, 'VersionFile', $event)" placeholder="version.json" spellcheck="false" /><mat-hint>{{ (app.Mode || 'mfe') === 'mfe' ? 'Ao lado do arquivo de entrada de cada módulo.' : 'Na pasta da aplicação.' }}</mat-hint></mat-form-field>
+                </div>
+                <button mat-icon-button class="remove" (click)="removeFrontend(index)" matTooltip="Deixar de acompanhar esta aplicação" aria-label="Remover"><mat-icon svgIcon="delete" /></button>
+              </div>
+            } @empty {
+              <p class="muted">Nenhuma aplicação web acompanhada.</p>
+            }
+          }
+          @default {
+            @if (section(); as item) {
+              <div class="title">
+                <h2>{{ item.title }}</h2>
+                <span class="spacer"></span>
+                @if (item.optional) {
+                  <mat-slide-toggle [checked]="present(item)" (change)="toggle(item, $event.checked)">{{ item.optional }}</mat-slide-toggle>
+                }
+              </div>
+              <p class="muted about">{{ item.about }}</p>
+              @if (present(item)) {
+                <div class="fields">
+                  @for (field of item.fields; track field.key) {
+                    @switch (field.kind) {
+                      @case ('bool') {
+                        <mat-slide-toggle class="toggle" [checked]="!!value(item, field)" (change)="set(item, field, $event.checked)">{{ field.label }}</mat-slide-toggle>
+                      }
+                      @case ('list') {
+                        <mat-form-field class="wide">
+                          <mat-label>{{ field.label }}</mat-label>
+                          <textarea matInput class="mono" rows="4" [ngModel]="value(item, field)" (ngModelChange)="set(item, field, $event)" [placeholder]="field.fallback ?? ''" spellcheck="false"></textarea>
+                          @if (field.hint) { <mat-hint>{{ field.hint }}</mat-hint> }
+                        </mat-form-field>
+                      }
+                      @case ('secret') {
+                        <mat-form-field>
+                          <mat-label>{{ field.label }}</mat-label>
+                          <input matInput type="password" autocomplete="new-password" [ngModel]="value(item, field)" (ngModelChange)="set(item, field, $event)" [placeholder]="kept(item, field) ? 'guardada; digite só para trocar' : ''" />
+                          <mat-hint>{{ kept(item, field) ? 'Há uma senha guardada, cifrada para esta máquina.' : 'Nenhuma senha guardada.' }}</mat-hint>
+                        </mat-form-field>
+                      }
+                      @default {
+                        <mat-form-field [class.wide]="field.wide">
+                          <mat-label>{{ field.label }}</mat-label>
+                          <input matInput [type]="field.kind === 'number' ? 'number' : 'text'" [class.mono]="field.wide" [ngModel]="value(item, field)" (ngModelChange)="set(item, field, $event)" [placeholder]="field.fallback ?? ''" spellcheck="false" />
+                          @if (field.hint) { <mat-hint>{{ field.hint }}</mat-hint> }
+                        </mat-form-field>
+                      }
+                    }
+                  }
+                </div>
+              } @else {
+                <p class="muted off">Desligado.</p>
+              }
+            }
+          }
+        }
+      </section>
+    </div>
+  } @else {
+    <section class="panel empty"><span>Lendo a configuração…</span></section>
+  }
+</div>

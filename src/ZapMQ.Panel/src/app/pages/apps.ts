@@ -7,7 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
 import { Api } from '../core/api';
 import { TransportTarget } from '../core/models';
-import { TARGET_KINDS, targetIcon, targetName } from '../core/transport';
+import { TARGET_KINDS, targetIcon, targetLabel, targetName } from '../core/transport';
 import { WorkerTabs } from '../shared/worker-tabs';
 
 /**
@@ -57,7 +57,7 @@ import { WorkerTabs } from '../shared/worker-tabs';
                   <li>
                     <a [routerLink]="['/workers/aplicacoes', target.Kind, target.Name]">
                       <span class="who">
-                        <strong>{{ target.Name }}</strong>
+                        <strong>{{ targetLabel(target) }}</strong>
                         @if (target.Version) { <span class="pill">{{ target.Version }}</span> }
                         @if (target.Problem) { <span class="pill danger" [matTooltip]="target.Problem">sem pasta conhecida</span> }
                       </span>
@@ -101,6 +101,7 @@ export class AppsPage implements OnInit {
   protected readonly kinds = TARGET_KINDS;
   protected readonly targetName = targetName;
   protected readonly targetIcon = targetIcon;
+  protected readonly targetLabel = targetLabel;
 
   private readonly matching = computed(() => {
     const wanted = this.search().trim().toLowerCase();

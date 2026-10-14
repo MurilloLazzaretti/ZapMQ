@@ -363,6 +363,8 @@ export interface WebApplication {
   BaseUrl: string | null;
   Problem: string | null;
   CheckedAt: string;
+  /** mfe: a shell and modules published apart; monolith: one application, published whole. */
+  Mode?: 'mfe' | 'monolith';
   /** When the application around the modules was last published. */
   ShellPublishedAt: string | null;
   /** Folders beside the modules that the manifest does not list. */

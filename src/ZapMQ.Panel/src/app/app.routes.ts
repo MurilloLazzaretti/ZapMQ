@@ -15,6 +15,7 @@ export const routes: Routes = [
       { path: 'filas/:name', title: 'Fila · ZapMQ', loadComponent: () => import('./pages/queue-detail').then((m) => m.QueueDetailPage) },
       { path: 'mortas', title: 'Mensagens mortas · ZapMQ', loadComponent: () => import('./pages/dead-letters').then((m) => m.DeadLettersPage) },
       { path: 'workers', title: 'Processos e serviços · ZapMQ', loadComponent: () => import('./pages/workers').then((m) => m.WorkersPage) },
+      { path: 'configuracoes', title: 'Configurações · ZapMQ', loadComponent: () => import('./pages/settings').then((m) => m.SettingsPage) },
       { path: 'workers/aplicacoes', title: 'Aplicações · ZapMQ', loadComponent: () => import('./pages/apps').then((m) => m.AppsPage) },
       { path: 'workers/aplicacoes/nova', title: 'Nova aplicação · ZapMQ', loadComponent: () => import('./pages/app-new').then((m) => m.AppNewPage) },
       { path: 'workers/aplicacoes/:kind/:name', title: 'Aplicação · ZapMQ', loadComponent: () => import('./pages/transport-app').then((m) => m.TransportAppPage) },

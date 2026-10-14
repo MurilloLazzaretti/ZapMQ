@@ -57,7 +57,11 @@
       @if (totals().mostUsed; as most) {
         <zap-stat label="Mais usado" icon="group" tone="neutral" [value]="most.module.Title || most.module.Name" [hint]="most.use!.Users + (most.use!.Users === 1 ? ' pessoa' : ' pessoas') + ' em 24 horas'" />
       } @else {
-        <zap-stat label="Casca da aplicação" icon="web" tone="neutral" [value]="app.ShellPublishedAt ? (app.ShellPublishedAt | ago) : '—'" hint="última publicação" />
+        @if (app.Mode === 'monolith') {
+          <zap-stat label="Arquitetura" icon="web" tone="neutral" value="Monolito" hint="publicada inteira" />
+        } @else {
+          <zap-stat label="Casca da aplicação" icon="web" tone="neutral" [value]="app.ShellPublishedAt ? (app.ShellPublishedAt | ago) : '—'" hint="última publicação" />
+        }
       }
     </section>
 

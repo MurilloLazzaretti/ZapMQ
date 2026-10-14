@@ -115,6 +115,13 @@ banco em `Databases`, o pacote não nomeia banco nenhum: diz "o banco do ambient
 aplica no seu. Só quando um ambiente acompanhar mais de um banco é que os itens passam a levar um
 nome, que precisa ser o mesmo nos ambientes (um apelido, traduzido por cada agente).
 
+**A aplicação web.** Numa aplicação **MFE**, cada módulo do manifesto é um alvo (a pasta do
+arquivo de entrada dele) e a **casca** é outro: a pasta da aplicação, deixando de fora as pastas dos
+módulos e o próprio manifesto, que são do ambiente. Sem conseguir ler o manifesto, a casca não é
+trocada, porque não se saberia o que preservar. Num **monolito** (`"Mode": "monolith"` na
+aplicação), a pasta inteira é um alvo só. Em todos os casos o upload de uma versão nova é o mesmo
+das outras aplicações, em Transporte → Aplicações.
+
 ### 4.1 Alvo que ainda não existe
 
 Um item de arquivos cujo alvo não existe no destino é uma **instalação**, e a aprovação muda:
