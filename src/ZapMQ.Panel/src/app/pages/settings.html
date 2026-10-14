@@ -36,6 +36,7 @@
           <button type="button" [class.on]="current() === item.id" (click)="current.set(item.id)"><mat-icon [svgIcon]="item.icon" /> {{ item.title }}</button>
           @if (item.id === 'aplicacoes') {
             <button type="button" [class.on]="current() === 'web'" (click)="current.set('web')"><mat-icon svgIcon="web" /> Aplicação web</button>
+            <button type="button" [class.on]="current() === 'downloads'" (click)="current.set('downloads')"><mat-icon svgIcon="download" /> Distribuição de arquivos</button>
           }
         }
       </nav>
@@ -61,6 +62,27 @@
               <li><a routerLink="/workers/proxy"><mat-icon svgIcon="dns" /> Arquivos do NGINX</a></li>
               @if (auth.master()) { <li><a routerLink="/usuarios"><mat-icon svgIcon="manage_accounts" /> Usuários do painel</a></li> }
             </ul>
+          }
+          @case ('downloads') {
+            <div class="title">
+              <h2>Distribuição de arquivos</h2>
+              <span class="spacer"></span>
+              <button mat-button (click)="addDownload()"><mat-icon svgIcon="add" /> Pasta</button>
+            </div>
+            <p class="muted about">Pastas de arquivos que só são baixados, como os aplicativos dos celulares. Cada arquivo é trocado sozinho, pelo mesmo nome, e a versão de cada um fica no arquivo de versões da pasta. O site do servidor web que serve a pasta continua como está.</p>
+            @for (area of downloads(); track $index; let index = $index) {
+              <div class="app">
+                <div class="fields">
+                  <mat-form-field><mat-label>Nome</mat-label><input matInput [ngModel]="area.Name" (ngModelChange)="setDownload(index, 'Name', $event)" placeholder="APKs" spellcheck="false" /></mat-form-field>
+                  <mat-form-field class="wide"><mat-label>Pasta</mat-label><input matInput class="mono" [ngModel]="area.Root" (ngModelChange)="setDownload(index, 'Root', $event)" spellcheck="false" /><mat-hint>A pasta que o site serve.</mat-hint></mat-form-field>
+                  <mat-form-field><mat-label>Arquivos distribuídos</mat-label><input matInput class="mono" [ngModel]="area.Files ?? ''" (ngModelChange)="setDownload(index, 'Files', $event)" placeholder="*.apk" spellcheck="false" /></mat-form-field>
+                  <mat-form-field><mat-label>Arquivo de versões</mat-label><input matInput class="mono" [ngModel]="area.VersionsFile ?? ''" (ngModelChange)="setDownload(index, 'VersionsFile', $event)" placeholder="versions.json" spellcheck="false" /></mat-form-field>
+                </div>
+                <button mat-icon-button class="remove" (click)="removeDownload(index)" matTooltip="Deixar de tratar esta pasta como distribuição" aria-label="Remover"><mat-icon svgIcon="delete" /></button>
+              </div>
+            } @empty {
+              <p class="muted">Nenhuma pasta de distribuição.</p>
+            }
           }
           @case ('web') {
             <div class="title">

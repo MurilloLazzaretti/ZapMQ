@@ -106,6 +106,13 @@ const SECTIONS: Section[] = [
   },
 ];
 
+interface Download {
+  Name: string;
+  Root: string;
+  Files?: string;
+  VersionsFile?: string;
+}
+
 interface Frontend {
   Name: string;
   Root: string;
@@ -318,6 +325,40 @@ export class SettingsPage implements OnInit {
     if (touched) {
       this.touch();
     }
+  }
+
+  protected readonly downloads = computed(() => (this.config()?.['Downloads'] as Download[] | undefined) ?? []);
+
+  protected addDownload(): void {
+    (this.config() as Record<string, unknown>)['Downloads'] = [...this.downloads(), { Name: '', Root: '' }];
+    this.touch();
+  }
+
+  protected removeDownload(index: number): void {
+    const left = this.downloads().filter((_, at) => at !== index);
+    const config = this.config() as Record<string, unknown>;
+    if (left.length) {
+      config['Downloads'] = left;
+    } else {
+      delete config['Downloads'];
+    }
+    this.touch();
+  }
+
+  protected setDownload(index: number, key: keyof Download, raw: string): void {
+    (this.config() as Record<string, unknown>)['Downloads'] = this.downloads().map((item, at) => {
+      if (at !== index) {
+        return item;
+      }
+      const changed = { ...item } as Record<string, unknown>;
+      if (raw.trim() || key === 'Name' || key === 'Root') {
+        changed[key] = raw.trim();
+      } else {
+        delete changed[key];
+      }
+      return changed;
+    });
+    this.touch();
   }
 
   protected addFrontend(): void {

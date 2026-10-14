@@ -806,6 +806,30 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
     }
 
     [Fact]
+    public async Task A_file_to_download_is_brought_as_it_is_and_goes_with_the_version_it_was_given()
+    {
+        var dev = new PretendDatabase();
+        dev.Targets["download:app-shop.apk"] = new() { ["app-shop.apk"] = "shop v1" };
+        await using var _ = await Serve(dev);
+        await ClearArea();
+
+        // An app is a zip itself: it is taken as the file it is, not opened.
+        var apk = PretendDatabase.Zipped(new() { ["classes.dex"] = "dex", ["AndroidManifest.xml"] = "<manifest/>" });
+        var placed = await Json(await Api.PostAsync("api/transport/area/upload?kind=download&name=app-shop.apk&version=2.1.0", new ByteArrayContent(apk)), HttpStatusCode.Created);
+        Assert.Equal(("app-shop.apk", "2.1.0"), ((string?)placed["files"]!.Single()["path"], (string?)placed["version"]));
+        await Json(await Api.PostAsync("api/transport/area/upload?kind=download&name=..%5Coutside.apk", new ByteArrayContent(apk)), HttpStatusCode.BadRequest);
+
+        var id = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "App 2.1.0" }), HttpStatusCode.Created))["package"]!["id"]!;
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
+        await WaitFor(id, "Applied");
+
+        lock (dev.Applied)
+            Assert.Equal(("download", "app-shop.apk", "2.1.0"), ((string?)dev.Applied.Last()["Kind"], (string?)dev.Applied.Last()["Name"], (string?)dev.Applied.Last()["Version"]));
+        // The file went alone, under its own name.
+        Assert.Equal(["app-shop.apk"], dev.Deployed!.Keys);
+    }
+
+    [Fact]
     public async Task A_new_application_is_brought_as_a_zip_looked_at_and_created_by_the_worker_control()
     {
         var machine = new PretendDatabase();

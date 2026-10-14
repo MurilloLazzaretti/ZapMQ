@@ -40,7 +40,15 @@
             <input type="checkbox" class="pick" [checked]="allPicked(section.items)" [indeterminate]="somePicked(section.items)" (change)="pickAll(section.items, $any($event.target).checked)" [attr.aria-label]="'Selecionar todos: ' + targetName(section.kind, true)" />
             <mat-icon [svgIcon]="targetIcon(section.kind)" /> {{ targetName(section.kind, true) }} <span class="muted">{{ section.items.length }}</span>
           </h2>
-          <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Upload versão</em>. <em>Empacotar</em> leva a versão que está rodando agora.</p>
+          @if (section.kind === 'download') {
+            <p class="muted where">
+              Cada arquivo é trocado sozinho, pelo mesmo nome: o endereço de download não muda. A versão informada no upload fica no <span class="mono">versions.json</span> da pasta.
+              <button mat-button class="add" (click)="newFile.click()" [disabled]="busy()"><mat-icon svgIcon="add" /> Novo arquivo</button>
+              <input #newFile type="file" hidden (change)="uploadNew($event)" />
+            </p>
+          } @else {
+            <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Upload versão</em>. <em>Empacotar</em> leva a versão que está rodando agora.</p>
+          }
           <ul>
             @for (target of section.items; track target.Name) {
               <li [class.picked]="picked().has(key(target))">
@@ -56,7 +64,7 @@
                     <button mat-flat-button (click)="incoming(target)" [disabled]="busy()" [matTooltip]="'Deixada na pasta de entrada ' + (left.At | ago)">Versão nova na entrada</button>
                   }
                   <button mat-button (click)="zip.click()" [disabled]="busy()" matTooltip="Faz o upload do .zip da pasta publicada e coloca na expedição">Upload versão</button>
-                  <input #zip type="file" accept=".zip" hidden (change)="upload(target, $event)" />
+                  <input #zip type="file" [accept]="target.Kind === 'download' ? '' : '.zip'" hidden (change)="upload(target, $event)" />
                   <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" matTooltip="Empacota a versão que está rodando nesta máquina agora e coloca na expedição">Empacotar</button>
                 </span>
               </li>

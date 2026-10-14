@@ -278,8 +278,8 @@ export class Api {
   }
 
   /** The zip of a published folder, brought from the machine of whoever is at the panel. */
-  addFiles(kind: string, name: string, file: Blob): Observable<AreaItem> {
-    return this.http.post<AreaItem>('api/transport/area/upload', file, { params: { kind, name }, headers: { 'Content-Type': 'application/octet-stream' } });
+  addFiles(kind: string, name: string, file: Blob, version: string | null = null): Observable<AreaItem> {
+    return this.http.post<AreaItem>('api/transport/area/upload', file, { params: version ? { kind, name, version } : { kind, name }, headers: { 'Content-Type': 'application/octet-stream' } });
   }
 
   applicationDefaults(): Observable<ApplicationDefaults> {

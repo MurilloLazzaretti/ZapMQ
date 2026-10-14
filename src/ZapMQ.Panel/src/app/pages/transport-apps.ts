@@ -9,6 +9,8 @@ import { Router, RouterLink } from '@angular/router';
 import { Observable, firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { uploadProblem } from '../core/settings';
+import { ask } from '../shared/dialogs';
+import { MatDialog } from '@angular/material/dialog';
 import { AgoPipe } from '../core/format';
 import { AreaItem, TransportTarget } from '../core/models';
 import { targetLabel, TARGET_KINDS, Transport, targetIcon, targetName } from '../core/transport';
@@ -28,6 +30,7 @@ import { TransportTabs } from '../shared/transport-tabs';
 export class TransportAppsPage implements OnInit {
   private readonly api = inject(Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
   private readonly router = inject(Router);
   private readonly transport = inject(Transport);
 
@@ -143,14 +146,53 @@ export class TransportAppsPage implements OnInit {
     return this.place(this.api.addIncoming(target.Kind, target.Name), `${target.Name}: a versão nova foi para a expedição`);
   }
 
-  /** A zip of the published folder, chosen on the machine of whoever is at the panel. */
+  /** A zip of the published folder, chosen on the machine of whoever is at the panel; for a file to download, the file itself. */
   protected async upload(target: TransportTarget, event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (file) {
-      await this.place(this.api.addFiles(target.Kind, target.Name, file), `${target.Name}: ${file.name} foi para a expedição`);
+    if (!file) {
+      return;
     }
+    if (target.Kind === 'download') {
+      const version = await this.versionOf(target.Name, target.Version);
+      if (version) {
+        await this.place(this.api.addFiles(target.Kind, target.Name, file, version), `${target.Name} ${version} foi para a expedição`);
+      }
+      return;
+    }
+    await this.place(this.api.addFiles(target.Kind, target.Name, file), `${target.Name}: ${file.name} foi para a expedição`);
+  }
+
+  /** A file to download that is not in the folder yet: it goes in under the name it has. */
+  protected async uploadNew(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+    const existing = (this.targets() ?? []).filter((target) => target.Kind === 'download');
+    // With more than one folder, the name says which: the same as the files already there.
+    const folder = existing.find((target) => target.Name.includes('/'))?.Name.split('/')[0];
+    const name = folder ? `${folder}/${file.name}` : file.name;
+    if (existing.some((target) => target.Name.toLowerCase() === name.toLowerCase())) {
+      this.snack.open(`${file.name} já existe: use Upload versão na linha dele`, 'Fechar', { duration: 8000 });
+      return;
+    }
+    const version = await this.versionOf(name, null);
+    if (version) {
+      await this.place(this.api.addFiles('download', name, file, version), `${name} ${version} foi para a expedição; aplicado, passa a existir na pasta`);
+    }
+  }
+
+  private versionOf(name: string, current: string | null): Promise<string | null> {
+    return ask(this.dialog, {
+      title: `Versão de ${name}`,
+      message: current ? `Hoje está na versão ${current}. Qual é a versão deste arquivo?` : 'Qual é a versão deste arquivo? Ela fica no versions.json da pasta, para quem baixa saber.',
+      label: 'Versão',
+      action: 'Continuar',
+    });
   }
 
   private async place(request: Observable<AreaItem>, done: string): Promise<void> {

@@ -139,7 +139,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     /// </summary>
     private static readonly string[] NeverCarried = ["appsettings*.json", "web.config", "ConfigWorkers.json", "*.ini", "environment.js", "env.json", "*.db", "*.db-wal", "*.db-shm", "logs/"];
 
-    public static readonly string[] FileKinds = ["worker", "service", "api", "frontend"];
+    public static readonly string[] FileKinds = ["worker", "service", "api", "frontend", "download"];
 
     private static bool Kept(string path)
     {
@@ -294,7 +294,7 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     private static void RequireFileKind(string? kind, string? name)
     {
         if (kind is null || !FileKinds.Contains(kind))
-            throw new TransportRefused("O tipo precisa ser worker, service, api ou frontend");
+            throw new TransportRefused("O tipo precisa ser worker, service, api, frontend ou download");
         if (string.IsNullOrWhiteSpace(name))
             throw new TransportRefused("Informe o nome do alvo");
     }
@@ -339,6 +339,21 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
     public AreaItem AddUpload(string? kind, string? name, string? version, byte[] brought, string by)
     {
         RequireFileKind(kind, name);
+        if (kind == "download")
+        {
+            // A file to be downloaded is brought as it is, not zipped: it is put in a zip of one, under its own name.
+            var file = name!.Trim()[(name!.Trim().LastIndexOf('/') + 1)..];
+            if (file.Length == 0 || file.IndexOfAny(['\\', ':', '*', '?', '"', '<', '>', '|']) >= 0 || file is "." or "..")
+                throw new TransportRefused("O nome do arquivo não serve");
+            if (brought.Length == 0)
+                throw new TransportRefused("Nenhum arquivo foi enviado");
+            using var memory = new MemoryStream();
+            using (var single = new System.IO.Compression.ZipArchive(memory, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+            using (var entry = single.CreateEntry(file, System.IO.Compression.CompressionLevel.NoCompression).Open())
+                entry.Write(brought);
+            return Place(kind!, name!.Trim(), string.IsNullOrWhiteSpace(version) ? null : version.Trim(), memory.ToArray(),
+                [new FileReference { Path = file, Size = brought.Length, Sha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(brought)) }], by);
+        }
         var (zip, files) = Normalize(brought);
         return Place(kind!, name!.Trim(), string.IsNullOrWhiteSpace(version) ? null : version.Trim(), zip, files, by);
     }
@@ -1005,6 +1020,8 @@ public sealed class TransportService(TransportStore store, WorkerControlClient w
                 request["Name"] = item.Name;
                 request["File"] = work;
                 request["Force"] = force;
+                if (!string.IsNullOrEmpty(item.Version))
+                    request["Version"] = item.Version;
             }, cancellation);
 
             if (!answer.Reached)

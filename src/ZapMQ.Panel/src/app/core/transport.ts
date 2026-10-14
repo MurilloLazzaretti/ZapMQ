@@ -39,9 +39,10 @@ const TARGETS: Record<string, { one: string; many: string; icon: string }> = {
   service: { one: 'Serviço do Windows', many: 'Serviços do Windows', icon: 'settings_applications' },
   api: { one: 'API', many: 'APIs', icon: 'dns' },
   frontend: { one: 'Aplicação web', many: 'Aplicação web', icon: 'widgets' },
+  download: { one: 'Arquivo para download', many: 'Distribuição de arquivos', icon: 'download' },
 };
 
-export const TARGET_KINDS = ['worker', 'service', 'api', 'frontend'];
+export const TARGET_KINDS = ['worker', 'service', 'api', 'frontend', 'download'];
 
 export function targetName(kind: string, many = false): string {
   const known = TARGETS[kind];

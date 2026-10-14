@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { firstValueFrom } from 'rxjs';
 
@@ -94,6 +95,46 @@ export class JsonDialog {
   protected copy(): void {
     void navigator.clipboard?.writeText(this.text).then(() => (this.copied = true));
   }
+}
+
+export interface Question {
+  title: string;
+  message: string;
+  label: string;
+  value?: string;
+  action: string;
+}
+
+@Component({
+  imports: [MatDialogModule, MatButtonModule, FormsModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <h2 mat-dialog-title>{{ data.title }}</h2>
+    <mat-dialog-content>
+      <p>{{ data.message }}</p>
+      <label class="field">{{ data.label }}<input type="text" [(ngModel)]="value" (keydown.enter)="value.trim() && ref.close(value.trim())" autocomplete="off" spellcheck="false" cdkFocusInitial /></label>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>Cancelar</button>
+      <button mat-flat-button [disabled]="!value.trim()" (click)="ref.close(value.trim())">{{ data.action }}</button>
+    </mat-dialog-actions>
+  `,
+  styles: `
+    p { margin: 0 0 14px; }
+    .field { display: grid; gap: 6px; font: var(--mat-sys-label-large); }
+    input { height: 40px; padding: 0 12px; border: 1px solid var(--zap-border); border-radius: 10px; background: var(--mat-sys-surface); color: var(--mat-sys-on-surface); font: var(--mat-sys-body-large); }
+    input:focus { outline: 2px solid var(--mat-sys-primary); outline-offset: -1px; }
+  `,
+})
+export class AskDialog {
+  protected readonly data = inject<Question>(MAT_DIALOG_DATA);
+  protected readonly ref = inject(MatDialogRef<AskDialog, string>);
+  protected value = this.data.value ?? '';
+}
+
+/** Asks for one text; null when the question was left without an answer. */
+export function ask(dialog: MatDialog, data: Question): Promise<string | null> {
+  return firstValueFrom(dialog.open(AskDialog, { data, maxWidth: '440px', width: 'calc(100vw - 32px)' }).afterClosed()).then((answer) => answer ?? null);
 }
 
 export function confirm(dialog: MatDialog, data: Confirmation): Promise<boolean> {

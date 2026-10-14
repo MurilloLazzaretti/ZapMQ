@@ -807,7 +807,7 @@ export interface AreaItem {
 
 /** Something on the machine of the environment that a package may replace. */
 export interface TransportTarget {
-  Kind: 'worker' | 'service' | 'api' | 'frontend';
+  Kind: 'worker' | 'service' | 'api' | 'frontend' | 'download';
   Name: string;
   Paths: string[];
   Version: string | null;

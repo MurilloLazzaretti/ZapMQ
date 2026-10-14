@@ -122,6 +122,13 @@ trocada, porque não se saberia o que preservar. Num **monolito** (`"Mode": "mon
 aplicação), a pasta inteira é um alvo só. Em todos os casos o upload de uma versão nova é o mesmo
 das outras aplicações, em Transporte → Aplicações.
 
+**Distribuição de arquivos.** Uma pasta de arquivos que só são baixados (os aplicativos Android,
+por exemplo), declarada em Configurações → Distribuição de arquivos, faz de cada arquivo um alvo.
+O upload é do próprio arquivo, com a versão informada; ele é trocado sozinho, pelo mesmo nome, sem
+parar nada, e o endereço de download continua o mesmo. Um arquivo que ainda não existe é criado na
+primeira vez que um pacote o traz. A versão de cada um fica no `versions.json` da pasta, para o
+aplicativo consultar. O site que serve a pasta deixa de aparecer como API.
+
 ### 4.1 Alvo que ainda não existe
 
 Um item de arquivos cujo alvo não existe no destino é uma **instalação**, e a aprovação muda:

@@ -58,7 +58,7 @@ export class TransportAppPage implements OnInit {
   protected readonly restartable = this.kind !== 'frontend';
 
   /** A module of the web application is not taken away from here. */
-  protected readonly removable = this.kind !== 'frontend';
+  protected readonly removable = ['worker', 'api', 'service'].includes(this.kind);
   protected readonly removed = signal<RemovedApplication | null>(null);
   protected typedName = '';
   protected forceRemove = false;
