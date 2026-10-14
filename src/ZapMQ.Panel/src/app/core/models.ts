@@ -546,6 +546,22 @@ export interface ParkMap {
   links: MapLink[];
 }
 
+/** What of the ZapMQ itself can be set from the panel. */
+export interface ZapMQSettings {
+  file: string;
+  settings: {
+    key: string;
+    kind: 'number' | 'text' | 'bool' | 'choice';
+    minimum: number | null;
+    maximum: number | null;
+    choices: string[] | null;
+    /** What the service runs with now. */
+    current: string | number | boolean | null;
+    /** What is written for the next start; null while nothing is. */
+    saved: string | number | boolean | null;
+  }[];
+}
+
 /** What the Worker Control adds to the drawing of the environment. */
 export interface Landscape {
   Machine: string;

@@ -7,7 +7,7 @@ import {
   AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
-  HealthSample, InstalledService, ParkMap, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
+  HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent,
 } from './models';
 
 /**
@@ -163,6 +163,15 @@ export class Api {
 
   workerConfig(): Observable<{ Text: string; Config: WorkerConfig }> {
     return this.http.get<{ Text: string; Config: WorkerConfig }>('api/workers/config');
+  }
+
+  /** What of the ZapMQ itself can be set: what it runs with, and what was written for its next start. */
+  zapmqSettings(): Observable<ZapMQSettings> {
+    return this.http.get<ZapMQSettings>('api/settings/zapmq');
+  }
+
+  saveZapmqSettings(values: Record<string, unknown>): Observable<ZapMQSettings> {
+    return this.http.put<ZapMQSettings>('api/settings/zapmq', values);
   }
 
   /** The settings of the environment, kept apart from the configuration of the supervisor. */

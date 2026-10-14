@@ -57,6 +57,11 @@ public sealed class ServerOptions
     /// </summary>
     public string WorkerControlKeyFile { get; set; } = "";
 
+    /// <summary>
+    /// Where what is set from the panel is kept, read after <c>appsettings.json</c>.
+    /// </summary>
+    public string SettingsFile { get; set; } = "zapmq.settings.json";
+
     public TransportOptions Transport { get; set; } = new();
 
     public V2Options V2 { get; set; } = new();

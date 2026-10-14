@@ -127,3 +127,6 @@ dl {
   p { margin: 4px 0 0; }
   pre { width: 100%; margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--mat-sys-surface-container-low); font-size: 12.5px; overflow: auto; }
 }
+
+.pending { color: var(--zap-warn); }
+.refused-line { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; background: var(--zap-danger-container); color: var(--zap-danger); }

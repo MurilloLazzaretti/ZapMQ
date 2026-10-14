@@ -242,7 +242,10 @@ separado do `ConfigWorkers.json`, que guarda só o que é dele (onde está o Zap
 acompanhados) e é editado em Micro serviços → Configurar. O Worker Control confere antes de passar a
 usar; uma recusa aparece com o motivo. Ao abrir a tela, o que está em uso sem estar escrito (os padrões e
 o que foi deduzido da máquina: pastas, nome dos sites, proxy) vem preenchido, para ser gravado. O que é do próprio
-ZapMQ (portas, nome do ambiente) continua no `appsettings.json` dele e é só mostrado.
+ZapMQ (portas, nome do ambiente, retenções, log) é editado no assunto **ZapMQ**, só pelo master, e
+fica em `zapmq.settings.json`, ao lado do executável (`ZapMQ:SettingsFile` diz outro lugar): ele é
+lido por cima do `appsettings.json` que vem com o programa, que nunca é escrito, e passa a valer
+quando o serviço é reiniciado. A tela mostra o que está gravado e o que está em uso até lá.
 
 ## 5. O que o servidor ganha
 

@@ -32,7 +32,11 @@ public static class ServerHost
 
         configure?.Invoke(builder);
 
+        // What was set from the panel, read after the file that comes with the program.
+        var settingsFile = ZapMQSettings.AddTo(builder.Configuration, builder.Configuration);
+
         var options = builder.Configuration.GetSection(ServerOptions.Section).Get<ServerOptions>() ?? new ServerOptions();
+        builder.Services.AddSingleton(new ZapMQSettings(settingsFile, options));
 
         builder.Services.AddWindowsService(service => service.ServiceName = "ZapMQ");
 

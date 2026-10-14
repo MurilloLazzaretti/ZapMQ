@@ -6,15 +6,7 @@
     </div>
   </header>
 
-  @if (problem()) {
-    <section class="panel empty">
-      <mat-icon svgIcon="cloud_off" />
-      <strong>Sem resposta do Worker Control</strong>
-      <span>{{ problem() }}</span>
-      <button mat-stroked-button (click)="load()"><mat-icon svgIcon="refresh" /> Tentar de novo</button>
-    </section>
-  } @else if (config(); as file) {
-    @if (dirty() || refusal()) {
+    @if (config() && (dirty() || refusal())) {
       <div class="bar">
         @if (refusal()) {
           <span class="refused"><mat-icon svgIcon="error" /> {{ refusal() }}</span>
@@ -31,7 +23,7 @@
 
     <div class="layout">
       <nav class="panel subjects" aria-label="Assuntos">
-        <button type="button" [class.on]="current() === 'ambiente'" (click)="current.set('ambiente')"><mat-icon svgIcon="hub" /> Ambiente</button>
+        <button type="button" [class.on]="current() === 'ambiente'" (click)="current.set('ambiente')"><mat-icon svgIcon="hub" /> ZapMQ</button>
         @for (item of sections; track item.id) {
           <button type="button" [class.on]="current() === item.id" (click)="current.set(item.id)"><mat-icon [svgIcon]="item.icon" /> {{ item.title }}</button>
           @if (item.id === 'aplicacoes') {
@@ -42,19 +34,51 @@
       </nav>
 
       <section class="panel form">
-        @switch (current()) {
-          @case ('ambiente') {
-            <h2>Ambiente</h2>
+        @if (current() === 'ambiente') {
+            <div class="title">
+              <h2>ZapMQ</h2>
+              <span class="spacer"></span>
+              @if (auth.master()) {
+                <button mat-flat-button (click)="saveOwn()" [disabled]="!ownDirty() || ownSaving()"><mat-icon svgIcon="save" /> Gravar</button>
+              }
+            </div>
             <p class="muted about">
-              Estas configurações ficam em <code>{{ location() || 'Environment.json' }}</code>, na máquina do Worker Control. As dele próprio (onde está o ZapMQ, os grupos, os serviços acompanhados) ficam no <code>ConfigWorkers.json</code>, em <a routerLink="/workers/configuracao">Micro serviços → Configurar</a>.
-              O que é do próprio ZapMQ fica no <code>appsettings.json</code> dele, ao lado do executável, e só muda com o serviço parado.
+              As configurações do próprio ZapMQ ficam em <code>{{ own()?.file || 'zapmq.settings.json' }}</code>, lidas por cima do <code>appsettings.json</code> que vem com o programa, e <strong>passam a valer quando o serviço do ZapMQ é reiniciado</strong>.
+              @if (!auth.master()) { Só o usuário master as altera. }
             </p>
-            <dl>
-              <div><dt>Nome do ambiente</dt><dd>{{ transport.summary()?.environment || '—' }}</dd><span class="muted">ZapMQ:Transport:Environment</span></div>
-              <div><dt>Versão do ZapMQ</dt><dd>{{ auth.version() }}</dd></div>
-              <div><dt>Arquivo</dt><dd class="mono">{{ location() || 'Environment.json' }}</dd><span class="muted">na máquina do Worker Control</span></div>
-            </dl>
+            @if (ownProblem()) { <p class="refused-line"><mat-icon svgIcon="error" /> {{ ownProblem() }}</p> }
+            @if (own(); as settings) {
+              @for (group of ownGroups(); track group.title) {
+                <h3>{{ group.title }}</h3>
+                <div class="fields">
+                  @for (setting of group.items; track setting.key) {
+                    @switch (setting.kind) {
+                      @case ('bool') {
+                        <mat-slide-toggle class="toggle" [checked]="!!ownValues[setting.key]" (change)="ownChanged(setting.key, $event.checked)" [disabled]="!auth.master()">{{ ownLabel(setting.key) }}</mat-slide-toggle>
+                      }
+                      @case ('choice') {
+                        <mat-form-field>
+                          <mat-label>{{ ownLabel(setting.key) }}</mat-label>
+                          <mat-select [ngModel]="ownValues[setting.key]" (ngModelChange)="ownChanged(setting.key, $event)" [disabled]="!auth.master()">
+                            @for (choice of setting.choices; track choice) { <mat-option [value]="choice">{{ choice }}</mat-option> }
+                          </mat-select>
+                          @if (pending(setting)) { <mat-hint class="pending">gravado {{ setting.saved }}, em uso {{ setting.current }}</mat-hint> }
+                        </mat-form-field>
+                      }
+                      @default {
+                        <mat-form-field>
+                          <mat-label>{{ ownLabel(setting.key) }}</mat-label>
+                          <input matInput [type]="setting.kind === 'number' ? 'number' : 'text'" [attr.min]="setting.minimum" [attr.max]="setting.maximum" [ngModel]="ownValues[setting.key]" (ngModelChange)="ownChanged(setting.key, $event)" [disabled]="!auth.master()" spellcheck="false" />
+                          @if (pending(setting)) { <mat-hint class="pending">gravado {{ setting.saved }}, em uso {{ setting.current }} até reiniciar</mat-hint> }
+                        </mat-form-field>
+                      }
+                    }
+                  }
+                </div>
+              }
+            }
             <h3>Outras configurações</h3>
+            <p class="muted">As do ambiente (os assuntos ao lado) ficam em <code>{{ location() || 'Environment.json' }}</code>, na máquina do Worker Control; as dele próprio, no <code>ConfigWorkers.json</code>.</p>
             <ul class="links">
               <li><a routerLink="/workers/configuracao"><mat-icon svgIcon="memory" /> Micro serviços: os grupos e os padrões deles</a></li>
               <li><a routerLink="/workers/servicos"><mat-icon svgIcon="settings_applications" /> Serviços do Windows acompanhados</a></li>
@@ -62,7 +86,17 @@
               <li><a routerLink="/workers/proxy"><mat-icon svgIcon="dns" /> Arquivos do NGINX</a></li>
               @if (auth.master()) { <li><a routerLink="/usuarios"><mat-icon svgIcon="manage_accounts" /> Usuários do painel</a></li> }
             </ul>
-          }
+          } @else if (problem()) {
+          <div class="empty">
+            <mat-icon svgIcon="cloud_off" />
+            <strong>Sem resposta do Worker Control</strong>
+            <span>{{ problem() }}</span>
+            <button mat-stroked-button (click)="load()"><mat-icon svgIcon="refresh" /> Tentar de novo</button>
+          </div>
+        } @else if (!config()) {
+          <p class="muted">Lendo a configuração…</p>
+        } @else {
+        @switch (current()) {
           @case ('downloads') {
             <div class="title">
               <h2>Distribuição de arquivos</h2>
@@ -174,9 +208,7 @@
             }
           }
         }
+        }
       </section>
     </div>
-  } @else {
-    <section class="panel empty"><span>Lendo a configuração…</span></section>
-  }
 </div>

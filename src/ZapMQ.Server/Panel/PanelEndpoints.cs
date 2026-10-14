@@ -52,6 +52,20 @@ public static class PanelEndpoints
             return Results.NoContent();
         });
 
+        // What of the ZapMQ itself can be set from here: what it runs with, and what was written for its next start.
+        api.MapGet("/settings/zapmq", (ZapMQSettings settings) => Results.Json(settings.Describe()));
+
+        api.MapPut("/settings/zapmq", (Dictionary<string, JsonElement> values, ZapMQSettings settings, PanelUserStore users, HttpContext context, ILoggerFactory loggers) =>
+        {
+            var login = (string)context.Items[PanelHost.UserItem]!;
+            if (users.Find(login) is not { Master: true })
+                return Results.Json(new { error = "Só o usuário master altera as configurações do ZapMQ" }, statusCode: StatusCodes.Status403Forbidden);
+            if (settings.Write(values) is { } wrong)
+                return Results.Json(new { error = wrong }, statusCode: StatusCodes.Status400BadRequest);
+            loggers.CreateLogger("ZapMQ.Panel").LogInformation("The settings of the ZapMQ were written to {File}; they are taken when the service starts again (by {User})", settings.Path, login);
+            return Results.Json(settings.Describe());
+        });
+
         api.MapGet("/session", (HttpContext context, PanelAuth auth) =>
             auth.Session(context.Request.Cookies[PanelAuth.Cookie]) is { } user
                 ? Results.Json(Who(user))

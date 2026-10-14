@@ -14,7 +14,7 @@ import { catchError, firstValueFrom, forkJoin, of } from 'rxjs';
 import { Api } from '../core/api';
 import { Auth } from '../core/auth';
 import { Transport } from '../core/transport';
-import { ApplicationDefaults, ProxyState, WorkerConfig } from '../core/models';
+import { ApplicationDefaults, ProxyState, WorkerConfig, ZapMQSettings } from '../core/models';
 
 type Kind = 'text' | 'number' | 'bool' | 'list' | 'secret';
 
@@ -106,6 +106,27 @@ const SECTIONS: Section[] = [
   },
 ];
 
+const OWN_LABELS: Record<string, string> = {
+  'Transport.Environment': 'Nome do ambiente',
+  'Transport.Directory': 'Pasta do transporte',
+  Port: 'Porta da mensageria',
+  RetentionSeconds: 'Mensagens não entregues vivem (s)',
+  EmptyQueueLifetimeSeconds: 'Fila vazia sem ninguém some após (s)',
+  MaxRequestLineBytes: 'Maior mensagem do protocolo 1.x (bytes)',
+  'V2.Enabled': 'Protocolo 2.x ligado',
+  'V2.MaxFrameBytes': 'Maior mensagem do protocolo 2.x (bytes)',
+  'V2.PingSeconds': 'Sinal de vida a cada (s)',
+  'V2.PingTimeoutSeconds': 'Conexão sem sinal cai após (s)',
+  'DeadLetters.MaxMessagesPerQueue': 'Mensagens mortas guardadas por fila',
+  'DeadLetters.MaxAgeHours': 'Mensagens mortas guardadas por (horas)',
+  'Panel.Port': 'Porta do painel',
+  'Panel.BasePath': 'Caminho do painel no proxy',
+  'Panel.SessionHours': 'Sessão do painel dura (horas)',
+  LogDirectory: 'Pasta do log',
+  LogRetentionDays: 'Log guardado por (dias)',
+  LogLevel: 'Nível do log',
+};
+
 interface Download {
   Name: string;
   Root: string;
@@ -156,12 +177,81 @@ export class SettingsPage implements OnInit {
   /** How many parameters were in their default and were filled with it, to be written. */
   protected readonly filled = signal(0);
 
+  /** The settings of the ZapMQ itself, and the values being edited, by key. */
+  protected readonly own = signal<ZapMQSettings | null>(null);
+  protected ownValues: Record<string, unknown> = {};
+  protected readonly ownDirty = signal(false);
+  protected readonly ownSaving = signal(false);
+  protected readonly ownProblem = signal('');
+
+  protected readonly ownGroups = computed(() => {
+    const all = this.own()?.settings ?? [];
+    const group = (prefix: string[]) => all.filter((setting) => prefix.some((start) => setting.key === start || setting.key.startsWith(start + '.')));
+    return [
+      { title: 'Ambiente e transporte', items: group(['Transport']) },
+      { title: 'Mensageria', items: group(['Port', 'RetentionSeconds', 'EmptyQueueLifetimeSeconds', 'MaxRequestLineBytes', 'V2', 'DeadLetters']) },
+      { title: 'Painel', items: group(['Panel']) },
+      { title: 'Log', items: group(['LogDirectory', 'LogRetentionDays', 'LogLevel']) },
+    ];
+  });
+
+  protected ownLabel(key: string): string {
+    return OWN_LABELS[key] ?? key;
+  }
+
+  /** Something written for the next start that is not what the service runs with now. */
+  protected pending(setting: ZapMQSettings['settings'][number]): boolean {
+    return setting.saved !== null && setting.saved !== setting.current;
+  }
+
+  private loadOwn(): void {
+    this.api.zapmqSettings().subscribe({
+      next: (settings) => {
+        this.own.set(settings);
+        this.ownValues = Object.fromEntries(settings.settings.map((setting) => [setting.key, setting.saved ?? setting.current]));
+        this.ownDirty.set(false);
+        this.ownProblem.set('');
+      },
+      error: () => undefined,
+    });
+  }
+
+  protected ownChanged(key: string, value: unknown): void {
+    this.ownValues[key] = value;
+    this.ownDirty.set(true);
+  }
+
+  protected async saveOwn(): Promise<void> {
+    const settings = this.own();
+    if (!settings) {
+      return;
+    }
+    this.ownSaving.set(true);
+    this.ownProblem.set('');
+    // Only what differs from what the service runs with goes to the file: the rest stays with the file of the program.
+    const values = Object.fromEntries(
+      settings.settings
+        .map((setting) => [setting.key, setting.kind === 'number' ? Number(this.ownValues[setting.key]) : this.ownValues[setting.key]] as const)
+        .filter(([key, value]) => value !== settings.settings.find((setting) => setting.key === key)!.current || settings.settings.find((setting) => setting.key === key)!.saved !== null),
+    );
+    try {
+      this.own.set(await firstValueFrom(this.api.saveZapmqSettings(values)));
+      this.ownDirty.set(false);
+      this.snack.open('Gravado. Passa a valer quando o serviço do ZapMQ for reiniciado.', undefined, { duration: 5000 });
+    } catch (failure) {
+      this.ownProblem.set((failure as HttpErrorResponse).error?.error ?? 'O ZapMQ não aceitou as configurações.');
+    } finally {
+      this.ownSaving.set(false);
+    }
+  }
+
   protected readonly section = computed(() => SECTIONS.find((section) => section.id === this.current()) ?? null);
 
   protected readonly frontends = computed(() => (this.config()?.['Frontends'] as Frontend[] | undefined) ?? []);
 
   ngOnInit(): void {
     this.load();
+    this.loadOwn();
   }
 
   protected load(): void {

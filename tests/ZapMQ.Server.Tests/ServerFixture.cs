@@ -63,6 +63,7 @@ public sealed class ServerFixture : IAsyncLifetime
                 ["ZapMQ:MessageModelsFile"] = _definitions + ".models",
                 ["ZapMQ:PanelUsersFile"] = _definitions + ".users",
                 ["ZapMQ:WorkerControlKeyFile"] = _definitions + ".key",
+                ["ZapMQ:SettingsFile"] = _definitions + ".settings",
                 ["ZapMQ:Transport:Directory"] = _definitions + ".transport",
                 ["ZapMQ:Transport:Environment"] = "TEST"
             });
