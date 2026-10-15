@@ -38,7 +38,7 @@
         <div class="section">
           <h2>
             <input type="checkbox" class="pick" [checked]="allPicked(section.items)" [indeterminate]="somePicked(section.items)" (change)="pickAll(section.items, $any($event.target).checked)" [attr.aria-label]="'Selecionar todos: ' + targetName(section.kind, true)" />
-            <mat-icon [svgIcon]="targetIcon(section.kind)" /> {{ targetName(section.kind, true) }} <span class="muted">{{ section.items.length }}</span>
+            <mat-icon [svgIcon]="targetIcon(section.kind)" /> {{ targetName(section.kind, true) }} <span class="muted">{{ section.kind === 'frontend' ? groups().length : section.items.length }}</span>
           </h2>
           @if (section.kind === 'download') {
             <p class="muted where">
@@ -49,32 +49,83 @@
           } @else {
             <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Upload versão</em>. <em>Empacotar</em> leva a versão que está rodando agora.</p>
           }
-          <ul>
-            @for (target of section.items; track target.Name) {
-              <li [class.picked]="picked().has(key(target))">
-                <input type="checkbox" class="pick" [checked]="picked().has(key(target))" (change)="pick(target, $any($event.target).checked)" [disabled]="!!target.Problem" [attr.aria-label]="'Selecionar ' + target.Name" />
-                <a class="who" [routerLink]="['/workers/aplicacoes', target.Kind, target.Name]" matTooltip="Pastas e arquivos de configuração, em Processos e serviços">
-                  <strong>{{ targetLabel(target) }}</strong>
-                  @if (target.Version) { <span class="pill">{{ target.Version }}</span> }
-                  @if (target.Problem) { <span class="pill danger" [matTooltip]="target.Problem">sem pasta conhecida</span> }
-                </a>
-                <span class="muted mono path" [matTooltip]="target.Paths.join('\n')">{{ target.Paths[0] }}@if (target.Paths.length > 1) { <span> (+{{ target.Paths.length - 1 }})</span> }</span>
-                <span class="actions">
-                  @if (target.Incoming; as left) {
-                    <button mat-flat-button (click)="incoming(target)" [disabled]="busy()" [matTooltip]="'Deixada na pasta de entrada ' + (left.At | ago)">Versão nova na entrada</button>
+          @if (section.kind === 'frontend') {
+            @for (group of groups(); track group.name) {
+              <div class="app" [class.open]="isOpen(group)">
+                <div class="row head-row" [class.picked]="groupPicked(group)">
+                  <input type="checkbox" class="pick" [checked]="groupPicked(group)" [indeterminate]="groupPartly(group)" (change)="pickGroup(group, $any($event.target).checked)" [disabled]="!!group.whole?.Problem"
+                    [attr.aria-label]="'Selecionar ' + group.name + (group.mode === 'mfe' ? ' inteira' : '')" />
+                  <span class="who">
+                    @if (group.modules.length || group.total) {
+                      <button type="button" class="twist" (click)="toggleOpen(group)" [attr.aria-expanded]="isOpen(group)" [attr.aria-label]="(isOpen(group) ? 'Recolher ' : 'Mostrar os módulos de ') + group.name">
+                        <mat-icon [svgIcon]="isOpen(group) ? 'keyboard_arrow_down' : 'chevron_right'" />
+                      </button>
+                    }
+                    <strong>{{ group.name }}</strong>
+                    <span class="pill">{{ group.mode === 'mfe' ? 'MFE' : 'Monolito' }}</span>
+                    @if (group.active !== null && group.address) {
+                      <span class="pill" [class.ok]="group.active" [matTooltip]="group.address">{{ group.active ? 'ativa' : 'inativa' }}</span>
+                    }
+                    @if (group.whole?.Version; as version) { <span class="pill">{{ version }}</span> }
+                    @if (group.mode === 'mfe') { <span class="muted count">{{ group.total }} {{ group.total === 1 ? 'item' : 'itens' }}</span> }
+                    @if (group.whole?.Problem) { <span class="pill danger" [matTooltip]="group.whole!.Problem!">sem pasta conhecida</span> }
+                  </span>
+                  @if (group.whole; as whole) {
+                    <span class="muted mono path" [matTooltip]="whole.Paths.join('\n')">{{ whole.Paths[0] }}</span>
+                    <ng-container *ngTemplateOutlet="actions; context: { $implicit: whole, whole: group.mode === 'mfe' }" />
                   }
-                  <button mat-button (click)="zip.click()" [disabled]="busy()" matTooltip="Faz o upload do .zip da pasta publicada e coloca na expedição">Upload versão</button>
-                  <input #zip type="file" [accept]="target.Kind === 'download' ? '' : '.zip'" hidden (change)="upload(target, $event)" />
-                  <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" matTooltip="Empacota a versão que está rodando nesta máquina agora e coloca na expedição">Empacotar</button>
-                </span>
-              </li>
+                </div>
+                @if (isOpen(group)) {
+                  <ul class="tree">
+                    @for (target of group.modules; track target.Name) {
+                      <li [class.picked]="picked().has(key(target)) || groupPicked(group)">
+                        <input type="checkbox" class="pick" [checked]="picked().has(key(target)) || groupPicked(group)" (change)="pick(target, $any($event.target).checked)"
+                          [disabled]="!!target.Problem || groupPicked(group)" [matTooltip]="groupPicked(group) ? 'Vai com a aplicação inteira' : ''" [attr.aria-label]="'Selecionar ' + target.Name" />
+                        <a class="who" [routerLink]="['/workers/aplicacoes', target.Kind, target.Name]" matTooltip="Pastas e arquivos de configuração, em Processos e serviços">
+                          <strong>{{ moduleLabel(target) }}</strong>
+                          @if (target.Version) { <span class="pill">{{ target.Version }}</span> }
+                          @if (target.Problem) { <span class="pill danger" [matTooltip]="target.Problem">sem pasta conhecida</span> }
+                        </a>
+                        <span class="muted mono path" [matTooltip]="target.Paths.join('\n')">{{ target.Paths[0] }}</span>
+                        <ng-container *ngTemplateOutlet="actions; context: { $implicit: target, whole: false }" />
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
             }
-          </ul>
+          } @else {
+            <ul>
+              @for (target of section.items; track target.Name) {
+                <li [class.picked]="picked().has(key(target))">
+                  <input type="checkbox" class="pick" [checked]="picked().has(key(target))" (change)="pick(target, $any($event.target).checked)" [disabled]="!!target.Problem" [attr.aria-label]="'Selecionar ' + target.Name" />
+                  <a class="who" [routerLink]="['/workers/aplicacoes', target.Kind, target.Name]" matTooltip="Pastas e arquivos de configuração, em Processos e serviços">
+                    <strong>{{ targetLabel(target) }}</strong>
+                    @if (target.Version) { <span class="pill">{{ target.Version }}</span> }
+                    @if (target.Problem) { <span class="pill danger" [matTooltip]="target.Problem">sem pasta conhecida</span> }
+                  </a>
+                  <span class="muted mono path" [matTooltip]="target.Paths.join('\n')">{{ target.Paths[0] }}@if (target.Paths.length > 1) { <span> (+{{ target.Paths.length - 1 }})</span> }</span>
+                  <ng-container *ngTemplateOutlet="actions; context: { $implicit: target, whole: false }" />
+                </li>
+              }
+            </ul>
+          }
         </div>
       } @empty {
         <div class="empty"><mat-icon svgIcon="search" /><strong>{{ all.length ? 'Nenhuma aplicação com esse filtro' : 'O Worker Control não conhece nada que possa ser transportado nesta máquina' }}</strong></div>
       }
     </section>
+    <ng-template #actions let-target let-whole="whole">
+      <span class="actions">
+        @if (target.Incoming; as left) {
+          <button mat-flat-button (click)="incoming(target)" [disabled]="busy()" [matTooltip]="'Deixada na pasta de entrada ' + (left.At | ago)">Versão nova na entrada</button>
+        }
+        <button mat-button (click)="zip.click()" [disabled]="busy()" [matTooltip]="whole ? 'Faz o upload do .zip da aplicação inteira (casca, módulos e manifesto) e coloca na expedição' : 'Faz o upload do .zip da pasta publicada e coloca na expedição'">Upload versão</button>
+        <input #zip type="file" [accept]="target.Kind === 'download' ? '' : '.zip'" hidden (change)="upload(target, $event)" />
+        <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" [matTooltip]="whole ? 'Empacota a aplicação inteira que está rodando agora: casca, módulos e manifesto' : 'Empacota a versão que está rodando nesta máquina agora e coloca na expedição'">{{ whole ? 'Empacotar inteira' : 'Empacotar' }}</button>
+      </span>
+    </ng-template>
+
     @if (picked().size) {
       <div class="selection" role="region" aria-label="Selecionados">
         <strong>{{ picked().size }} {{ picked().size === 1 ? 'selecionada' : 'selecionadas' }}</strong>

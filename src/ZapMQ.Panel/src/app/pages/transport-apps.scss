@@ -96,12 +96,70 @@
   .who:hover strong { text-decoration: underline; }
   .path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
   .actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; flex-wrap: wrap; }
+
+  /* One web application: a box of its own, its modules hanging from it. */
+  .app {
+    margin: 6px 12px 8px 12px;
+    border: 1px solid var(--zap-border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: auto minmax(160px, 1fr) minmax(0, 1.4fr) auto;
+    align-items: center;
+    gap: 4px 14px;
+    padding: 6px 12px 6px 8px;
+  }
+  .head-row { background: var(--mat-sys-surface-container-low); }
+  .head-row.picked { background: color-mix(in srgb, var(--mat-sys-primary-container) 60%, transparent); }
+  .app.open .head-row { border-bottom: 1px solid var(--zap-border); }
+  .twist {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin: 0 -2px 0 -4px;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--mat-sys-on-surface-variant);
+    cursor: pointer;
+
+    mat-icon { width: 20px; height: 20px; }
+    &:hover { background: var(--mat-sys-surface-container-high); color: var(--mat-sys-on-surface); }
+  }
+  .count { font: var(--mat-sys-label-medium); }
+  .tree li {
+    position: relative;
+    padding-left: 44px;
+  }
+  /* The branch from the application to each module. */
+  .tree li::before {
+    content: '';
+    position: absolute;
+    left: 22px;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid var(--zap-border);
+  }
+  .tree li:last-child::before { bottom: 50%; }
+  .tree li::after {
+    content: '';
+    position: absolute;
+    left: 22px;
+    top: 50%;
+    width: 12px;
+    border-top: 1px solid var(--zap-border);
+  }
 }
 
 .note { margin: 0; font: var(--mat-sys-body-small); }
 
 @media (max-width: 900px) {
-  .section li { grid-template-columns: auto minmax(0, 1fr); padding-top: 8px; padding-bottom: 8px; }
+  .section li, .section .row { grid-template-columns: auto minmax(0, 1fr); padding-top: 8px; padding-bottom: 8px; }
+  .section .app { margin-left: 8px; margin-right: 8px; }
   .section .actions { grid-column: 2; }
   .section .path { display: none; }
   .section .actions { justify-content: flex-start; }
