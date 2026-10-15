@@ -575,14 +575,24 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// </summary>
     public async Task<List<ItemCheck>> Check(PackageRecord record, string by, CancellationToken cancellation)
     {
-        var here = record.Manifest.Items.Any(item => item.Kind == "database" && item.Action == "Define") ? await Everything(record, by, cancellation) : null;
+        var here = record.Manifest.Items.Any(item => item.Kind == "database" && item.Action is "Define" or "Script") ? await Everything(record, by, cancellation) : null;
         var brought = record.Manifest.Items.Where(item => item.Action == "Define").Select(item => Key(item.ObjectKind, item.Schema, item.Name)).ToHashSet();
+        // A script names objects without saying what they are: by schema and name only.
+        static string Named(string key) => key[(key.IndexOf('|') + 1)..].Replace('|', '.');
+        var hereNamed = here?.Select(Named).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var broughtNamed = brought.Select(Named).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var checks = new List<ItemCheck>();
         foreach (var item in record.Manifest.Items)
         {
             if (item.Action == "Script")
             {
-                checks.Add(new ItemCheck(item.Number, "script", null, [], null));
+                // What it needs has to be here already, or come before it: brought by the package, or made by a script before it.
+                var names = store.Script(record.Manifest.Id, item.Number) is { } text ? ScriptNames.Read(text) : null;
+                var lacking = names is null || hereNamed is null ? [] : names.Needed.Where(name => !hereNamed.Contains(name) && !broughtNamed.Contains(name)).ToList();
+                if (names is not null)
+                    broughtNamed.UnionWith(names.Made);
+                checks.Add(new ItemCheck(item.Number, "script", null, lacking,
+                    names is { Problems.Count: > 0 } ? "O script não pôde ser lido para conferir o que ele usa: " + string.Join("; ", names.Problems) : null));
                 continue;
             }
             if (item.Kind != "database")
@@ -693,6 +703,11 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         {
             var item = waiting.Manifest.Items.First(candidate => candidate.Number == absent.Number);
             throw new TransportRefused($"O item {item.Number} ({item.Kind} {item.Name}) não existe neste ambiente, e o pacote não diz como instalá-lo (veio de uma versão anterior, ou o tipo não é instalado pelo transporte). Instale-o aqui e aprove depois.", StatusCodes.Status409Conflict);
+        }
+        if (checks.FirstOrDefault(check => check.Missing.Count > 0) is { } lacking)
+        {
+            var item = waiting.Manifest.Items.First(candidate => candidate.Number == lacking.Number);
+            throw new TransportRefused($"O item {item.Number} ({(item.Action == "Script" ? item.Title ?? "script" : $"{item.Schema}.{item.Name}")}) usa o que não existe neste ambiente nem vem antes no pacote: {string.Join(", ", lacking.Missing)}. Inclua no pacote o que falta, antes dele, e aprove a versão nova.", StatusCodes.Status409Conflict);
         }
         if (checks.FirstOrDefault(check => check.State == "mismatch") is { } mismatch)
             throw new TransportRefused($"O item {mismatch.Number}: {mismatch.Problem}", StatusCodes.Status409Conflict);

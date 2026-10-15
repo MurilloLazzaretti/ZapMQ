@@ -109,7 +109,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected readonly warnings = computed(() => {
     const checks = this.checks() ?? [];
     return {
-      blocked: checks.filter((check) => check.state === 'blocked' || check.state === 'missing' || check.state === 'mismatch').length,
+      blocked: checks.filter((check) => check.state === 'blocked' || check.state === 'missing' || check.state === 'mismatch' || check.missing.length > 0).length,
       conflicts: checks.filter((check) => check.state === 'conflict').length,
       drops: checks.filter((check) => check.state === 'drops').length,
       missing: checks.filter((check) => check.missing.length > 0).length,
@@ -203,7 +203,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     const notes = [
       warnings.blocked ? `${warnings.blocked} item(ns) não podem ser aplicados como estão e vão falhar` : '',
       warnings.conflicts ? `${warnings.conflicts} item(ns) diferentes do ponto de partida` : '',
-      warnings.missing ? `${warnings.missing} item(ns) usam algo que não existe aqui nem vem no pacote` : '',
+      warnings.missing ? `${warnings.missing} item(ns) usam algo que não existe aqui nem vem antes no pacote` : '',
       warnings.drops ? `${warnings.drops} objeto(s) serão apagados` : '',
       this.installing().length ? `${this.installing().length} aplicação(ões) serão instaladas aqui` : '',
     ].filter(Boolean);

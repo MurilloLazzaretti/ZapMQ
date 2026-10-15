@@ -333,6 +333,10 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         Assert.Contains("fncTotal()", (string?)compared["script"]);
         Assert.Equal("CREATE PROCEDURE dbo.spClose AS RETURN", (string?)compared["current"]);
 
+        // What the function needs is not here: it is not approved until it is.
+        var refused = await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }), HttpStatusCode.Conflict);
+        Assert.Contains("dbo.Rates", (string?)refused["error"]);
+        here.Objects["Rates"] = ("Table", "CREATE TABLE dbo.Rates (Id int)", []);
         var approved = await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
         Assert.Equal("admin", (string?)approved["package"]!["approvedBy"]);
         var applied = await WaitFor(id, "Applied", "Partial", "Failed");
@@ -364,6 +368,7 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         here.Objects["spClose"] = ("Procedure", "CREATE PROCEDURE dbo.spClose AS RETURN", []);
         here.Objects["fncTotal"] = ("Function", "CREATE FUNCTION dbo.fncTotal() RETURNS int AS BEGIN RETURN 99 END", []);
         here.Objects["vwOld"] = ("View", "CREATE VIEW dbo.vwOld AS SELECT 1 AS a", []);
+        here.Objects["Rates"] = ("Table", "CREATE TABLE dbo.Rates (Id int)", []);
         await using var _ = await Serve(here);
         var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
         // Not applied, there is nothing to put back.
@@ -398,6 +403,37 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await Json(await Api.PostAsync($"api/transport/packages/{id}/revert", null), HttpStatusCode.Conflict);
         await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { at = DateTimeOffset.UtcNow.AddHours(3) }));
         await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/reject", new { }));
+    }
+
+    [Fact]
+    public async Task A_script_that_names_what_is_neither_here_nor_before_it_in_the_package_is_not_approved()
+    {
+        var origin = new PretendDatabase();
+        byte[] made;
+        await using (await Serve(origin))
+        {
+            await ClearArea();
+            await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { title = "Tabela", script = "CREATE TABLE dbo.Fresh (Id int)" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { title = "Carga", script = "INSERT INTO dbo.Fresh (Id) SELECT p.Id FROM dbo.Prices p JOIN dbo.Lost l ON l.Id = p.Id" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Carga" }), HttpStatusCode.Created);
+            made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
+        }
+
+        var here = new PretendDatabase();
+        here.Objects["Prices"] = ("Table", "CREATE TABLE dbo.Prices (Id int)", []);
+        await using var _ = await Serve(here);
+        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+
+        // The table the first script makes is not missing for the second; the one nobody makes is.
+        var checks = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]!;
+        Assert.Empty(checks[0]!["missing"]!);
+        Assert.Equal(["dbo.Lost"], checks[1]!["missing"]!.Select(name => (string?)name));
+        var refused = await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }), HttpStatusCode.Conflict);
+        Assert.Contains("dbo.Lost", (string?)refused["error"]);
+
+        here.Objects["Lost"] = ("Table", "CREATE TABLE dbo.Lost (Id int)", []);
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
+        await WaitFor(id, "Applied");
     }
 
     [Fact]
@@ -495,6 +531,7 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                 ? new JObject { ["Ok"] = true, ["Applied"] = false, ["Problem"] = "Invalid object name 'dbo.Rates'.", ["Batch"] = 1, ["Line"] = 3, ["Messages"] = new JArray() }
                 : null
         };
+        here.Objects["Rates"] = ("Table", "CREATE TABLE dbo.Rates (Id int)", []);
         await using var _ = await Serve(here);
         var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
 
@@ -520,6 +557,7 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
     {
         var (_, made) = await Made();
         var here = new PretendDatabase();
+        here.Objects["Rates"] = ("Table", "CREATE TABLE dbo.Rates (Id int)", []);
         await using var _ = await Serve(here);
         var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
 
