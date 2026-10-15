@@ -103,6 +103,12 @@ public sealed class PackageItem
     /// yet to install it. Null when it could not be told, or is not of a kind that is installed.
     /// </summary>
     public InstallInfo? Install { get; set; }
+
+    /// <summary>
+    /// For a whole web application: what it is, mfe or monolith. One of micro frontends that arrives
+    /// where a monolith is replaces it, and the application is registered as micro frontends.
+    /// </summary>
+    public string? Mode { get; set; }
 }
 
 /// <summary>
@@ -202,6 +208,10 @@ public sealed class ItemResult
     /// The item made, here, an application that was not here before.
     /// </summary>
     public bool Installed { get; set; }
+    /// <summary>
+    /// What the web application was registered as before the item changed it, to put that back too.
+    /// </summary>
+    public string? ModeBefore { get; set; }
     public string? Did { get; set; }
     public string? Problem { get; set; }
     public int? Batch { get; set; }

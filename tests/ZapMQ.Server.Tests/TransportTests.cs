@@ -42,6 +42,10 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         public Dictionary<string, Dictionary<string, string>> Settings { get; } = [];
         public Dictionary<string, JArray> Sites { get; } = [];
         public Dictionary<string, string> ProxyFiles { get; } = [];
+        /// <summary>
+        /// What a whole web application is, as "kind:name": mfe or monolith.
+        /// </summary>
+        public Dictionary<string, string> Modes { get; } = [];
 
         /// <summary>
         /// What was left in the inbox of the machine for a target, as "kind:name".
@@ -101,7 +105,7 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                     return Targets.TryGetValue($"{request["Kind"]}:{request["Name"]}", out var files)
                         ? new JObject
                         {
-                            ["Ok"] = true, ["Target"] = new JObject { ["Kind"] = request["Kind"], ["Name"] = request["Name"], ["Version"] = "1.0", ["Problem"] = TargetProblem, ["Paths"] = new JArray("D:\\Apps\\" + request["Name"]), ["Sites"] = Sites.GetValueOrDefault((string)request["Name"]!) ?? [] },
+                            ["Ok"] = true, ["Target"] = new JObject { ["Kind"] = request["Kind"], ["Name"] = request["Name"], ["Version"] = "1.0", ["Problem"] = TargetProblem, ["Paths"] = new JArray("D:\\Apps\\" + request["Name"]), ["Sites"] = Sites.GetValueOrDefault((string)request["Name"]!) ?? [], ["Mode"] = Modes.GetValueOrDefault($"{request["Kind"]}:{request["Name"]}") },
                             ["Files"] = new JArray(files.Select(file => new JObject { ["Path"] = file.Key, ["Size"] = file.Value.Length, ["Sha256"] = Sha(file.Value) }))
                         }
                         : new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "not-found", ["Message"] = "no such target" } };
@@ -859,6 +863,47 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         // What was installed is not taken away by putting the package back.
         var plan = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/revert"));
         Assert.Equal("cannot", (string?)plan["steps"]![0]!["state"]);
+    }
+
+    [Fact]
+    public async Task Micro_frontends_brought_whole_replace_a_monolith_and_go_back_to_it()
+    {
+        var origin = new PretendDatabase();
+        origin.Targets["frontend:OJITECH"] = new() { ["index.html"] = "shell", ["assets/mf.manifest.json"] = "{}", ["mfe/producao/remoteEntry.js"] = "p" };
+        origin.Modes["frontend:OJITECH"] = "mfe";
+        byte[] made;
+        await using (await Serve(origin))
+        {
+            await ClearArea();
+            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "frontend", name = "OJITECH" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "OJITECH MFE" }), HttpStatusCode.Created);
+            Assert.Equal("mfe", (string?)closed["items"]![0]!["mode"]);
+            made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
+        }
+
+        var here = new PretendDatabase
+        {
+            OnApply = request => (string?)request["Command"] == "TransportDeploy"
+                ? new JObject { ["Ok"] = true, ["Applied"] = true, ["Did"] = "replaced", ["Backup"] = "/backup/monolith", ["Mode"] = request["Mode"], ["Messages"] = new JArray("replaced") }
+                : null
+        };
+        here.Targets["frontend:OJITECH"] = new() { ["index.html"] = "monolith", ["main.js"] = "m" };
+        here.Modes["frontend:OJITECH"] = "monolith";
+        await using var _ = await Serve(here);
+        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+        Assert.Equal("converts", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!["state"]);
+
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
+        var applied = await WaitFor(id, "Applied", "Partial", "Failed");
+        Assert.Equal(("Applied", "monolith"), ((string?)applied["package"]!["status"], (string?)applied["results"]![0]!["modeBefore"]));
+        lock (here.Applied)
+            Assert.Equal("mfe", (string?)here.Applied.Single(request => (string?)request["Command"] == "TransportDeploy")["Mode"]);
+
+        // Going back puts the monolith back and says what the application was.
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/revert", new { }));
+        await WaitFor(id, "Reverted");
+        lock (here.Reverted)
+            Assert.Equal("monolith", (string?)here.Reverted.Single()["Mode"]);
     }
 
     [Fact]

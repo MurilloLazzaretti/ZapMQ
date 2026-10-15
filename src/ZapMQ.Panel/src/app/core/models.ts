@@ -831,6 +831,8 @@ export interface TransportTarget {
   Service: string | null;
   Sites: string[];
   Problem: string | null;
+  /** For a whole web application: mfe or monolith. */
+  Mode?: 'mfe' | 'monolith' | null;
   /** A new version somebody left for it in the inbox of the machine. */
   Incoming?: { Path: string; At: string; Files: number | null } | null;
 }
@@ -931,6 +933,8 @@ export interface PackageItem {
   install?: InstallInfo | null;
   /** How it was said to be installed here, when the package was approved. */
   chosen?: InstallChoice | null;
+  /** A whole web application: mfe or monolith. */
+  mode?: string | null;
 }
 
 export interface InstallInfo {
@@ -975,6 +979,8 @@ export interface PackageResult {
   revertBackup: string | null;
   /** The item made here an application that was not here before. */
   installed?: boolean;
+  /** What the web application was registered as before the item changed it. */
+  modeBefore?: string | null;
 }
 
 /** What putting back one applied item would take. */
@@ -997,7 +1003,7 @@ export interface PackageDetail {
 /** How one item of a package stands against what this environment has. */
 export interface ItemCheck {
   number: number;
-  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'unknown' | 'missing' | 'install';
+  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'unknown' | 'missing' | 'install' | 'converts';
   added: number;
   changed: number;
   removed: number;

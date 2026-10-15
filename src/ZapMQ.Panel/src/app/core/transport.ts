@@ -50,7 +50,10 @@ export function targetName(kind: string, many = false): string {
 }
 
 /** How a target is called on the screen: the shell of an application of modules says what it is. */
-export function targetLabel(target: { Kind: string; Name: string }): string {
+export function targetLabel(target: { Kind: string; Name: string; Mode?: string | null }): string {
+  if (target.Kind === 'frontend' && target.Mode === 'mfe') {
+    return `${target.Name} (aplicação inteira)`;
+  }
   if (target.Kind === 'frontend' && (target.Name === 'shell' || target.Name.endsWith('/shell'))) {
     return target.Name.replace(/shell$/, 'Casca (shell)');
   }

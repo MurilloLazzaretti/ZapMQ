@@ -291,6 +291,22 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         return answer.Body;
     }
 
+    /// <summary>
+    /// What a whole web application is here, mfe or monolith; null for a module, or when it cannot be told.
+    /// </summary>
+    private async Task<string?> ModeOf(PackageItem item, string by, CancellationToken cancellation)
+    {
+        try
+        {
+            var target = (await Ask("TransportTarget", by, request => { request["Kind"] = item.Kind; request["Name"] = item.Name; }, cancellation))["Target"];
+            return target?["Mode"]?.GetValue<string>();
+        }
+        catch (TransportRefused)
+        {
+            return null;
+        }
+    }
+
     private static void RequireFileKind(string? kind, string? name)
     {
         if (kind is null || !FileKinds.Contains(kind))
@@ -433,6 +449,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 item.Files = area_.Files;
                 // For an environment that does not have it yet: what it is here, without the secrets.
                 item.Install = await DescribeForInstall(item, by, cancellation);
+                if (item.Kind == "frontend")
+                    item.Mode = await ModeOf(item, by, cancellation);
                 items.Add((area_, item, await File.ReadAllBytesAsync(store.AreaFile(area_.Id), cancellation)));
                 continue;
             }
@@ -575,7 +593,10 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                     else if (found.Target["Problem"]?.GetValue<string>() is { } problem)
                         checks.Add(new ItemCheck(item.Number, "unknown", found.Target["Version"]?.GetValue<string>(), [], problem));
                     else
-                        checks.Add(new ItemCheck(item.Number, found.Changes.All(change => change.State == "same") ? "same" : "changes", found.Target["Version"]?.GetValue<string>(), [], null)
+                        checks.Add(new ItemCheck(item.Number,
+                            // Micro frontends where a monolith is: it is replaced whole, and becomes one of micro frontends.
+                            item.Mode == "mfe" && found.Target["Mode"]?.GetValue<string>() == "monolith" ? "converts"
+                            : found.Changes.All(change => change.State == "same") ? "same" : "changes", found.Target["Version"]?.GetValue<string>(), [], null)
                         {
                             Added = found.Changes.Count(change => change.State == "added"), Changed = found.Changes.Count(change => change.State == "changed"), Removed = found.Changes.Count(change => change.State == "removed")
                         });
@@ -931,6 +952,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                         request["Name"] = item.Name;
                         request["Backup"] = record.Results.First(result => result.Number == step.Number).Backup;
                         request["Force"] = record.Force;
+                        if (record.Results.First(result => result.Number == step.Number).ModeBefore is { } before)
+                            request["Mode"] = before;
                     }, cancellation));
                 else
                 {
@@ -1029,6 +1052,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 request["Force"] = force;
                 if (!string.IsNullOrEmpty(item.Version))
                     request["Version"] = item.Version;
+                if (item.Mode is { Length: > 0 })
+                    request["Mode"] = item.Mode;
             }, cancellation);
 
             if (!answer.Reached)
@@ -1049,6 +1074,11 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 result.Problem = body["Problem"]?.GetValue<string>();
                 result.Backup = body["Backup"]?.GetValue<string>();
                 result.Messages = [.. (body["Messages"] as JsonArray ?? []).Select(message => message?.GetValue<string>() ?? "")];
+                // The application changed kind: what it was is what it goes back to.
+                if (body["Mode"]?.GetValue<string>() is { } now)
+                    result.ModeBefore = now == "mfe" ? "monolith" : "mfe";
+                if (body["ModeProblem"]?.GetValue<string>() is { } problem)
+                    result.Messages.Add(problem);
             }
         }
         finally

@@ -74,13 +74,14 @@
               <span class="bad">Não foi possível comparar com este ambiente: {{ checkProblem() }}</span>
             } @else if (!checks()) {
               <span class="muted">Comparando com o que existe aqui…</span>
-            } @else if (warnings().blocked || warnings().conflicts || warnings().missing || warnings().drops) {
+            } @else if (warnings().blocked || warnings().conflicts || warnings().missing || warnings().drops || warnings().converts) {
               <span class="muted">
                 Antes de aprovar, veja:
                 @if (warnings().blocked) { <b class="bad">{{ warnings().blocked }} que não podem ser aplicados aqui (tabela ou type que já existe, ou aplicação que este ambiente não tem), o que impede a aprovação</b>; }
                 @if (warnings().conflicts) { <b>{{ warnings().conflicts }} diferentes do ponto de partida</b>; }
                 @if (warnings().missing) { <b>{{ warnings().missing }} que usam algo que falta aqui</b>; }
                 @if (warnings().drops) { <b>{{ warnings().drops }} que serão apagados</b>. }
+                @if (warnings().converts) { <b>a aplicação web, hoje um monolito, será trocada pela de micro frontends</b>. }
               </span>
             } @else {
               <span class="muted">Nada no pacote entra em choque com o que existe aqui.</span>
@@ -203,7 +204,7 @@
                   }
                   @switch (done.reverted === 'reverted' ? '' : done.status) {
                     @case ('') {}
-                    @case ('applied') { <span class="pill ok">{{ done.installed ? 'instalado' : done.did === 'replaced' ? 'substituído' : done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
+                    @case ('applied') { <span class="pill ok">{{ done.installed ? 'instalado' : done.modeBefore === 'monolith' ? 'trocado pelo MFE' : done.did === 'replaced' ? 'substituído' : done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
                     @case ('failed') { <span class="pill danger">falhou</span> }
                     @default { <span class="pill warn" matTooltip="O pedido foi feito e a resposta não chegou: pode ter sido aplicado ou não. Confira no banco.">resultado desconhecido</span> }
                   }
