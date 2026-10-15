@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult,
   PanelUser,
-  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
+  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageDraft, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
   HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WebSite, WebSwitched, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending, InstallChoice } from './models';
@@ -260,16 +260,38 @@ export class Api {
     return this.http.get<TransportSummary>('api/transport/summary');
   }
 
-  area(): Observable<{ environment: string; items: AreaItem[] }> {
-    return this.http.get<{ environment: string; items: AreaItem[] }>('api/transport/area');
+  /** The packages open here. */
+  drafts(): Observable<{ environment: string; drafts: PackageDraft[] }> {
+    return this.http.get<{ environment: string; drafts: PackageDraft[] }>('api/transport/drafts');
   }
 
-  addToArea(item: { database?: string; kind: string; schema: string; name: string; drop?: boolean }): Observable<AreaItem> {
-    return this.http.post<AreaItem>('api/transport/area/objects', item);
+  createDraft(draft: { name: string; description: string }): Observable<PackageDraft> {
+    return this.http.post<PackageDraft>('api/transport/drafts', draft);
   }
 
-  addScript(script: { title: string; script: string }): Observable<AreaItem> {
-    return this.http.post<AreaItem>('api/transport/area/scripts', script);
+  changeDraft(id: string, draft: { name?: string; description?: string }): Observable<PackageDraft> {
+    return this.http.put<PackageDraft>(`api/transport/drafts/${id}`, draft);
+  }
+
+  deleteDraft(id: string): Observable<void> {
+    return this.http.delete<void>(`api/transport/drafts/${id}`);
+  }
+
+  /** The next version of a package made here, open with what the newest one carries. */
+  newVersion(id: string): Observable<PackageDraft> {
+    return this.http.post<PackageDraft>(`api/transport/packages/${id}/versions`, null);
+  }
+
+  area(draft: string): Observable<{ environment: string; draft: PackageDraft | null; items: AreaItem[] }> {
+    return this.http.get<{ environment: string; draft: PackageDraft | null; items: AreaItem[] }>('api/transport/area', { params: { draft } });
+  }
+
+  addToArea(draft: string, item: { database?: string; kind: string; schema: string; name: string; drop?: boolean }): Observable<AreaItem> {
+    return this.http.post<AreaItem>('api/transport/area/objects', { draft, ...item });
+  }
+
+  addScript(draft: string, script: { title: string; script: string }): Observable<AreaItem> {
+    return this.http.post<AreaItem>('api/transport/area/scripts', { draft, ...script });
   }
 
   transportTargets(): Observable<{ Inbox: string; Targets: TransportTarget[]; Unmatched: string[] }> {
@@ -277,18 +299,18 @@ export class Api {
   }
 
   /** The new version somebody left for a target in the inbox of the machine. */
-  addIncoming(kind: string, name: string): Observable<AreaItem> {
-    return this.http.post<AreaItem>('api/transport/area/incoming', { kind, name });
+  addIncoming(draft: string, kind: string, name: string): Observable<AreaItem> {
+    return this.http.post<AreaItem>('api/transport/area/incoming', { draft, kind, name });
   }
 
   /** What a target is running right now, packed by the Worker Control. */
-  addRunning(kind: string, name: string): Observable<AreaItem> {
-    return this.http.post<AreaItem>('api/transport/area/running', { kind, name });
+  addRunning(draft: string, kind: string, name: string): Observable<AreaItem> {
+    return this.http.post<AreaItem>('api/transport/area/running', { draft, kind, name });
   }
 
   /** The zip of a published folder, brought from the machine of whoever is at the panel. */
-  addFiles(kind: string, name: string, file: Blob, version: string | null = null): Observable<AreaItem> {
-    return this.http.post<AreaItem>('api/transport/area/upload', file, { params: version ? { kind, name, version } : { kind, name }, headers: { 'Content-Type': 'application/octet-stream' } });
+  addFiles(draft: string, kind: string, name: string, file: Blob, version: string | null = null): Observable<AreaItem> {
+    return this.http.post<AreaItem>('api/transport/area/upload', file, { params: version ? { draft, kind, name, version } : { draft, kind, name }, headers: { 'Content-Type': 'application/octet-stream' } });
   }
 
   applicationDefaults(): Observable<ApplicationDefaults> {
@@ -403,7 +425,7 @@ export class Api {
     return this.http.get<{ environment: string; packages: PackageSummary[] }>('api/transport/packages');
   }
 
-  closePackage(request: { name: string; description: string; items?: string[] }): Observable<PackageDetail> {
+  closePackage(request: { draft: string; name?: string; description?: string; items?: string[] }): Observable<PackageDetail> {
     return this.http.post<PackageDetail>('api/transport/packages', request);
   }
 

@@ -3,13 +3,28 @@
     <a mat-icon-button routerLink="/transporte/pacotes" matTooltip="Voltar aos pacotes" aria-label="Voltar aos pacotes"><mat-icon svgIcon="arrow_back" /></a>
     @if (detail(); as now) {
       <div class="title">
-        <h1>{{ now.package.name }} <span class="pill" [class]="'pill ' + statusTone(now.package.status)">{{ statusName(now.package.status) }}</span></h1>
+        <h1>{{ now.package.name }} <span class="pill primary">v{{ now.package.version }}</span> <span class="pill" [class]="'pill ' + statusTone(now.package.status)">{{ statusName(now.package.status) }}</span></h1>
         <p class="muted">
           Montado em <strong>{{ now.package.origin }}</strong> por {{ now.package.createdBy }}, {{ now.package.createdAt | when }} ·
           {{ now.items.length }} {{ now.items.length === 1 ? 'item' : 'itens' }} · {{ size(now.package.size / 1024) }} ·
           <span class="mono" matTooltip="Impressão digital do arquivo do pacote: a mesma em todos os ambientes">{{ now.sha256.slice(0, 12) }}</span>
         </p>
         @if (now.package.description) { <p class="description">{{ now.package.description }}</p> }
+        @if (now.versions.length > 1 || now.draft || (!now.package.received && !now.package.newer)) {
+          <p class="versions">
+            @if (now.versions.length > 1) {
+              <span class="muted">Versões aqui:</span>
+              @for (other of now.versions; track other.id) {
+                @if (other.id === now.package.id) { <strong>v{{ other.version }}</strong> } @else { <a [routerLink]="['/transporte/pacotes', other.id]" [matTooltip]="statusName(other.status)">v{{ other.version }}</a> }
+              }
+            }
+            @if (now.draft; as open) {
+              <a mat-button [routerLink]="['/transporte/aberto', open.id]"><mat-icon svgIcon="edit_note" /> v{{ open.version }} aberta</a>
+            } @else if (!now.package.received && !now.package.newer) {
+              <button mat-button (click)="nextVersion()" [disabled]="busy()" matTooltip="Abre a versão seguinte com tudo o que esta leva, para corrigir ou acrescentar"><mat-icon svgIcon="add" /> Nova versão</button>
+            }
+          </p>
+        }
       </div>
     } @else {
       <div class="title"><h1>Pacote</h1></div>
@@ -21,6 +36,14 @@
   } @else if (missing()) {
     <section class="panel empty"><mat-icon svgIcon="search" /><strong>Este pacote não está neste ambiente</strong></section>
   } @else if (detail(); as now) {
+    @if (now.package.newer; as newest) {
+      <div class="notice" role="status">
+        <mat-icon svgIcon="info" />
+        <div>Este ambiente já tem a <strong>versão {{ newest }}</strong> deste pacote, que leva tudo o que esta leva. Esta não é mais aprovada nem enviada.
+          @for (other of now.versions; track other.id) { @if (other.version === newest) { <a [routerLink]="['/transporte/pacotes', other.id]">Ver a versão {{ newest }}</a> } }
+        </div>
+      </div>
+    }
     <!-- What there is to do about it, which depends on where it stands. -->
     @switch (now.package.status) {
       @case ('Closed') {
@@ -203,7 +226,7 @@
                   }
                   @switch (done.reverted === 'reverted' ? '' : done.status) {
                     @case ('') {}
-                    @case ('applied') { <span class="pill ok">{{ done.installed ? 'instalado' : done.did === 'replaced' ? 'substituído' : done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
+                    @case ('applied') { <span class="pill ok">{{ done.did === 'skipped' ? 'já tinha rodado' : done.installed ? 'instalado' : done.did === 'replaced' ? 'substituído' : done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
                     @case ('failed') { <span class="pill danger">falhou</span> }
                     @default { <span class="pill warn" matTooltip="O pedido foi feito e a resposta não chegou: pode ter sido aplicado ou não. Confira no banco.">resultado desconhecido</span> }
                   }

@@ -13,11 +13,13 @@ public static class TransportEndpoints
     /// </summary>
     private const long MaxPackage = 512L * 1024 * 1024;
 
-    public sealed record AddObjectRequest(string? Database, string? Kind, string? Schema, string? Name, bool Drop);
+    public sealed record AddObjectRequest(string? Draft, string? Database, string? Kind, string? Schema, string? Name, bool Drop);
 
-    public sealed record AddScriptRequest(string? Database, string? Title, string? Script);
+    public sealed record AddScriptRequest(string? Draft, string? Database, string? Title, string? Script);
 
-    public sealed record AddTargetRequest(string? Kind, string? Name);
+    public sealed record AddTargetRequest(string? Draft, string? Kind, string? Name);
+
+    public sealed record DraftRequest(string? Name, string? Description);
 
     public sealed record WriteFileRequest(string? Kind, string? Name, int Instance, string? Path, string? Content, string? Sha256, bool Restart);
 
@@ -45,7 +47,7 @@ public static class TransportEndpoints
         return Results.Content(answer.Body!.ToJsonString(), "application/json; charset=utf-8");
     }
 
-    public sealed record CloseRequest(string? Name, string? Description, List<string>? Items, bool KeepOrder);
+    public sealed record CloseRequest(string? Draft, string? Name, string? Description, List<string>? Items, bool KeepOrder);
 
     public sealed record ApproveRequest(DateTimeOffset? At, bool Force = false, Dictionary<int, InstallChoice>? Installs = null);
 
@@ -75,9 +77,9 @@ public static class TransportEndpoints
         item.Number, item.Kind, item.Action, item.Name, item.Version, item.Fingerprint, item.Size, files = item.Files.Count
     };
 
-    private static object Summary(PackageRecord record) => new
+    private static object Summary(PackageRecord record, TransportStore store) => new
     {
-        id = record.Manifest.Id, name = record.Manifest.Name, description = record.Manifest.Description, origin = record.Manifest.Origin,
+        id = record.Manifest.Id, line = Versions.LineOf(record.Manifest), version = Versions.VersionOf(record.Manifest), newer = store.Newer(record.Manifest), name = record.Manifest.Name, description = record.Manifest.Description, origin = record.Manifest.Origin,
         createdAt = record.Manifest.CreatedAt, createdBy = record.Manifest.CreatedBy, items = record.Manifest.Items.Count,
         status = record.Status, received = record.Received, deliveries = record.Deliveries, applyAt = record.ApplyAt, approvedBy = record.ApprovedBy, revertBy = record.RevertBy, force = record.Force, acknowledgedBy = record.AcknowledgedBy, size = record.Size,
         changedAt = record.History.LastOrDefault()?.At ?? record.Manifest.CreatedAt
@@ -86,11 +88,14 @@ public static class TransportEndpoints
     private static object Detail(PackageRecord record, TransportStore store) => new
     {
         environment = store.Environment,
-        package = Summary(record),
+        package = Summary(record, store),
+        // The versions of the same package that this environment has.
+        versions = store.Line(record.Manifest).Select(other => new { id = other.Manifest.Id, version = Versions.VersionOf(other.Manifest), status = other.Status, createdAt = other.Manifest.CreatedAt }),
+        draft = store.Drafts().FirstOrDefault(draft => draft.Line == Versions.LineOf(record.Manifest)),
         sha256 = record.Sha256,
         items = record.Manifest.Items.Select(item => new
         {
-            item.Number, item.Kind, item.Action, item.ObjectKind, item.Variety, item.Schema, item.Name, item.Title, item.Database, item.Fingerprint, item.Base, item.Size,
+            item.Number, item.Kind, item.Action, item.ObjectKind, item.Variety, item.Schema, item.Name, item.Title, item.Database, item.Fingerprint, item.Base, item.Earlier, item.Size,
             item.Version, files = item.Files.Count, uses = item.Uses.Count, install = item.Install, chosen = record.Installs.GetValueOrDefault(item.Number), mode = item.Mode
         }),
         history = record.History,
@@ -109,22 +114,50 @@ public static class TransportEndpoints
             var packages = store.Packages();
             return Results.Json(new
             {
-                environment = store.Environment, area = store.Area().Count,
+                environment = store.Environment, area = store.Area().Count, drafts = store.Drafts().Count,
                 pending = packages.Count(record => record.Status == "Pending"),
                 scheduled = packages.Count(record => record.Status == "Approved"),
                 troubled = packages.Count(record => record.Status is "Partial" or "Failed" or "RevertedPartly" && record.AcknowledgedBy is null)
             });
         });
 
-        // ── The area ────────────────────────────────────────────────────────
+        // ── Open packages ───────────────────────────────────────────────────
 
-        api.MapGet("/area", (TransportStore store) => Results.Json(new { environment = store.Environment, items = store.Area() }));
+        api.MapGet("/drafts", (TransportStore store) =>
+        {
+            var area = store.Area();
+            return Results.Json(new
+            {
+                environment = store.Environment,
+                drafts = store.Drafts().Select(draft => new { draft.Id, draft.Line, draft.Version, draft.Name, draft.Description, draft.CreatedBy, draft.CreatedAt, items = area.Count(item => item.Draft == draft.Id) })
+            });
+        });
+
+        api.MapPost("/drafts", (DraftRequest request, TransportStore store, HttpContext context, TimeProvider time) => Guarded(() =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new TransportRefused("Dê um nome ao pacote");
+            return Task.FromResult(Results.Json(store.CreateDraft(request.Name, request.Description, null, 1, User(context), time.GetUtcNow()), statusCode: StatusCodes.Status201Created));
+        }));
+
+        api.MapPut("/drafts/{id}", (string id, DraftRequest request, TransportStore store) => Guarded(() =>
+            Task.FromResult(Results.Json(store.ChangeDraft(id, request.Name, request.Description)))));
+
+        api.MapDelete("/drafts/{id}", (string id, TransportStore store) => store.DeleteDraft(id) ? Results.NoContent() : Results.NotFound());
+
+        // The next version of a package made here, open with what the newest one carries.
+        api.MapPost("/packages/{id}/versions", (string id, TransportStore store, HttpContext context, TimeProvider time) => Guarded(() =>
+            Task.FromResult(Results.Json(store.NewVersion(id, User(context), time.GetUtcNow()), statusCode: StatusCodes.Status201Created))));
+
+        // ── What goes in them ───────────────────────────────────────────────
+
+        api.MapGet("/area", (string? draft, TransportStore store) => Results.Json(new { environment = store.Environment, draft = store.Draft(draft), items = store.Area(draft) }));
 
         api.MapPost("/area/objects", (AddObjectRequest request, TransportService transport, HttpContext context) => Guarded(async () =>
-            Results.Json(await transport.AddObject(request.Database, request.Kind, request.Schema, request.Name, request.Drop, User(context), context.RequestAborted), statusCode: StatusCodes.Status201Created)));
+            Results.Json(await transport.AddObject(request.Draft, request.Database, request.Kind, request.Schema, request.Name, request.Drop, User(context), context.RequestAborted), statusCode: StatusCodes.Status201Created)));
 
         api.MapPost("/area/scripts", (AddScriptRequest request, TransportService transport, HttpContext context) => Guarded(() =>
-            Task.FromResult(Results.Json(transport.AddScript(request.Database, request.Title, request.Script, User(context)), statusCode: StatusCodes.Status201Created))));
+            Task.FromResult(Results.Json(transport.AddScript(request.Draft, request.Database, request.Title, request.Script, User(context)), statusCode: StatusCodes.Status201Created))));
 
         // What can be replaced on the machine of this environment.
         api.MapGet("/targets", (TransportService transport, HttpContext context) => Guarded(async () =>
@@ -189,18 +222,18 @@ public static class TransportEndpoints
 
         // What a target is running right now, packed and put in the area.
         api.MapPost("/area/running", (AddTargetRequest request, TransportService transport, HttpContext context) => Guarded(async () =>
-            Results.Json(await transport.AddRunning(request.Kind, request.Name, incoming: false, User(context), context.RequestAborted), statusCode: StatusCodes.Status201Created)));
+            Results.Json(await transport.AddRunning(request.Draft, request.Kind, request.Name, incoming: false, User(context), context.RequestAborted), statusCode: StatusCodes.Status201Created)));
 
         // The new version somebody left for a target in the inbox of the machine.
         api.MapPost("/area/incoming", (AddTargetRequest request, TransportService transport, HttpContext context) => Guarded(async () =>
-            Results.Json(await transport.AddRunning(request.Kind, request.Name, incoming: true, User(context), context.RequestAborted), statusCode: StatusCodes.Status201Created)));
+            Results.Json(await transport.AddRunning(request.Draft, request.Kind, request.Name, incoming: true, User(context), context.RequestAborted), statusCode: StatusCodes.Status201Created)));
 
         // The zip of a published folder, brought by somebody.
-        api.MapPost("/area/upload", (string? kind, string? name, string? version, HttpContext context, TransportService transport) => Guarded(async () =>
+        api.MapPost("/area/upload", (string? draft, string? kind, string? name, string? version, HttpContext context, TransportService transport) => Guarded(async () =>
         {
             using var memory = new MemoryStream();
             await context.Request.Body.CopyToAsync(memory, context.RequestAborted);
-            return Results.Json(transport.AddUpload(kind, name, version, memory.ToArray(), User(context)), statusCode: StatusCodes.Status201Created);
+            return Results.Json(transport.AddUpload(draft, kind, name, version, memory.ToArray(), User(context)), statusCode: StatusCodes.Status201Created);
         })).WithMetadata(new RequestSizeLimitAttribute(MaxPackage));
 
         api.MapDelete("/area/{id}", (string id, TransportStore store) => store.Remove(id) ? Results.NoContent() : Results.NotFound());
@@ -210,10 +243,10 @@ public static class TransportEndpoints
 
         // ── Packages ────────────────────────────────────────────────────────
 
-        api.MapGet("/packages", (TransportStore store) => Results.Json(new { environment = store.Environment, packages = store.Packages().Select(Summary) }));
+        api.MapGet("/packages", (TransportStore store) => Results.Json(new { environment = store.Environment, packages = store.Packages().Select(record => Summary(record, store)) }));
 
         api.MapPost("/packages", (CloseRequest request, TransportService transport, TransportStore store, HttpContext context) => Guarded(async () =>
-            Results.Json(Detail(await transport.Close(request.Name, request.Description, request.Items, request.KeepOrder, User(context), context.RequestAborted), store), statusCode: StatusCodes.Status201Created)));
+            Results.Json(Detail(await transport.Close(request.Draft, request.Name, request.Description, request.Items, request.KeepOrder, User(context), context.RequestAborted), store), statusCode: StatusCodes.Status201Created)));
 
         api.MapPost("/packages/import", (HttpContext context, TransportStore store, TimeProvider time, ILoggerFactory loggers) => Guarded(async () =>
         {

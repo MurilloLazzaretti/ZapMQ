@@ -95,7 +95,7 @@
               <strong>{{ picked().size }} {{ picked().size === 1 ? 'objeto selecionado' : 'objetos selecionados' }}</strong>
               <button mat-button (click)="clearPicked()" [disabled]="adding()">Limpar</button>
               <span class="spacer"></span>
-              <button mat-flat-button (click)="addPicked()" [disabled]="adding()"><mat-icon svgIcon="local_shipping" /> {{ adding() ? 'Incluindo…' : 'Incluir na expedição' }}</button>
+              <button mat-flat-button (click)="addPicked()" [disabled]="adding()"><mat-icon svgIcon="local_shipping" /> {{ adding() ? 'Incluindo…' : 'Incluir no pacote' }}</button>
             </div>
           }
           <div class="foot"><span class="muted">{{ found.length | num }} {{ found.length === 1 ? 'objeto' : 'objetos' }} com esse texto, nos scripts como estavam na última conferência do banco.</span></div>
@@ -133,7 +133,7 @@
                     <td class="right" data-label="Alterado" [matTooltip]="item.ModifiedAt | when">{{ item.ModifiedAt | ago }}</td>
                     <td class="right num" data-label="Linhas">{{ item.Rows === null ? '—' : (item.Rows | num) }}</td>
                     <td class="right num" data-label="Tamanho">{{ item.SizeKb === null ? '—' : size(item.SizeKb) }}</td>
-                    <td class="actions"><button mat-icon-button (click)="transport.add({ database: now.Database, kind: item.Kind, schema: item.Schema, name: item.Name })" matTooltip="Incluir na expedição" aria-label="Incluir na expedição"><mat-icon svgIcon="local_shipping" /></button></td>
+                    <td class="actions"><button mat-icon-button (click)="transport.add({ database: now.Database, kind: item.Kind, schema: item.Schema, name: item.Name })" matTooltip="Incluir no pacote" aria-label="Incluir no pacote"><mat-icon svgIcon="local_shipping" /></button></td>
                   </tr>
                 }
               </tbody>

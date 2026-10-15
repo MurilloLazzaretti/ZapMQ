@@ -913,10 +913,28 @@ export interface RemovedApplication {
   Messages: string[];
 }
 
-export type PackageStatus = 'Closed' | 'Pending' | 'Rejected' | 'Approved' | 'Applying' | 'Applied' | 'Partial' | 'Failed' | 'Reverting' | 'Reverted' | 'RevertedPartly';
+export type PackageStatus = 'Closed' | 'Pending' | 'Rejected' | 'Approved' | 'Applying' | 'Applied' | 'Partial' | 'Failed' | 'Reverting' | 'Reverted' | 'RevertedPartly' | 'Superseded';
+
+/** A package being put together here: closed, it becomes the given version of its package. */
+export interface PackageDraft {
+  id: string;
+  /** The package all its versions share. */
+  line: string;
+  version: number;
+  name: string;
+  description: string;
+  createdBy: string;
+  createdAt: string;
+  items?: number;
+}
 
 export interface PackageSummary {
   id: string;
+  /** The package all its versions share, and which version this one is. */
+  line: string;
+  version: number;
+  /** The newest version this environment has, when it is newer than this one. */
+  newer: number | null;
   name: string;
   description: string;
   origin: string;
@@ -1018,6 +1036,10 @@ export interface RevertStep {
 export interface PackageDetail {
   environment: string;
   package: PackageSummary;
+  /** The versions of the same package this environment has, the oldest first. */
+  versions: { id: string; version: number; status: PackageStatus; createdAt: string }[];
+  /** The next version, when it is open here. */
+  draft: PackageDraft | null;
   sha256: string;
   items: PackageItem[];
   history: { at: string; by: string; what: string; detail: string | null }[];
@@ -1027,7 +1049,7 @@ export interface PackageDetail {
 /** How one item of a package stands against what this environment has. */
 export interface ItemCheck {
   number: number;
-  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'unknown' | 'missing' | 'install' | 'mismatch';
+  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'ran' | 'unknown' | 'missing' | 'install' | 'mismatch';
   added: number;
   changed: number;
   removed: number;
@@ -1052,6 +1074,8 @@ export interface PackageItemDetail {
 export interface TransportSummary {
   environment: string;
   area: number;
+  /** The packages open here. */
+  drafts?: number;
   pending: number;
   scheduled: number;
   troubled: number;

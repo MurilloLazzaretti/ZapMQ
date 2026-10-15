@@ -17,7 +17,7 @@
     </div>
     <span class="spacer"></span>
     @if (detail(); as now) {
-      <button mat-button (click)="transport.add({ database: now.Database, kind: now.Object.Kind, schema: now.Object.Schema, name: now.Object.Name })" matTooltip="Incluir na expedição, para ir em um pacote">
+      <button mat-button (click)="transport.add({ database: now.Database, kind: now.Object.Kind, schema: now.Object.Schema, name: now.Object.Name })" matTooltip="Incluir num pacote aberto">
         <mat-icon svgIcon="local_shipping" /> Transportar
       </button>
     }

@@ -19,7 +19,8 @@ form.script, form.close {
 
   mat-form-field { width: 100%; }
   textarea.mono { font-family: var(--zap-mono); font-size: 12.5px; line-height: 1.5; white-space: pre; overflow-x: auto; }
-  .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+  .buttons { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  .buttons .danger { margin-right: auto; color: var(--zap-danger); }
   .note { margin: 0; font: var(--mat-sys-body-small); max-width: 90ch; }
 }
 

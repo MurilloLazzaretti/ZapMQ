@@ -201,7 +201,10 @@ desliga a criação e a exclusão na máquina.
 
 ### 5.1 Entrada
 
-De duas formas, que dão no mesmo lugar, a **área** do ambiente:
+Tudo começa por um **pacote aberto**: em *Transporte → Pacotes*, **Novo pacote** pede o nome e o
+que muda, e o que for incluído pelas telas do painel vai nele (o último escolhido fica lembrado no
+navegador; sem nenhum, o painel pergunta em qual incluir ou cria um). Sem pacote aberto não se
+inclui nada. Entram nele de duas formas:
 
 - **Pelo painel:** escolher objetos do banco, nas abas Objetos e Alterações (esta marca o que
   mudou e ainda não entrou em nenhum pacote); escrever ou importar um script; ou enviar o zip de
@@ -213,12 +216,28 @@ De duas formas, que dão no mesmo lugar, a **área** do ambiente:
 Em DEV também se pode montar um item **a partir do que está rodando**: o agente empacota a pasta
 atual do alvo.
 
-### 5.2 Montagem
+### 5.2 Montagem e versões
 
-Na área, escolhem-se os itens, a ordem e a descrição, e o pacote é fechado. O script de cada
-objeto é capturado nesse momento, não quando ele entrou na área. A ordem é calculada pelas
-dependências (types e tabelas antes de functions, views e procedures) e pode ser ajustada à mão.
-Fechado, o pacote não muda mais: uma correção é outro pacote.
+No pacote aberto ficam os itens, o nome e a descrição; **Fechar a versão N** fecha. O script de
+cada objeto é capturado nesse momento, não quando ele entrou no pacote. A ordem é calculada pelas
+dependências (types e tabelas antes de functions, views e procedures). Fechada, a versão não muda
+mais.
+
+**Uma correção é a versão seguinte do mesmo pacote.** Em um pacote feito no ambiente, **Nova
+versão** abre a versão N+1 com tudo o que a última leva (os objetos apontados de novo, os scripts
+com o texto, os arquivos das aplicações); nela se corrige, acrescenta ou tira o que for, e ela é
+fechada como qualquer outra. Toda versão é **completa**: a mais nova leva tudo o que o pacote é,
+não só a diferença.
+
+- **Só a mais nova segue.** Uma versão mais antiga não é enviada nem aprovada onde já existe uma
+  mais nova; o ambiente seguinte (PRD) recebe só a última. Uma versão que esperava aprovação e
+  é alcançada por outra mais nova fica **substituída**.
+- **O que já está como a versão anterior deixou** não é conflito: o objeto alterado pela v1 está,
+  onde a v1 foi aplicada, como a v2 espera (`Earlier` do item).
+- **Um script não roda duas vezes no mesmo ambiente.** O mesmo texto (impressão digital do
+  script), já aplicado ali por uma versão anterior do mesmo pacote, aparece como **já rodou aqui**
+  e é pulado. Um script corrigido é outro texto e roda; o ideal é escrevê-lo de forma que possa
+  rodar mais de uma vez (`IF NOT EXISTS`, `IF COL_LENGTH(...) IS NULL`).
 
 Um pacote fechado pode ser **baixado** como arquivo e **importado** no painel de outro ambiente.
 É o caminho que existe antes do envio direto, e o que continua valendo entre ambientes que não
@@ -256,7 +275,12 @@ busca o que a origem tem para ele); isso não está feito.
 
 ### 5.4 Aprovação
 
-No destino o pacote aparece como **pendente**, com, para cada item:
+No destino o pacote aparece como **pendente**. Antes de aprovar, o destino confere o que cada
+item usa: os objetos de que um objeto do banco depende e os que um script cita (lidos com o
+interpretador de T-SQL, sem rodar o script: tabelas, views, procedures e funções; o que o próprio
+script cria, as tabelas temporárias, os apelidos e o que é de outro banco ficam de fora). O que
+não existe no destino nem vem antes no pacote **impede a aprovação**, com o nome do que falta. A
+conferência é de objetos, não de colunas. Para cada item aparece:
 
 - a comparação entre o que chega e o que existe hoje (linha a linha para banco; versão e lista de
   arquivos para pastas);
@@ -332,7 +356,7 @@ Um pacote aplicado pode ser enviado ao ambiente seguinte, onde passa por tudo de
 Em cada ambiente um pacote está em um destes: **em montagem**, **fechado**, **enviado** (com o
 destino e a hora da entrega), **pendente**, **recusado**, **aprovado** (agora ou agendado),
 **aplicando**, **aplicado**, **aplicado em parte**, **falhou**, **revertendo**, **revertido**,
-**revertido em parte**. Toda passagem de um para outro
+**revertido em parte**, **substituído** (por uma versão mais nova que chegou). Toda passagem de um para outro
 fica no histórico do pacote, com o usuário e a hora.
 
 ## 7. A garantia de leitura do banco
@@ -384,12 +408,13 @@ autorizadas não ficam no `appsettings.json`: são cadastradas no painel (seçã
 
 **Telas.** Item **Transporte** no menu, com um aviso de quantos pacotes esperam por alguém.
 
-- **Expedição** (`/transporte`): o que espera para entrar em um pacote. Objetos entram pelo botão
+- **Pacotes** (`/transporte/pacotes`): os **abertos** (sendo montados) com *Novo pacote*, e os
+  fechados e recebidos, uma linha por pacote com a versão mais nova (as anteriores ficam
+  acessíveis por ela), com a situação de cada um e *Importar pacote*.
+- **Pacote aberto** (`/transporte/aberto/{id}`): o que vai nele. Objetos entram pelo botão
   *Transportar* das telas Objetos e Alterações do banco (esta marca cada alteração como ainda
-  não transportada, ou já em pacote); um script é escrito ali ou importado de um `.sql`. Fechar o
-  pacote pede um nome e a descrição.
-- **Pacotes** (`/transporte/pacotes`): os montados aqui e os que chegaram, com a situação de
-  cada um, e *Importar pacote*.
+  não transportada, ou já em pacote) e pelas Aplicações; um script é escrito ali ou importado de
+  um `.sql`. Daí se fecha a versão, se guarda o nome e a descrição ou se descarta.
 - **Pacote** (`/transporte/pacotes/{id}`): os itens na ordem de aplicação, cada um com o que traz
   comparado linha a linha ao que existe aqui; a decisão (aprovar e aplicar agora, agendar,
   recusar, cancelar a aprovação); o resultado de cada item; e o histórico no ambiente.
@@ -420,12 +445,16 @@ nunca é excluído: pode ser recusado, o que impede para sempre a aplicação de
 registrado tudo o que trazia.
 
 **Onde fica.** No painel, a pasta `transport` ao lado do executável (`ZapMQ:Transport:Directory`):
-`area.json` e, por pacote, `packages/{id}/package.zpkg` e `state.json`. O nome do ambiente vem de
+`drafts.json` (os pacotes abertos), `area.json` (o que foi incluído em cada um) e, por pacote,
+`packages/{id}/package.zpkg` e `state.json`. O manifesto diz `line` (o pacote que as versões
+compartilham) e `version`; um pacote anterior às versões é a versão 1 de si mesmo. O nome do ambiente vem de
 `ZapMQ:Transport:Environment`; sem ele, vale o nome da máquina.
 
-**Rotas** (todas sob `api/transport`, atrás do login): `summary`; `area`, `area/objects`,
-`area/scripts`, `area/{id}`; `packaged`; `packages`, `packages/import`, `packages/{id}`,
-`packages/{id}/download`, `/check`, `/items/{n}`, `/approve`, `/reject`; `DELETE packages/{id}`.
+**Rotas** (todas sob `api/transport`, atrás do login): `summary`; `drafts` (GET, POST),
+`drafts/{id}` (PUT, DELETE); `area?draft=`, `area/objects`, `area/scripts`, `area/{id}` (o que
+inclui pede `draft`); `packaged`; `packages` (POST fecha um `draft`), `packages/import`,
+`packages/{id}`, `packages/{id}/versions` (abre a versão seguinte), `packages/{id}/download`,
+`/check`, `/items/{n}`, `/approve`, `/reject`; `DELETE packages/{id}` (reabre a versão).
 
 **No agente:** o comando `DatabaseApply` e o componente `SqlServerWriter`, o único que escreve
 no banco. Ele recusa um banco fora de `Databases`, cria ou altera conforme o objeto exista, não

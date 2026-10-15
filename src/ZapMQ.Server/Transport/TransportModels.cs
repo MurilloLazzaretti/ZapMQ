@@ -7,6 +7,11 @@ namespace ZapMQ.Server.Transport;
 public sealed class AreaItem
 {
     public string Id { get; set; } = "";
+
+    /// <summary>
+    /// The open package it goes in.
+    /// </summary>
+    public string? Draft { get; set; }
     public string Kind { get; set; } = "database";
 
     /// <summary>
@@ -42,6 +47,21 @@ public sealed class AreaItem
     public string? Version { get; set; }
     public List<FileReference> Files { get; set; } = [];
     public long Size { get; set; }
+}
+
+/// <summary>
+/// A package being put together here: what it will be called and which version of which package
+/// it will be once closed. Its items are in the area, each saying it is of this one.
+/// </summary>
+public sealed class PackageDraft
+{
+    public string Id { get; set; } = "";
+    public string Line { get; set; } = "";
+    public int Version { get; set; } = 1;
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string CreatedBy { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
 }
 
 /// <summary>
@@ -83,6 +103,12 @@ public sealed class PackageItem
     /// What the object was like, where the package was made, before the changes it carries.
     /// </summary>
     public string? Base { get; set; }
+
+    /// <summary>
+    /// What the version before this one of the same package left the object like: where that
+    /// version was applied, the object is as this one expects too.
+    /// </summary>
+    public string? Earlier { get; set; }
 
     /// <summary>
     /// The file of the item inside the package, and what tells it arrived whole.
@@ -181,12 +207,30 @@ public sealed class PackageManifest
 {
     public int Format { get; set; } = 1;
     public string Id { get; set; } = "";
+
+    /// <summary>
+    /// The package all the versions of it share; the id of the package for one made before there were versions.
+    /// </summary>
+    public string? Line { get; set; }
+
+    /// <summary>
+    /// Each version is whole: the newest one carries everything the package is, and is the only
+    /// one that goes on to the next environment.
+    /// </summary>
+    public int Version { get; set; } = 1;
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
     public string Origin { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
     public string CreatedBy { get; set; } = "";
     public List<PackageItem> Items { get; set; } = [];
+}
+
+public static class Versions
+{
+    public static string LineOf(PackageManifest manifest) => string.IsNullOrEmpty(manifest.Line) ? manifest.Id : manifest.Line;
+
+    public static int VersionOf(PackageManifest manifest) => manifest.Version <= 0 ? 1 : manifest.Version;
 }
 
 public sealed class HistoryEntry
@@ -251,7 +295,8 @@ public sealed class PackageRecord
 
     /// <summary>
     /// Closed (made here), Pending, Rejected, Approved, Applying, Applied, Partial or Failed;
-    /// and, when what it did was put back, Reverting, Reverted or RevertedPartly.
+    /// and, when what it did was put back, Reverting, Reverted or RevertedPartly. Superseded
+    /// when a newer version of it arrived before it was applied.
     /// </summary>
     public string Status { get; set; } = "Closed";
 

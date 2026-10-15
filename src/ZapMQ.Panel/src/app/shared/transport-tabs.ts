@@ -1,22 +1,20 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { Transport } from '../core/transport';
 
 /** The screens of the transport: what waits to go into a package, the packages, what runs on the machine and how it is all set up. */
 @Component({
   selector: 'zap-transport-tabs',
-  imports: [RouterLink, RouterLinkActive, MatIconModule],
+  imports: [RouterLink, RouterLinkActive, MatIconModule, MatTooltipModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav aria-label="Transporte">
-      <a routerLink="/transporte" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
-        <mat-icon svgIcon="playlist_add" /> Expedição
-        @if (transport.summary()?.area; as count) { <span class="count">{{ count }}</span> }
-      </a>
-      <a routerLink="/transporte/pacotes" routerLinkActive="active">
+      <a routerLink="/transporte/pacotes" routerLinkActive="active" [class.active]="opened()">
         <mat-icon svgIcon="inventory_2" /> Pacotes
-        @if (transport.waiting(); as count) { <span class="count hot">{{ count }}</span> }
+        @if (transport.summary()?.drafts; as count) { <span class="count" matTooltip="Abertos">{{ count }}</span> }
+        @if (transport.waiting(); as count) { <span class="count hot" matTooltip="Pedem atenção">{{ count }}</span> }
       </a>
       <a routerLink="/transporte/aplicacoes" routerLinkActive="active"><mat-icon svgIcon="deployed_code" /> Aplicações</a>
       <a routerLink="/transporte/configuracao" routerLinkActive="active"><mat-icon svgIcon="tune" /> Configuração</a>
@@ -45,4 +43,10 @@ import { Transport } from '../core/transport';
 })
 export class TransportTabs {
   protected readonly transport = inject(Transport);
+  private readonly router = inject(Router);
+
+  /** An open package is one of the packages too. */
+  protected opened(): boolean {
+    return this.router.url.startsWith('/transporte/aberto/');
+  }
 }

@@ -8,6 +8,7 @@
   h1 .pill { vertical-align: middle; margin-left: 8px; letter-spacing: 0; }
   p { margin: 4px 0 0; overflow-wrap: anywhere; }
   .description { max-width: 90ch; white-space: pre-line; }
+  .versions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 6px 0 0; }
 }
 
 .spacer { flex: 1; }
@@ -131,3 +132,6 @@
 
   input { accent-color: var(--zap-danger); }
 }
+
+.notice { display: flex; gap: 12px; padding: 12px 16px; border-radius: 14px; background: var(--zap-warn-container); color: var(--zap-warn); }
+.notice mat-icon { flex: none; }

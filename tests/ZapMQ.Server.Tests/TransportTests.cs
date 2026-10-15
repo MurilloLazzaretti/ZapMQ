@@ -190,16 +190,28 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         return JObject.Parse(text);
     }
 
+    /// <summary>
+    /// The open package the test puts things in.
+    /// </summary>
+    private string? _draft;
+
     private async Task ClearArea()
     {
-        foreach (var item in JObject.Parse(await Api.GetStringAsync("api/transport/area"))["items"]!)
-            await Api.DeleteAsync("api/transport/area/" + (string?)item["id"]);
+        foreach (var draft in JObject.Parse(await Api.GetStringAsync("api/transport/drafts"))["drafts"]!)
+            await Api.DeleteAsync("api/transport/drafts/" + (string?)draft["id"]);
+        _draft = (string?)(await Json(await Api.PostAsJsonAsync("api/transport/drafts", new { name = "Teste" }), HttpStatusCode.Created))["id"];
     }
 
     /// <summary>
     /// The same package as another environment would have made it: under another identity and origin.
     /// </summary>
-    private static byte[] FromElsewhere(byte[] package, Func<string, string>? tamper = null)
+    /// <summary>
+    /// A package as it arrives at one of several environments the test pretends there are, all
+    /// served by the same panel: its versions are of a line of that environment alone.
+    /// </summary>
+    private static byte[] At(string environment, byte[] package) => FromElsewhere(package, line: environment);
+
+    private static byte[] FromElsewhere(byte[] package, Func<string, string>? tamper = null, string? line = null)
     {
         using var source = new ZipArchive(new MemoryStream(package), ZipArchiveMode.Read);
         using var memory = new MemoryStream();
@@ -215,6 +227,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                     var manifest = JObject.Parse(Encoding.UTF8.GetString(bytes));
                     manifest["id"] = Guid.NewGuid().ToString("N");
                     manifest["origin"] = "DEV";
+                    if (line is not null)
+                        manifest["line"] = $"{manifest["line"]}-{line}";
                     bytes = Encoding.UTF8.GetBytes(manifest.ToString());
                 }
                 else if (tamper is not null && entry.FullName.EndsWith(".sql"))
@@ -255,20 +269,21 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
 
         // The screens say which database the object is in; with one database, the package names none.
         foreach (var (kind, name) in new[] { ("Procedure", "spClose"), ("View", "vwOrders"), ("Type", "OrderList"), ("Function", "fncTotal") })
-            Assert.Equal(JTokenType.Null, (await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { database = "Sales", kind, schema = "dbo", name }), HttpStatusCode.Created))["database"]!.Type);
+            Assert.Equal(JTokenType.Null, (await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, database = "Sales", kind, schema = "dbo", name }), HttpStatusCode.Created))["database"]!.Type);
         // Twice is once; what is not there cannot be carried; what is there cannot go as a drop.
-        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "View", schema = "dbo", name = "VWORDERS" }), HttpStatusCode.Created);
-        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "View", schema = "dbo", name = "vwGone" }), HttpStatusCode.NotFound);
-        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "View", schema = "dbo", name = "vwOrders", drop = true }), HttpStatusCode.BadRequest);
-        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "Procedure", schema = "dbo", name = "spOld", drop = true }), HttpStatusCode.Created);
-        await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { title = "Nova coluna", script = "ALTER TABLE dbo.Orders ADD Channel varchar(10) NULL" }), HttpStatusCode.Created);
-        await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { title = "", script = "x" }), HttpStatusCode.BadRequest);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "View", schema = "dbo", name = "VWORDERS" }), HttpStatusCode.Created);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "View", schema = "dbo", name = "vwGone" }), HttpStatusCode.NotFound);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "View", schema = "dbo", name = "vwOrders", drop = true }), HttpStatusCode.BadRequest);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spOld", drop = true }), HttpStatusCode.Created);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { draft = _draft, title = "Nova coluna", script = "ALTER TABLE dbo.Orders ADD Channel varchar(10) NULL" }), HttpStatusCode.Created);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { draft = _draft, title = "", script = "x" }), HttpStatusCode.BadRequest);
         Assert.Equal(6, JObject.Parse(await Api.GetStringAsync("api/transport/area"))["items"]!.Count());
 
         // The script is the one of the moment the package is closed.
         database.Objects["fncTotal"] = ("Function", "CREATE FUNCTION dbo.fncTotal() RETURNS int AS BEGIN RETURN 2 END", []);
-        await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "" }), HttpStatusCode.BadRequest);
-        var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Fechamento de pedidos", description = "Nova regra" }), HttpStatusCode.Created);
+        // Without an open package, nothing is closed; without a name of its own, it keeps the one of the open package.
+        await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = "nenhum", name = "x" }), HttpStatusCode.NotFound);
+        var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Fechamento de pedidos", description = "Nova regra" }), HttpStatusCode.Created);
 
         Assert.Equal(("Closed", false, "TEST", "admin"), ((string?)closed["package"]!["status"], (bool)closed["package"]!["received"]!, (string?)closed["package"]!["origin"], (string?)closed["package"]!["createdBy"]));
         Assert.Equal(["OrderList", null, "fncTotal", "vwOrders", "spClose", "spOld"], closed["items"]!.Select(item => (string?)item["name"]));
@@ -302,9 +317,9 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using var worker = await Serve(origin);
         await ClearArea();
         foreach (var (kind, name) in new[] { ("Function", "fncTotal"), ("Procedure", "spClose"), ("Procedure", "spNew") })
-            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind, schema = "dbo", name }), HttpStatusCode.Created);
-        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "View", schema = "dbo", name = "vwOld", drop = true }), HttpStatusCode.Created);
-        var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Pacote " + Guid.NewGuid().ToString("N")[..6] }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind, schema = "dbo", name }), HttpStatusCode.Created);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "View", schema = "dbo", name = "vwOld", drop = true }), HttpStatusCode.Created);
+        var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Pacote " + Guid.NewGuid().ToString("N")[..6] }), HttpStatusCode.Created);
         return (origin, await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download"));
     }
 
@@ -406,6 +421,84 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
     }
 
     [Fact]
+    public async Task A_new_version_carries_everything_and_a_script_that_already_ran_does_not_run_again()
+    {
+        var origin = new PretendDatabase();
+        origin.Objects["Orders"] = ("Table", "CREATE TABLE dbo.Orders (Id int)", []);
+        origin.Objects["spClose"] = ("Procedure", "CREATE PROCEDURE dbo.spClose AS SELECT 1", []);
+        byte[] first, second;
+        await using (await Serve(origin))
+        {
+            await ClearArea();
+            await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { draft = _draft, title = "Coluna", script = "ALTER TABLE dbo.Orders ADD Channel int" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spClose" }), HttpStatusCode.Created);
+            var v1 = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Pedidos" }), HttpStatusCode.Created);
+            var v1Id = (string)v1["package"]!["id"]!;
+            Assert.Equal(1, (int)v1["package"]!["version"]!);
+            first = await Api.GetByteArrayAsync($"api/transport/packages/{v1Id}/download");
+
+            // The next version opens with everything the first carried; something new goes in it.
+            var draft = await Json(await Api.PostAsync($"api/transport/packages/{v1Id}/versions", null), HttpStatusCode.Created);
+            Assert.Equal((2, "Pedidos"), ((int)draft["version"]!, (string?)draft["name"]));
+            await Json(await Api.PostAsync($"api/transport/packages/{v1Id}/versions", null), HttpStatusCode.Conflict);
+            _draft = (string?)draft["id"];
+            Assert.Equal(2, JObject.Parse(await Api.GetStringAsync($"api/transport/area?draft={_draft}"))["items"]!.Count());
+            origin.Objects["spClose"] = ("Procedure", "CREATE PROCEDURE dbo.spClose AS SELECT 2", []);
+            origin.Objects["spNew"] = ("Procedure", "CREATE PROCEDURE dbo.spNew AS RETURN", []);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spNew" }), HttpStatusCode.Created);
+            var v2 = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft }), HttpStatusCode.Created);
+            Assert.Equal((2, (string?)v1["package"]!["line"], "Pedidos"), ((int)v2["package"]!["version"]!, (string?)v2["package"]!["line"], (string?)v2["package"]!["name"]));
+            Assert.Equal(3, v2["items"]!.Count());
+            second = await Api.GetByteArrayAsync($"api/transport/packages/{(string)v2["package"]!["id"]!}/download");
+            // The older version is not applied nor sent any more where the newer one is.
+            var older = await Json(await Api.PostAsJsonAsync($"api/transport/packages/{v1Id}/approve", new { }), HttpStatusCode.Conflict);
+            Assert.Contains("versão 2", (string?)older["error"]);
+        }
+
+        // Where the first version was applied, the second does not run its script again.
+        var qas = new PretendDatabase();
+        qas.Objects["Orders"] = ("Table", "CREATE TABLE dbo.Orders (Id int)", []);
+        await using (await Serve(qas))
+        {
+            var one = (string)(await Import(At("QAS", first)))["package"]!["id"]!;
+            await Json(await Api.PostAsJsonAsync($"api/transport/packages/{one}/approve", new { }));
+            await WaitFor(one, "Applied");
+            var two = (string)(await Import(At("QAS", second)))["package"]!["id"]!;
+            var checks = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{two}/check"))["checks"]!;
+            Assert.Equal("ran", (string?)checks.First(check => (int)check["number"]! == 1)["state"]);
+            await Json(await Api.PostAsJsonAsync($"api/transport/packages/{two}/approve", new { }));
+            var applied = await WaitFor(two, "Applied");
+            Assert.Equal("skipped", (string?)applied["results"]![0]!["did"]);
+            lock (qas.Applied)
+                Assert.Equal(["Script", "Define", "Define", "Define"], qas.Applied.Select(request => (string?)request["Action"]));
+        }
+
+        // Where only the newest arrives, everything in it runs, the script once.
+        var prd = new PretendDatabase();
+        prd.Objects["Orders"] = ("Table", "CREATE TABLE dbo.Orders (Id int)", []);
+        await using (await Serve(prd))
+        {
+            var two = (string)(await Import(At("PRD", second)))["package"]!["id"]!;
+            await Json(await Api.PostAsJsonAsync($"api/transport/packages/{two}/approve", new { }));
+            var applied = await WaitFor(two, "Applied");
+            Assert.Equal("Applied", (string?)applied["package"]!["status"]);
+            lock (prd.Applied)
+                Assert.Equal(["Script", "Define", "Define"], prd.Applied.Select(request => (string?)request["Action"]));
+        }
+
+        // An older version waiting where a newer one arrives gives it its place.
+        var other = new PretendDatabase();
+        other.Objects["Orders"] = ("Table", "CREATE TABLE dbo.Orders (Id int)", []);
+        await using (await Serve(other))
+        {
+            var one = (string)(await Import(At("OTHER", first)))["package"]!["id"]!;
+            await Import(At("OTHER", second));
+            Assert.Equal("Superseded", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{one}"))["package"]!["status"]);
+            await Json(await Api.PostAsJsonAsync($"api/transport/packages/{one}/approve", new { }), HttpStatusCode.Conflict);
+        }
+    }
+
+    [Fact]
     public async Task A_script_that_names_what_is_neither_here_nor_before_it_in_the_package_is_not_approved()
     {
         var origin = new PretendDatabase();
@@ -413,9 +506,9 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using (await Serve(origin))
         {
             await ClearArea();
-            await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { title = "Tabela", script = "CREATE TABLE dbo.Fresh (Id int)" }), HttpStatusCode.Created);
-            await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { title = "Carga", script = "INSERT INTO dbo.Fresh (Id) SELECT p.Id FROM dbo.Prices p JOIN dbo.Lost l ON l.Id = p.Id" }), HttpStatusCode.Created);
-            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Carga" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { draft = _draft, title = "Tabela", script = "CREATE TABLE dbo.Fresh (Id int)" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { draft = _draft, title = "Carga", script = "INSERT INTO dbo.Fresh (Id) SELECT p.Id FROM dbo.Prices p JOIN dbo.Lost l ON l.Id = p.Id" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Carga" }), HttpStatusCode.Created);
             made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
         }
 
@@ -446,10 +539,10 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using (await Serve(origin))
         {
             await ClearArea();
-            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "Procedure", schema = "dbo", name = "spClose" }), HttpStatusCode.Created);
-            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "Table", schema = "dbo", name = "Rates" }), HttpStatusCode.Created);
-            await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { title = "Fill", script = "UPDATE dbo.Rates SET Id = 1" }), HttpStatusCode.Created);
-            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Rates" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spClose" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Table", schema = "dbo", name = "Rates" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { draft = _draft, title = "Fill", script = "UPDATE dbo.Rates SET Id = 1" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Rates" }), HttpStatusCode.Created);
             made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
         }
 
@@ -492,9 +585,10 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
 
         async Task<string> Applied(string version)
         {
+            await ClearArea();
             dev.Incoming["api:Billing"] = new() { ["Billing.dll"] = version };
-            await Json(await Api.PostAsJsonAsync("api/transport/area/incoming", new { kind = "api", name = "Billing" }), HttpStatusCode.Created);
-            var made = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Billing " + version }), HttpStatusCode.Created))["package"]!["id"]!;
+            await Json(await Api.PostAsJsonAsync("api/transport/area/incoming", new { draft = _draft, kind = "api", name = "Billing" }), HttpStatusCode.Created);
+            var made = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Billing " + version }), HttpStatusCode.Created))["package"]!["id"]!;
             await Json(await Api.PostAsJsonAsync($"api/transport/packages/{made}/approve", new { }));
             await WaitFor(made, "Applied");
             return made;
@@ -601,8 +695,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using (await Serve(origin))
         {
             await ClearArea();
-            Assert.Equal("Sales", (string?)(await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { database = "Sales", kind = "Procedure", schema = "dbo", name = "spNew" }), HttpStatusCode.Created))["database"]);
-            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Two databases" }), HttpStatusCode.Created);
+            Assert.Equal("Sales", (string?)(await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, database = "Sales", kind = "Procedure", schema = "dbo", name = "spNew" }), HttpStatusCode.Created))["database"]);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Two databases" }), HttpStatusCode.Created);
             made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
         }
         var here = new PretendDatabase { Databases = ["Other"] };
@@ -624,8 +718,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using (await Serve(origin))
         {
             await ClearArea();
-            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "Table", schema = "dbo", name = "Orders" }), HttpStatusCode.Created);
-            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "A table" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Table", schema = "dbo", name = "Orders" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "A table" }), HttpStatusCode.Created);
             made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
         }
 
@@ -689,17 +783,21 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         database.Objects["spNew"] = ("Procedure", "CREATE PROCEDURE dbo.spNew AS RETURN", []);
         await using var _ = await Serve(database);
         await ClearArea();
-        await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { title = "Nova coluna", script = "ALTER TABLE dbo.Orders ADD Channel varchar(10) NULL" }), HttpStatusCode.Created);
-        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "Procedure", schema = "dbo", name = "spNew" }), HttpStatusCode.Created);
-        var first = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "To be deleted" }), HttpStatusCode.Created))["package"]!["id"]!;
+        await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { draft = _draft, title = "Nova coluna", script = "ALTER TABLE dbo.Orders ADD Channel varchar(10) NULL" }), HttpStatusCode.Created);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spNew" }), HttpStatusCode.Created);
+        var first = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "To be deleted" }), HttpStatusCode.Created))["package"]!["id"]!;
 
         Assert.Equal(HttpStatusCode.NoContent, (await Api.DeleteAsync($"api/transport/packages/{first}")).StatusCode);
         var area = JObject.Parse(await Api.GetStringAsync("api/transport/area"))["items"]!;
         Assert.Equal("ALTER TABLE dbo.Orders ADD Channel varchar(10) NULL", (string?)area.Single(item => (string?)item["action"] == "Script")["script"]);
         Assert.Equal(2, area.Count());
+        // Open again, as the same version of the same package.
+        var reopened = JObject.Parse(await Api.GetStringAsync("api/transport/drafts"))["drafts"]!.Single();
+        Assert.Equal(("To be deleted", 1), ((string?)reopened["name"], (int)reopened["version"]!));
+        _draft = (string?)reopened["id"];
 
         // Closed again and received somewhere: from then on it stays.
-        var second = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Delivered" }), HttpStatusCode.Created))["package"]!["id"]!;
+        var second = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Delivered" }), HttpStatusCode.Created))["package"]!["id"]!;
         server.Services.GetRequiredService<global::ZapMQ.Server.Transport.TransportStore>().Update(second, record =>
             record.Deliveries.Add(new global::ZapMQ.Server.Transport.Delivery { To = "QAS", At = DateTimeOffset.UtcNow, By = "admin" }));
 
@@ -723,17 +821,17 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
 
             // Brought as a zip made by a careless hand: the folder on the outside, and the configuration in it.
             var zip = PretendDatabase.Zipped(new() { ["Orders.Api.dll"] = "v2", ["wwwroot/index.html"] = "<html>", ["appsettings.json"] = "{dev}", ["web.config"] = "<x/>", ["logs/today.log"] = "noise" }, outer: "publish/");
-            var uploaded = await Json(await Api.PostAsync("api/transport/area/upload?kind=api&name=Orders&version=2.3.0", new ByteArrayContent(zip)), HttpStatusCode.Created);
+            var uploaded = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders&version=2.3.0", new ByteArrayContent(zip)), HttpStatusCode.Created);
             Assert.Equal(["Orders.Api.dll", "wwwroot/index.html"], uploaded["files"]!.Select(file => (string?)file["path"]));
             Assert.Equal(("api", "Orders", "2.3.0", "Replace"), ((string?)uploaded["kind"], (string?)uploaded["name"], (string?)uploaded["version"], (string?)uploaded["action"]));
             // And what is running, packed by the Worker Control.
-            var running = await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "service", name = "Sockets" }), HttpStatusCode.Created);
+            var running = await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { draft = _draft, kind = "service", name = "Sockets" }), HttpStatusCode.Created);
             Assert.Equal(("2.0", 2), ((string?)running["version"], running["files"]!.Count()));
-            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { kind = "Procedure", schema = "dbo", name = "spNew" }), HttpStatusCode.Created);
-            await Json(await Api.PostAsync("api/transport/area/upload?kind=database&name=x", new ByteArrayContent(zip)), HttpStatusCode.BadRequest);
-            await Json(await Api.PostAsync("api/transport/area/upload?kind=api&name=Orders", new ByteArrayContent(Encoding.UTF8.GetBytes("not a zip"))), HttpStatusCode.BadRequest);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spNew" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=database&name=x", new ByteArrayContent(zip)), HttpStatusCode.BadRequest);
+            await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders", new ByteArrayContent(Encoding.UTF8.GetBytes("not a zip"))), HttpStatusCode.BadRequest);
 
-            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Orders 2.3" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Orders 2.3" }), HttpStatusCode.Created);
             // The database first, then what runs.
             Assert.Equal(["database", "api", "service"], closed["items"]!.Select(item => (string?)item["kind"]));
             Assert.Equal((2, "2.3.0"), ((int)closed["items"]![1]!["files"]!, (string?)closed["items"]![1]!["version"]));
@@ -777,9 +875,9 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using (await Serve(origin))
         {
             await ClearArea();
-            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "frontend", name = "orders" }), HttpStatusCode.Created);
-            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "worker", name = "Orders" }), HttpStatusCode.Created);
-            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Orders worker" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { draft = _draft, kind = "frontend", name = "orders" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { draft = _draft, kind = "worker", name = "Orders" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Orders worker" }), HttpStatusCode.Created);
             // What runs before the screens that call it.
             Assert.Equal(["worker", "frontend"], closed["items"]!.Select(item => (string?)item["kind"]));
             made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
@@ -857,8 +955,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using (await Serve(origin))
         {
             await ClearArea();
-            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "api", name = "Orders" }), HttpStatusCode.Created);
-            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Orders new" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { draft = _draft, kind = "api", name = "Orders" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Orders new" }), HttpStatusCode.Created);
             var install = closed["items"]![0]!["install"]!;
             Assert.Equal((2, "9024,9025"), ((int)install["instances"]!, string.Join(",", install["ports"]!.Select(port => (int)port))));
             // No secret of here goes along.
@@ -913,8 +1011,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using (await Serve(origin))
         {
             await ClearArea();
-            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "frontend", name = "Portal" }), HttpStatusCode.Created);
-            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Portal MFE" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { draft = _draft, kind = "frontend", name = "Portal" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Portal MFE" }), HttpStatusCode.Created);
             Assert.Equal("mfe", (string?)closed["items"]![0]!["mode"]);
             made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
         }
@@ -956,9 +1054,9 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using var _ = await Serve(dev);
         await ClearArea();
 
-        var placed = await Json(await Api.PostAsJsonAsync("api/transport/area/incoming", new { kind = "api", name = "Orders" }), HttpStatusCode.Created);
+        var placed = await Json(await Api.PostAsJsonAsync("api/transport/area/incoming", new { draft = _draft, kind = "api", name = "Orders" }), HttpStatusCode.Created);
         Assert.Equal(["new.js", "Orders.Api.dll"], placed["files"]!.Select(file => (string?)file["path"]));
-        var id = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Orders 2" }), HttpStatusCode.Created))["package"]!["id"]!;
+        var id = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Orders 2" }), HttpStatusCode.Created))["package"]!["id"]!;
 
         // Made here, it is compared with what runs here and applied here like anywhere else.
         var check = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!;
@@ -991,11 +1089,11 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
 
         // An app is a zip itself: it is taken as the file it is, not opened.
         var apk = PretendDatabase.Zipped(new() { ["classes.dex"] = "dex", ["AndroidManifest.xml"] = "<manifest/>" });
-        var placed = await Json(await Api.PostAsync("api/transport/area/upload?kind=download&name=app-shop.apk&version=2.1.0", new ByteArrayContent(apk)), HttpStatusCode.Created);
+        var placed = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=download&name=app-shop.apk&version=2.1.0", new ByteArrayContent(apk)), HttpStatusCode.Created);
         Assert.Equal(("app-shop.apk", "2.1.0"), ((string?)placed["files"]!.Single()["path"], (string?)placed["version"]));
-        await Json(await Api.PostAsync("api/transport/area/upload?kind=download&name=..%5Coutside.apk", new ByteArrayContent(apk)), HttpStatusCode.BadRequest);
+        await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=download&name=..%5Coutside.apk", new ByteArrayContent(apk)), HttpStatusCode.BadRequest);
 
-        var id = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "App 2.1.0" }), HttpStatusCode.Created))["package"]!["id"]!;
+        var id = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "App 2.1.0" }), HttpStatusCode.Created))["package"]!["id"]!;
         await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
         await WaitFor(id, "Applied");
 

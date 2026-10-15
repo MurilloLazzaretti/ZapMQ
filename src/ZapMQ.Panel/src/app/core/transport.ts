@@ -3,7 +3,10 @@ import { Injectable, inject, signal } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 import { Api } from './api';
-import { PackageStatus, TransportSummary } from './models';
+import { MatDialog } from '@angular/material/dialog';
+import { Router } from '@angular/router';
+import { DraftPicker } from '../shared/draft-picker';
+import { PackageDraft, PackageStatus, TransportSummary } from './models';
 
 const STATUS: Record<PackageStatus, { text: string; tone: string }> = {
   Closed: { text: 'fechado', tone: 'info' },
@@ -17,6 +20,7 @@ const STATUS: Record<PackageStatus, { text: string; tone: string }> = {
   Reverting: { text: 'revertendo', tone: 'primary' },
   Reverted: { text: 'revertido', tone: 'warn' },
   RevertedPartly: { text: 'revertido em parte', tone: 'danger' },
+  Superseded: { text: 'substituído por versão nova', tone: '' },
 };
 
 export function statusName(status: PackageStatus): string {
@@ -95,18 +99,26 @@ export function historyText(what: string): string {
       'reverted-partly': 'Revertido em parte',
       'revert-failed': 'A reversão falhou',
       'revert-interrupted': 'Reversão interrompida',
+      superseded: 'Substituído por versão nova',
     } as Record<string, string>
   )[what] ?? what;
 }
 
+const CURRENT = 'zapmq.transport.draft';
+
 /**
  * What every screen needs of the transport: how much is waiting, and the one way of putting
- * an object of the database in the area of the environment.
+ * something in an open package.
  */
 @Injectable({ providedIn: 'root' })
 export class Transport {
   private readonly api = inject(Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
+  private readonly router = inject(Router);
+
+  /** The open package things go in from the screens, as chosen last in this browser. */
+  readonly current = signal<PackageDraft | null>(null);
 
   readonly summary = signal<TransportSummary | null>(null);
   /** The names of the packages this environment knows, by their identity. */
@@ -115,6 +127,16 @@ export class Transport {
   readonly waiting = signal(0);
 
   constructor() {
+    // The one chosen before, while it is still open.
+    let remembered: string | null = null;
+    try {
+      remembered = localStorage.getItem(CURRENT);
+    } catch {
+      remembered = null;
+    }
+    if (remembered) {
+      this.api.drafts().subscribe({ next: (answer) => this.current.set(answer.drafts.find((draft) => draft.id === remembered) ?? null), error: () => undefined });
+    }
     this.refresh();
     setInterval(() => this.refresh(), 30000);
   }
@@ -135,34 +157,96 @@ export class Transport {
   }
 
   /**
-   * Puts several objects in the area, one after the other; what fails is said and the rest
-   * goes on. Gives how many went in.
+   * The open package to put something in: the one chosen last, while it is still open; otherwise
+   * whoever is at the panel says which, or makes one. Null when nobody answered.
+   */
+  async draftFor(ask = false): Promise<PackageDraft | null> {
+    let drafts: PackageDraft[];
+    try {
+      drafts = (await firstValueFrom(this.api.drafts())).drafts;
+    } catch {
+      this.snack.open('Não foi possível ler os pacotes abertos', 'Fechar', { duration: 6000 });
+      return null;
+    }
+    let remembered: string | null = null;
+    try {
+      remembered = localStorage.getItem(CURRENT);
+    } catch {
+      remembered = this.current()?.id ?? null;
+    }
+    const known = drafts.find((draft) => draft.id === remembered);
+    if (known && !ask) {
+      this.current.set(known);
+      return known;
+    }
+    const chosen = await firstValueFrom(this.dialog.open(DraftPicker, { data: { drafts, current: remembered }, maxWidth: '520px', width: 'calc(100vw - 32px)' }).afterClosed());
+    if (!chosen) {
+      return null;
+    }
+    this.choose(chosen);
+    return chosen;
+  }
+
+  /** From now on, what is included from the screens goes in this one. */
+  choose(draft: PackageDraft | null): void {
+    this.current.set(draft);
+    try {
+      if (draft) {
+        localStorage.setItem(CURRENT, draft.id);
+      } else {
+        localStorage.removeItem(CURRENT);
+      }
+    } catch {
+      // Remembered only while the page is open.
+    }
+    this.refresh();
+  }
+
+  /** Says what went in and lets whoever did it see the package. */
+  told(message: string, draft: PackageDraft, failed = false): void {
+    this.snack
+      .open(message, 'Ver o pacote', { duration: failed ? 15000 : 5000 })
+      .onAction()
+      .subscribe(() => void this.router.navigate(['/transporte/aberto', draft.id]));
+  }
+
+  /**
+   * Puts several objects in the open package, one after the other; what fails is said and the
+   * rest goes on. Gives how many went in.
    */
   async addMany(items: { database?: string; kind: string; schema: string; name: string }[]): Promise<number> {
+    const draft = await this.draftFor();
+    if (!draft) {
+      return 0;
+    }
     const failed: string[] = [];
     let done = 0;
     for (const item of items) {
       try {
-        await firstValueFrom(this.api.addToArea(item));
+        await firstValueFrom(this.api.addToArea(draft.id, item));
         done++;
       } catch (failure) {
         failed.push(`${item.schema}.${item.name}: ${(failure as HttpErrorResponse).error?.error ?? 'recusado'}`);
       }
     }
-    this.snack.open(`${done} ${done === 1 ? 'objeto foi' : 'objetos foram'} para a expedição${failed.length ? `; não ${failed.length === 1 ? 'foi' : 'foram'}: ${failed.join(' · ')}` : ''}`, 'Fechar', { duration: failed.length ? 15000 : 4000 });
+    this.told(`${done} ${done === 1 ? 'objeto foi' : 'objetos foram'} para ${draft.name} v${draft.version}${failed.length ? `; não ${failed.length === 1 ? 'foi' : 'foram'}: ${failed.join(' · ')}` : ''}`, draft, failed.length > 0);
     this.refresh();
     return done;
   }
 
-  /** Puts an object in the area and says so; true when it went in. */
+  /** Puts an object in the open package and says so; true when it went in. */
   async add(item: { database?: string; kind: string; schema: string; name: string; drop?: boolean }): Promise<boolean> {
+    const draft = await this.draftFor();
+    if (!draft) {
+      return false;
+    }
     try {
-      await firstValueFrom(this.api.addToArea(item));
-      this.snack.open(`${item.schema}.${item.name} está na expedição${item.drop ? ', como exclusão' : ''}`, undefined, { duration: 3000 });
+      await firstValueFrom(this.api.addToArea(draft.id, item));
+      this.told(`${item.schema}.${item.name} está em ${draft.name} v${draft.version}${item.drop ? ', como exclusão' : ''}`, draft);
       this.refresh();
       return true;
     } catch (failure) {
-      this.snack.open((failure as HttpErrorResponse).error?.error ?? 'Não foi possível incluir na expedição', 'Fechar', { duration: 7000 });
+      this.snack.open((failure as HttpErrorResponse).error?.error ?? 'Não foi possível incluir no pacote', 'Fechar', { duration: 7000 });
       return false;
     }
   }

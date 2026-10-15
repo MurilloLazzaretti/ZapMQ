@@ -30,6 +30,7 @@ const STATES: Record<string, { text: string; tone: string; hint: string }> = {
   drops: { text: 'será apagado', tone: 'danger', hint: 'O objeto existe aqui e será apagado.' },
   absent: { text: 'já não existe', tone: '', hint: 'O objeto a apagar não existe aqui: nada será feito.' },
   script: { text: 'script', tone: 'primary', hint: 'Roda como está, dentro de uma transação.' },
+  ran: { text: 'já rodou aqui', tone: '', hint: 'Este mesmo script rodou neste ambiente numa versão anterior deste pacote: ele é pulado, não roda de novo.' },
   unknown: { text: 'não foi possível comparar', tone: 'warn', hint: '' },
   missing: { text: 'não existe aqui', tone: 'danger', hint: 'Este ambiente não tem esse alvo, e o pacote não diz como instalá-lo (veio de uma versão anterior, ou o tipo não é instalado pelo transporte).' },
   mismatch: { text: 'tipo diferente', tone: 'danger', hint: 'Aqui a aplicação web com esse nome é de outro tipo (monolito ou micro frontends). Um tipo nunca vira o outro: cadastre a aplicação do outro tipo com outro nome e transporte para ela.' },
@@ -138,8 +139,13 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
-    this.id = this.route.snapshot.paramMap.get('id') ?? '';
-    this.load(true);
+    // From one version to another of the same package, the screen stays and what it shows changes.
+    this.route.paramMap.subscribe((parameters) => {
+      this.id = parameters.get('id') ?? '';
+      this.detail.set(null);
+      this.checks.set(null);
+      this.load(true);
+    });
     this.timer = setInterval(() => ['Approved', 'Applying', 'Reverting'].includes(this.status() ?? '') && this.load(false), 2000);
   }
 
@@ -278,7 +284,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected async remove(): Promise<void> {
     const sure = await confirm(this.dialog, {
       title: 'Excluir o pacote?',
-      message: `"${this.detail()!.package.name}" é apagado deste ambiente, com o arquivo. Os itens que ele levava voltam para a expedição.`,
+      message: `A versão ${this.detail()!.package.version} de "${this.detail()!.package.name}" é apagada deste ambiente, com o arquivo, e volta a ser um pacote aberto, com os itens que levava.`,
       warning: 'Se o arquivo já foi levado a outro ambiente, lá ele continua existindo.',
       action: 'Excluir',
       danger: true,
@@ -290,7 +296,8 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     try {
       await firstValueFrom(this.api.deletePackage(this.id));
       this.transport.refresh();
-      void this.router.navigate(['/transporte']);
+      const reopened = (await firstValueFrom(this.api.drafts())).drafts.find((draft) => draft.line === this.detail()!.package.line);
+      void this.router.navigate(reopened ? ['/transporte/aberto', reopened.id] : ['/transporte/pacotes']);
     } catch (failure) {
       this.say(failure);
     } finally {
@@ -312,6 +319,20 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     } catch (failure) {
       this.say(failure);
       this.load(false);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /** The next version: it opens with everything this one carries, to be corrected and closed. */
+  protected async nextVersion(): Promise<void> {
+    this.busy.set(true);
+    try {
+      const draft = await firstValueFrom(this.api.newVersion(this.id));
+      this.transport.choose(draft);
+      void this.router.navigate(['/transporte/aberto', draft.id]);
+    } catch (failure) {
+      this.say(failure);
     } finally {
       this.busy.set(false);
     }

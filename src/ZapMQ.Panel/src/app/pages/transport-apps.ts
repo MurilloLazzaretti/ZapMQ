@@ -222,12 +222,16 @@ export class TransportAppsPage implements OnInit {
    */
   protected async packPicked(fromInbox: boolean): Promise<void> {
     const chosen = fromInbox ? this.pickedIncoming() : (this.targets() ?? []).filter((target) => this.picked().has(this.key(target)));
+    const draft = await this.transport.draftFor();
+    if (!draft) {
+      return;
+    }
     this.busy.set(true);
     const failed: string[] = [];
     let done = 0;
     for (const target of chosen) {
       try {
-        await firstValueFrom(fromInbox ? this.api.addIncoming(target.Kind, target.Name) : this.api.addRunning(target.Kind, target.Name));
+        await firstValueFrom(fromInbox ? this.api.addIncoming(draft.id, target.Kind, target.Name) : this.api.addRunning(draft.id, target.Kind, target.Name));
         done++;
         this.pick(target, false);
       } catch (failure) {
@@ -237,18 +241,17 @@ export class TransportAppsPage implements OnInit {
     this.busy.set(false);
     this.transport.refresh();
     this.load();
-    const message = `${done} ${done === 1 ? 'foi' : 'foram'} para a expedição${failed.length ? `; não ${failed.length === 1 ? 'foi' : 'foram'}: ${failed.join(' · ')}` : ''}`;
-    this.snack.open(message, done ? 'Ver a expedição' : 'Fechar', { duration: failed.length ? 15000 : 5000 }).onAction().subscribe(() => done && void this.router.navigate(['/transporte']));
+    this.transport.told(`${done} ${done === 1 ? 'foi' : 'foram'} para ${draft.name} v${draft.version}${failed.length ? `; não ${failed.length === 1 ? 'foi' : 'foram'}: ${failed.join(' · ')}` : ''}`, draft, failed.length > 0);
   }
 
   /** What the application is running right now goes into the area. */
   protected running(target: TransportTarget): Promise<void> {
-    return this.place(this.api.addRunning(target.Kind, target.Name), `${target.Name}: a versão que está rodando foi para a expedição`);
+    return this.place((draft) => this.api.addRunning(draft, target.Kind, target.Name), `${target.Name}: a versão que está rodando foi`);
   }
 
   /** The new version that was left for it in the inbox goes into the area, and leaves the inbox. */
   protected incoming(target: TransportTarget): Promise<void> {
-    return this.place(this.api.addIncoming(target.Kind, target.Name), `${target.Name}: a versão nova foi para a expedição`);
+    return this.place((draft) => this.api.addIncoming(draft, target.Kind, target.Name), `${target.Name}: a versão nova foi`);
   }
 
   /** A zip of the published folder, chosen on the machine of whoever is at the panel; for a file to download, the file itself. */
@@ -262,11 +265,11 @@ export class TransportAppsPage implements OnInit {
     if (target.Kind === 'download') {
       const version = await this.versionOf(target.Name, target.Version);
       if (version) {
-        await this.place(this.api.addFiles(target.Kind, target.Name, file, version), `${target.Name} ${version} foi para a expedição`);
+        await this.place((draft) => this.api.addFiles(draft, target.Kind, target.Name, file, version), `${target.Name} ${version} foi`);
       }
       return;
     }
-    await this.place(this.api.addFiles(target.Kind, target.Name, file), `${target.Name}: ${file.name} foi para a expedição`);
+    await this.place((draft) => this.api.addFiles(draft, target.Kind, target.Name, file), `${target.Name}: ${file.name} foi`);
   }
 
   /** A file to download that is not in the folder yet: it goes in under the name it has. */
@@ -287,7 +290,7 @@ export class TransportAppsPage implements OnInit {
     }
     const version = await this.versionOf(name, null);
     if (version) {
-      await this.place(this.api.addFiles('download', name, file, version), `${name} ${version} foi para a expedição; aplicado, passa a existir na pasta`);
+      await this.place((draft) => this.api.addFiles(draft, 'download', name, file, version), `${name} ${version} (aplicado, passa a existir na pasta) foi`);
     }
   }
 
@@ -300,11 +303,15 @@ export class TransportAppsPage implements OnInit {
     });
   }
 
-  private async place(request: Observable<AreaItem>, done: string): Promise<void> {
+  private async place(request: (draft: string) => Observable<AreaItem>, done: string): Promise<void> {
+    const draft = await this.transport.draftFor();
+    if (!draft) {
+      return;
+    }
     this.busy.set(true);
     try {
-      await firstValueFrom(request);
-      this.snack.open(done, 'Ver a expedição', { duration: 5000 }).onAction().subscribe(() => void this.router.navigate(['/transporte']));
+      await firstValueFrom(request(draft.id));
+      this.transport.told(`${done} para ${draft.name} v${draft.version}`, draft);
       this.transport.refresh();
       this.load();
     } catch (failure) {

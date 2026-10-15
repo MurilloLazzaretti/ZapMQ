@@ -185,7 +185,7 @@ Declarar um exchange e as filas que recebem cópia do que é publicado nele. Ent
 ### 4.7 Worker Control
 
 Nas listas de aplicações do transporte e de objetos do banco, vários itens podem ser marcados e
-levados à expedição de uma vez.
+levados de uma vez ao pacote aberto.
 
 A área **Processos e serviços** tem cinco abas: **Micro serviços**, **Serviços do Windows**,
 **Aplicações**, **Proxy reverso** e **Histórico**. Em Micro serviços ficam juntos os dois lados dos

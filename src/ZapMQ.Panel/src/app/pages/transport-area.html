@@ -2,23 +2,29 @@
   <header class="head">
     <div>
       <h1>Transporte</h1>
-      <p class="muted">O que está em <strong>{{ environment() || 'este ambiente' }}</strong> esperando para entrar em um pacote.</p>
+      <p class="muted">Um pacote aberto em <strong>{{ environment() || 'este ambiente' }}</strong>: o que vai nele antes de fechar a versão.</p>
     </div>
     <span class="spacer"></span>
     <zap-transport-tabs />
   </header>
 
   @if (problem()) {
-    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível ler a expedição</strong><span>{{ problem() }}</span></section>
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível ler o pacote</strong><span>{{ problem() }}</span></section>
+  } @else if (draft() === null) {
+    <section class="panel empty">
+      <mat-icon svgIcon="inventory_2" />
+      <strong>Este pacote não está mais aberto</strong>
+      <span>Ele foi fechado ou descartado. Veja os <a routerLink="/transporte/pacotes">pacotes</a>.</span>
+    </section>
   } @else if (items(); as list) {
     <section class="panel">
       <div class="panel-head">
-        <h2>Expedição</h2>
-        <span class="hint">{{ list.length }} {{ list.length === 1 ? 'item' : 'itens' }}</span>
+        <h2>{{ draft()?.name }} <span class="pill primary">v{{ draft()?.version }}</span></h2>
+        <span class="hint">{{ list.length }} {{ list.length === 1 ? 'item' : 'itens' }} · aberto por {{ draft()?.createdBy }} {{ draft()?.createdAt | ago }}</span>
         <span class="spacer"></span>
-        <a mat-button routerLink="/banco/alteracoes"><mat-icon svgIcon="history" /> Alterações do banco</a>
-        <a mat-button routerLink="/banco/objetos"><mat-icon svgIcon="table" /> Objetos do banco</a>
-        <a mat-button routerLink="/transporte/aplicacoes"><mat-icon svgIcon="deployed_code" /> Aplicações</a>
+        <a mat-button routerLink="/banco/alteracoes" (click)="includeHere()"><mat-icon svgIcon="history" /> Alterações do banco</a>
+        <a mat-button routerLink="/banco/objetos" (click)="includeHere()"><mat-icon svgIcon="table" /> Objetos do banco</a>
+        <a mat-button routerLink="/transporte/aplicacoes" (click)="includeHere()"><mat-icon svgIcon="deployed_code" /> Aplicações</a>
         <button mat-button (click)="writing.set(!writing())"><mat-icon svgIcon="code" /> Escrever script</button>
         <button mat-button (click)="file.click()"><mat-icon svgIcon="upload" /> Importar .sql</button>
         <input #file type="file" accept=".sql,text/plain" hidden (change)="pick($event)" />
@@ -37,7 +43,7 @@
           </mat-form-field>
           <div class="buttons">
             <button mat-button type="button" (click)="writing.set(false)">Cancelar</button>
-            <button mat-flat-button type="submit" [disabled]="busy() || !title.trim() || !script.trim()">Incluir na expedição</button>
+            <button mat-flat-button type="submit" [disabled]="busy() || !title.trim() || !script.trim()">Incluir no pacote</button>
           </div>
         </form>
       }
@@ -63,7 +69,7 @@
                   </td>
                   <td data-label="O que fazer no destino"><span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span></td>
                   <td data-label="Incluído">{{ item.addedAt | ago }} <span class="muted">por {{ item.addedBy }}</span></td>
-                  <td class="actions"><button mat-icon-button (click)="remove(item)" matTooltip="Tirar da expedição" [attr.aria-label]="'Tirar da expedição'"><mat-icon svgIcon="close" /></button></td>
+                  <td class="actions"><button mat-icon-button (click)="remove(item)" matTooltip="Tirar do pacote" [attr.aria-label]="'Tirar do pacote'"><mat-icon svgIcon="close" /></button></td>
                 </tr>
               }
             </tbody>
@@ -72,15 +78,14 @@
       } @else if (!writing()) {
         <div class="empty">
           <mat-icon svgIcon="playlist_add" />
-          <strong>A expedição está vazia</strong>
-          <span>Inclua objetos pelas telas <a routerLink="/banco/alteracoes">Alterações</a> e <a routerLink="/banco/objetos">Objetos</a> do banco, escreva um script, ou escolha uma <a routerLink="/transporte/aplicacoes">aplicação</a>.</span>
+          <strong>O pacote está vazio</strong>
+          <span>Inclua objetos pelas telas <a routerLink="/banco/alteracoes" (click)="includeHere()">Alterações</a> e <a routerLink="/banco/objetos" (click)="includeHere()">Objetos</a> do banco, escreva um script, ou escolha uma <a routerLink="/transporte/aplicacoes" (click)="includeHere()">aplicação</a>.</span>
         </div>
       }
     </section>
 
-    @if (list.length) {
-      <section class="panel">
-        <div class="panel-head"><h2>Fechar pacote</h2><span class="hint">com tudo o que está na expedição</span></div>
+    <section class="panel">
+        <div class="panel-head"><h2>Fechar a versão {{ draft()?.version }}</h2><span class="hint">com tudo o que está no pacote</span></div>
         <form class="close" (ngSubmit)="close()">
           <mat-form-field subscriptSizing="dynamic">
             <mat-label>Nome do pacote</mat-label>
@@ -93,12 +98,15 @@
           </mat-form-field>
           <p class="muted note">
             O script de cada objeto é o do momento do fechamento. A ordem segue as dependências: types e tabelas, scripts, functions, views, procedures, o que é apagado e, depois do banco, as aplicações.
-            Fechado, o pacote não muda mais.
+            Fechada, a versão não muda mais; uma correção vira a versão seguinte, que leva tudo o que esta leva.
           </p>
-          <div class="buttons"><button mat-flat-button type="submit" [disabled]="busy() || !name.trim()"><mat-icon svgIcon="inventory_2" /> Fechar pacote</button></div>
+          <div class="buttons">
+            <button mat-button type="button" class="danger" (click)="discard()" [disabled]="busy()"><mat-icon svgIcon="delete" /> Descartar</button>
+            <button mat-button type="button" (click)="saveNames()" [disabled]="busy() || !name.trim()">Guardar nome e descrição</button>
+            <button mat-flat-button type="submit" [disabled]="busy() || !name.trim() || !list.length"><mat-icon svgIcon="inventory_2" /> Fechar a versão {{ draft()?.version }}</button>
+          </div>
         </form>
-      </section>
-    }
+    </section>
   } @else {
     <section class="panel empty"><span>Lendo…</span></section>
   }

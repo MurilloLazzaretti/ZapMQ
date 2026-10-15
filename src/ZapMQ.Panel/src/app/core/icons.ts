@@ -16,6 +16,7 @@ import contentCopy from '@material-symbols/svg-400/rounded/content_copy.svg';
 import darkMode from '@material-symbols/svg-400/rounded/dark_mode.svg';
 import dashboard from '@material-symbols/svg-400/rounded/dashboard.svg';
 import deleteIcon from '@material-symbols/svg-400/rounded/delete.svg';
+import editNote from '@material-symbols/svg-400/rounded/edit_note.svg';
 import deviceHub from '@material-symbols/svg-400/rounded/device_hub.svg';
 import dns from '@material-symbols/svg-400/rounded/dns.svg';
 import error from '@material-symbols/svg-400/rounded/error.svg';
@@ -115,7 +116,7 @@ const ICONS: Record<string, string> = {
   memory, history, restart_alt: restartAlt, add, remove, monitor_heart: monitorHeart, data_object: dataObject, save, rocket_launch: rocketLaunch, recycling, trending_up: trendingUp, edit, precision_manufacturing: precisionManufacturing,
   account_circle: accountCircle, arrow_back: arrowBack, arrow_downward: arrowDownward, arrow_upward: arrowUpward, block, bolt,
   check_circle: checkCircle, chevron_right: chevronRight, close, cloud_off: cloudOff, content_copy: contentCopy, dark_mode: darkMode,
-  dashboard, delete: deleteIcon, device_hub: deviceHub, dns, error, hourglass_empty: hourglassEmpty, inbox, info,
+  dashboard, delete: deleteIcon, edit_note: editNote, device_hub: deviceHub, dns, error, hourglass_empty: hourglassEmpty, inbox, info,
   keyboard_arrow_down: keyboardArrowDown, lan, light_mode: lightMode, logout, mail, menu, more_vert: moreVert, power_settings_new: powerSettingsNew, pause, pending,
   play_arrow: playArrow, refresh, replay, schedule, search, settings, skull, speed, stacks, sync, tune, verified, visibility, warning,
 };

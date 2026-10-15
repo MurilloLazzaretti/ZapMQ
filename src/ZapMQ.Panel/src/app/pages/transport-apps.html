@@ -120,9 +120,9 @@
         @if (target.Incoming; as left) {
           <button mat-flat-button (click)="incoming(target)" [disabled]="busy()" [matTooltip]="'Deixada na pasta de entrada ' + (left.At | ago)">Versão nova na entrada</button>
         }
-        <button mat-button (click)="zip.click()" [disabled]="busy()" [matTooltip]="whole ? 'Faz o upload do .zip da aplicação inteira (casca, módulos e manifesto) e coloca na expedição' : 'Faz o upload do .zip da pasta publicada e coloca na expedição'">Upload versão</button>
+        <button mat-button (click)="zip.click()" [disabled]="busy()" [matTooltip]="whole ? 'Faz o upload do .zip da aplicação inteira (casca, módulos e manifesto) e inclui no pacote aberto' : 'Faz o upload do .zip da pasta publicada e inclui no pacote aberto'">Upload versão</button>
         <input #zip type="file" [accept]="target.Kind === 'download' ? '' : '.zip'" hidden (change)="upload(target, $event)" />
-        <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" [matTooltip]="whole ? 'Empacota a aplicação inteira que está rodando agora: casca, módulos e manifesto' : 'Empacota a versão que está rodando nesta máquina agora e coloca na expedição'">{{ whole ? 'Empacotar inteira' : 'Empacotar' }}</button>
+        <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" [matTooltip]="whole ? 'Empacota a aplicação inteira que está rodando agora: casca, módulos e manifesto' : 'Empacota a versão que está rodando nesta máquina agora e inclui no pacote aberto'">{{ whole ? 'Empacotar inteira' : 'Empacotar' }}</button>
       </span>
     </ng-template>
 
@@ -132,9 +132,9 @@
         <button mat-button (click)="picked.set(emptySet())" [disabled]="busy()">Limpar</button>
         <span class="spacer"></span>
         @if (pickedIncoming().length) {
-          <button mat-stroked-button (click)="packPicked(true)" [disabled]="busy()" matTooltip="As que têm versão nova na pasta de entrada: essa versão vai para a expedição">Versão nova na entrada ({{ pickedIncoming().length }})</button>
+          <button mat-stroked-button (click)="packPicked(true)" [disabled]="busy()" matTooltip="As que têm versão nova na pasta de entrada: essa versão vai para o pacote aberto">Versão nova na entrada ({{ pickedIncoming().length }})</button>
         }
-        <button mat-flat-button (click)="packPicked(false)" [disabled]="busy()" matTooltip="Empacota a versão que está rodando agora de cada uma e coloca na expedição">{{ busy() ? 'Empacotando…' : 'Empacotar ' + picked().size }}</button>
+        <button mat-flat-button (click)="packPicked(false)" [disabled]="busy()" matTooltip="Empacota a versão que está rodando agora de cada uma e inclui no pacote aberto">{{ busy() ? 'Empacotando…' : 'Empacotar ' + picked().size }}</button>
       </div>
     }
     <p class="muted note">Arquivos de configuração (<code>appsettings*.json</code>, <code>web.config</code>, <code>*.ini</code>, <code>environment.js</code>, <code>env.json</code>, bancos locais e logs) nunca entram no pacote nem são substituídos no destino. Eles são editados em <a routerLink="/workers/aplicacoes">Processos e serviços → Aplicações</a>.</p>

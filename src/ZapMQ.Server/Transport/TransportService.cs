@@ -93,8 +93,9 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// Puts an object of the database in the area, to be carried or to be dropped where the
     /// package goes. One that is to be carried has to exist.
     /// </summary>
-    public async Task<AreaItem> AddObject(string? database, string? kind, string? schema, string? name, bool drop, string by, CancellationToken cancellation)
+    public async Task<AreaItem> AddObject(string? draft, string? database, string? kind, string? schema, string? name, bool drop, string by, CancellationToken cancellation)
     {
+        RequireDraft(draft);
         if (string.IsNullOrWhiteSpace(kind) || string.IsNullOrWhiteSpace(schema) || string.IsNullOrWhiteSpace(name))
             throw new TransportRefused("Informe o tipo, o schema e o nome do objeto");
         database = await Logical(database, by, cancellation);
@@ -105,7 +106,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
             throw new TransportRefused($"{schema}.{name} ainda existe neste banco: só o que foi apagado aqui vai como exclusão");
         return store.Add(new AreaItem
         {
-            Action = drop ? "Drop" : "Define", ObjectKind = kind, Variety = found?.Variety, Schema = schema, Name = name, Database = string.IsNullOrEmpty(database) ? null : database,
+            Draft = draft, Action = drop ? "Drop" : "Define", ObjectKind = kind, Variety = found?.Variety, Schema = schema, Name = name, Database = string.IsNullOrEmpty(database) ? null : database,
             Fingerprint = found?.Fingerprint, AddedBy = by, AddedAt = time.GetUtcNow()
         });
     }
@@ -122,13 +123,20 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         return (state["Databases"] as JsonArray)?.Count > 1 ? database : null;
     }
 
-    public AreaItem AddScript(string? database, string? title, string? script, string by)
+    private void RequireDraft(string? draft)
     {
+        if (store.Draft(draft) is null)
+            throw new TransportRefused("Escolha um pacote aberto, ou crie um, para incluir isso nele", StatusCodes.Status409Conflict);
+    }
+
+    public AreaItem AddScript(string? draft, string? database, string? title, string? script, string by)
+    {
+        RequireDraft(draft);
         if (string.IsNullOrWhiteSpace(title))
             throw new TransportRefused("Dê um título ao script: é como ele aparece para quem aprova");
         if (string.IsNullOrWhiteSpace(script))
             throw new TransportRefused("O script está vazio");
-        return store.Add(new AreaItem { Action = "Script", Title = title.Trim(), Script = script, Database = string.IsNullOrEmpty(database) ? null : database, AddedBy = by, AddedAt = time.GetUtcNow() });
+        return store.Add(new AreaItem { Draft = draft, Action = "Script", Title = title.Trim(), Script = script, Database = string.IsNullOrEmpty(database) ? null : database, AddedBy = by, AddedAt = time.GetUtcNow() });
     }
 
     // ---------------------------------------------------------------- what is made of files
@@ -325,9 +333,10 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// <summary>
     /// Puts in the area what a target is running right now, packed by the Worker Control.
     /// </summary>
-    public async Task<AreaItem> AddRunning(string? kind, string? name, bool incoming, string by, CancellationToken cancellation)
+    public async Task<AreaItem> AddRunning(string? draft, string? kind, string? name, bool incoming, string by, CancellationToken cancellation)
     {
         RequireFileKind(kind, name);
+        RequireDraft(draft);
         // Either what the target is running, or the new version somebody left for it in the inbox of the machine.
         var body = await Ask("TransportCapture", by, request =>
         {
@@ -343,7 +352,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         try
         {
             var (zip, files) = Normalize(await File.ReadAllBytesAsync(file, cancellation));
-            return Place(kind!, body["Target"]?["Name"]?.GetValue<string>() ?? name!, body["Target"]?["Version"]?.GetValue<string>(), zip, files, by);
+            return Place(draft!, kind!, body["Target"]?["Name"]?.GetValue<string>() ?? name!, body["Target"]?["Version"]?.GetValue<string>(), zip, files, by);
         }
         finally
         {
@@ -354,9 +363,10 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// <summary>
     /// Puts in the area the zip of a published folder somebody brought.
     /// </summary>
-    public AreaItem AddUpload(string? kind, string? name, string? version, byte[] brought, string by)
+    public AreaItem AddUpload(string? draft, string? kind, string? name, string? version, byte[] brought, string by)
     {
         RequireFileKind(kind, name);
+        RequireDraft(draft);
         if (kind == "download")
         {
             // A file to be downloaded is brought as it is, not zipped: it is put in a zip of one, under its own name.
@@ -369,17 +379,17 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
             using (var single = new System.IO.Compression.ZipArchive(memory, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
             using (var entry = single.CreateEntry(file, System.IO.Compression.CompressionLevel.NoCompression).Open())
                 entry.Write(brought);
-            return Place(kind!, name!.Trim(), string.IsNullOrWhiteSpace(version) ? null : version.Trim(), memory.ToArray(),
+            return Place(draft!, kind!, name!.Trim(), string.IsNullOrWhiteSpace(version) ? null : version.Trim(), memory.ToArray(),
                 [new FileReference { Path = file, Size = brought.Length, Sha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(brought)) }], by);
         }
         var (zip, files) = Normalize(brought);
-        return Place(kind!, name!.Trim(), string.IsNullOrWhiteSpace(version) ? null : version.Trim(), zip, files, by);
+        return Place(draft!, kind!, name!.Trim(), string.IsNullOrWhiteSpace(version) ? null : version.Trim(), zip, files, by);
     }
 
-    private AreaItem Place(string kind, string name, string? version, byte[] zip, List<FileReference> files, string by) =>
+    private AreaItem Place(string draft, string kind, string name, string? version, byte[] zip, List<FileReference> files, string by) =>
         store.Add(new AreaItem
         {
-            Kind = kind, Action = "Replace", Name = name, Version = version, Files = files, Size = zip.Length, Fingerprint = Fingerprint(files), AddedBy = by, AddedAt = time.GetUtcNow()
+            Draft = draft, Kind = kind, Action = "Replace", Name = name, Version = version, Files = files, Size = zip.Length, Fingerprint = Fingerprint(files), AddedBy = by, AddedAt = time.GetUtcNow()
         }, zip);
 
     /// <summary>
@@ -422,17 +432,25 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// Closes a package with the items of the area that were chosen. The script of each object
     /// is taken now. Unless the order is said to be the one given, it follows what depends on what.
     /// </summary>
-    public async Task<PackageRecord> Close(string? name, string? description, IReadOnlyList<string>? ids, bool keepOrder, string by, CancellationToken cancellation)
+    public async Task<PackageRecord> Close(string? draftId, string? name, string? description, IReadOnlyList<string>? ids, bool keepOrder, string by, CancellationToken cancellation)
     {
+        var draft = store.Draft(draftId) ?? throw new TransportRefused("Esse pacote não está mais aberto", StatusCodes.Status404NotFound);
+        name = string.IsNullOrWhiteSpace(name) ? draft.Name : name;
         if (string.IsNullOrWhiteSpace(name))
             throw new TransportRefused("Dê um nome ao pacote");
-        var area = store.Area();
-        var chosen = ids is { Count: > 0 } ? ids.Select(id => area.FirstOrDefault(item => item.Id == id) ?? throw new TransportRefused("Um dos itens escolhidos não está mais na expedição")).ToList() : area;
+        var area = store.Area(draft.Id);
+        // The order given, when one is given; whatever was left out of it goes at the end.
+        var chosen = ids is { Count: > 0 }
+            ? [.. ids.Select(id => area.FirstOrDefault(item => item.Id == id) ?? throw new TransportRefused("Um dos itens não está mais no pacote")), .. area.Where(item => !ids.Contains(item.Id))]
+            : area;
         if (chosen.Count == 0)
-            throw new TransportRefused("A expedição está vazia: não há o que fechar");
+            throw new TransportRefused("O pacote está vazio: inclua o que ele leva antes de fechar");
 
         var now = time.GetUtcNow();
-        var packaged = LastPackaged();
+        // Before the changes: as it was when it last went in another package, not in a version of this one.
+        var packaged = LastPackaged(draft.Line);
+        var earlier = store.Packages().Where(record => !record.Received && Versions.LineOf(record.Manifest) == draft.Line)
+            .MaxBy(record => Versions.VersionOf(record.Manifest))?.Manifest.Items ?? [];
         var items = new List<(AreaItem Area, PackageItem Item, byte[] Content)>();
         foreach (var area_ in chosen)
         {
@@ -459,7 +477,11 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
 
             string script;
             if (area_.Action == "Script")
+            {
                 script = area_.Script ?? "";
+                // What tells it is the same script in the next version of the package.
+                item.Fingerprint = Printed(script);
+            }
             else if (area_.Action == "Drop")
                 script = $"-- {area_.ObjectKind} {area_.Schema}.{area_.Name}: apagado em {store.Environment}\n";
             else
@@ -471,6 +493,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 item.Variety = found.Variety;
                 item.Uses = found.Uses;
                 item.Base = await Base(area_, packaged.GetValueOrDefault(Key(area_.ObjectKind, area_.Schema, area_.Name)), by, cancellation);
+                item.Earlier = earlier.FirstOrDefault(before => before.Action == "Define" && Key(before.ObjectKind, before.Schema, before.Name) == Key(item.ObjectKind, item.Schema, item.Name))?.Fingerprint;
             }
             items.Add((area_, item, System.Text.Encoding.UTF8.GetBytes(script)));
         }
@@ -482,10 +505,10 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
 
         var manifest = new PackageManifest
         {
-            Id = Guid.NewGuid().ToString("N"), Name = name.Trim(), Description = description?.Trim() ?? "", Origin = store.Environment, CreatedAt = now, CreatedBy = by,
+            Id = Guid.NewGuid().ToString("N"), Line = draft.Line, Version = draft.Version, Name = name.Trim(), Description = (description ?? draft.Description).Trim(), Origin = store.Environment, CreatedAt = now, CreatedBy = by,
             Items = [.. items.Select(item => item.Item)]
         };
-        var record = store.Close(manifest, [.. items.Select(item => item.Content)], chosen.Select(item => item.Id), by, now);
+        var record = store.Close(manifest, [.. items.Select(item => item.Content)], chosen.Select(item => item.Id), draft.Id, by, now);
         logger.LogInformation("Transport: package {Name} ({Id}) closed with {Items} items (by {User})", manifest.Name, manifest.Id, manifest.Items.Count, by);
         return record;
     }
@@ -521,10 +544,10 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// <summary>
     /// When each object last went into a package made here.
     /// </summary>
-    public Dictionary<string, DateTimeOffset> LastPackaged()
+    public Dictionary<string, DateTimeOffset> LastPackaged(string? except = null)
     {
         var last = new Dictionary<string, DateTimeOffset>();
-        foreach (var record in store.Packages().Where(record => !record.Received))
+        foreach (var record in store.Packages().Where(record => !record.Received && (except is null || Versions.LineOf(record.Manifest) != except)))
             foreach (var item in record.Manifest.Items.Where(item => item.Kind == "database" && item.Action != "Script"))
             {
                 var key = Key(item.ObjectKind, item.Schema, item.Name);
@@ -591,7 +614,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 var lacking = names is null || hereNamed is null ? [] : names.Needed.Where(name => !hereNamed.Contains(name) && !broughtNamed.Contains(name)).ToList();
                 if (names is not null)
                     broughtNamed.UnionWith(names.Made);
-                checks.Add(new ItemCheck(item.Number, "script", null, lacking,
+                checks.Add(new ItemCheck(item.Number, RanBefore(record, item) is null ? "script" : "ran", null, lacking,
                     names is { Problems.Count: > 0 } ? "O script não pôde ser lido para conferir o que ele usa: " + string.Join("; ", names.Problems) : null));
                 continue;
             }
@@ -630,8 +653,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                     : current is null ? "new"
                     : current.Fingerprint == item.Fingerprint ? "same"
                     : item.ObjectKind is "Table" or "Type" ? "blocked"
-                    : item.Base is null ? "changes"
-                    : current.Fingerprint == item.Base ? "clean" : "conflict";
+                    : item.Base is null && item.Earlier is null ? "changes"
+                    : current.Fingerprint == item.Base || current.Fingerprint == item.Earlier ? "clean" : "conflict";
                 var missing = item.Action == "Drop" || here is null ? [] : item.Uses
                     .Where(use => use.Database is null && use.Kind is not null && !brought.Contains(Key(use.Kind, use.Schema, use.Name)) && !here.Contains(Key(use.Kind, use.Schema, use.Name)))
                     .Select(use => $"{use.Schema}.{use.Name}").Distinct().ToList();
@@ -698,6 +721,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     public async Task<PackageRecord> Approve(string id, DateTimeOffset? at, bool force, string by, CancellationToken cancellation, IReadOnlyDictionary<int, InstallChoice>? installs = null)
     {
         var waiting = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
+        if (store.Newer(waiting.Manifest) is { } newer)
+            throw new TransportRefused($"Este ambiente já tem a versão {newer} deste pacote: aprove a mais nova, que leva tudo o que esta leva", StatusCodes.Status409Conflict);
         var checks = Waits(waiting) ? await Check(waiting, by, cancellation) : [];
         if (checks.FirstOrDefault(check => check.State == "missing") is { } absent)
         {
@@ -806,6 +831,27 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     }
 
     // ---------------------------------------------------------------- putting back
+
+    /// <summary>
+    /// When the same script ran here in an earlier version of the same package. Null when it did not.
+    /// </summary>
+    private (int Version, DateTimeOffset At)? RanBefore(PackageRecord record, PackageItem item)
+    {
+        var others = store.Line(record.Manifest).Where(other => other.Manifest.Id != record.Manifest.Id).ToList();
+        if (others.Count == 0)
+            return null;
+        var mine = ScriptPrint(record, item);
+        foreach (var other in others)
+            foreach (var before in other.Manifest.Items.Where(before => before.Action == "Script"))
+                if (other.Results.FirstOrDefault(result => result.Number == before.Number) is { Status: "applied" } ran && mine is not null && ScriptPrint(other, before) == mine)
+                    return (Versions.VersionOf(other.Manifest), ran.At);
+        return null;
+    }
+
+    private static string Printed(string script) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(script.ReplaceLineEndings("\n").Trim())));
+
+    private string? ScriptPrint(PackageRecord record, PackageItem item) =>
+        item.Fingerprint ?? (store.Script(record.Manifest.Id, item.Number) is { } text ? Printed(text) : null);
 
     private static bool Stands(ItemResult result) => result.Status == "applied" && result.Reverted != "reverted";
 
@@ -1130,6 +1176,17 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                     store.Update(id, applying => applying.Results.Add(result));
                     if (result.Status != "applied")
                         break;
+                    continue;
+                }
+
+                if (item.Action == "Script" && RanBefore(record, item) is { } ran)
+                {
+                    // The same script, in an earlier version of this package, already ran here: it is not run twice.
+                    result.Status = "applied";
+                    result.Did = "skipped";
+                    result.Messages = [$"Já rodou aqui na versão {ran.Version}, em {ran.At.ToLocalTime():dd/MM/yyyy HH:mm}: não roda de novo"];
+                    result.At = time.GetUtcNow();
+                    store.Update(id, applying => applying.Results.Add(result));
                     continue;
                 }
 
