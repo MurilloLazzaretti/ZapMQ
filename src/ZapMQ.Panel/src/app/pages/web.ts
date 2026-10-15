@@ -8,10 +8,13 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { MatInputModule } from '@angular/material/input';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Api } from '../core/api';
+import { copyText } from '../core/clipboard';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
-import { TrafficScreen, WebApplication, WebModule, WebPublication } from '../core/models';
+import { TrafficScreen, WebApplication, WebModule, WebPublication, WebSite } from '../core/models';
+import { confirm } from '../shared/dialogs';
 import { Stat } from '../shared/stat';
 
 const STATES: Record<WebModule['State'], { label: string; tone: string }> = {
@@ -110,6 +113,7 @@ export class WebModuleDialog {
 export class WebPage implements OnInit, OnDestroy {
   private readonly api = inject(Api);
   private readonly dialog = inject(MatDialog);
+  private readonly snack = inject(MatSnackBar);
   private timer: ReturnType<typeof setInterval> | null = null;
 
   protected readonly applications = signal<WebApplication[] | null>(null);
@@ -122,6 +126,17 @@ export class WebPage implements OnInit, OnDestroy {
   /** How much the screens of each module were used in the last day, by module. Empty while it is not known. */
   protected readonly usage = signal<ReadonlyMap<string, { Count: number; Users: number }>>(new Map());
   private readonly pages = signal<TrafficScreen[]>([]);
+  /** The file of the proxy for the name of the application on screen. */
+  protected readonly site = signal<WebSite | null>(null);
+  protected readonly siteProblem = signal('');
+  protected readonly switching = signal(false);
+  protected readonly switchOutput = signal('');
+
+  /** The applications registered by the same name of the DNS as the one on screen. */
+  protected readonly sharing = computed(() => {
+    const address = this.application()?.Address;
+    return address ? (this.applications() ?? []).filter((application) => application.Address === address) : [];
+  });
 
   protected readonly application = computed(() => {
     const all = this.applications() ?? [];
@@ -168,6 +183,77 @@ export class WebPage implements OnInit, OnDestroy {
     if (this.timer) {
       clearInterval(this.timer);
     }
+  }
+
+  /** Makes the application the one that answers by its name, or takes it out of the air. */
+  protected async swap(app: WebApplication, activate: boolean): Promise<void> {
+    const other = this.sharing().find((item) => item.Name !== app.Name && item.Active !== false);
+    const accepted = await confirm(this.dialog, activate && app.Active !== false
+      ? {
+          title: `Criar o arquivo do NGINX para ${app.Address}?`,
+          message: `O arquivo passa a dizer que ${app.Address} abre ${app.Name}, como hoje. O NGINX só o usa depois que a linha de include for colocada no server do site.`,
+          action: 'Criar',
+        }
+      : activate
+      ? {
+          title: `Ativar ${app.Name}?`,
+          message: `${app.Address} passa a abrir ${app.Name} (${app.Mode === 'monolith' ? 'monolito' : 'micro frontends'}).` + (other ? ` ${other.Name} deixa de responder por ele.` : ''),
+          warning: 'Quem está com a aplicação aberta precisa recarregar a página. O NGINX confere a configuração antes; se não aceitar, nada muda.',
+          action: 'Ativar',
+        }
+      : {
+          title: `Desativar ${app.Name}?`,
+          message: `${app.Address} passa a mostrar uma página de sistema fora do ar até outra aplicação ser ativada.`,
+          action: 'Desativar',
+          danger: true,
+        });
+    if (!accepted) {
+      return;
+    }
+    this.switching.set(true);
+    this.switchOutput.set('');
+    this.api.switchWeb(app.Name, activate).subscribe({
+      next: (answer) => {
+        this.switching.set(false);
+        if (!answer.Switched) {
+          this.switchOutput.set(answer.Output || 'O NGINX não aceitou a configuração; nada mudou.');
+          return;
+        }
+        this.snack.open(
+          answer.Included
+            ? activate ? `${app.Name} responde por ${answer.Address}` : `${answer.Address} fora do ar`
+            : `Gravado, mas o NGINX ainda não inclui o arquivo de ${answer.Address}: veja abaixo a linha a incluir`,
+          undefined, { duration: 6000 });
+        this.refresh();
+      },
+      error: (failure: HttpErrorResponse) => {
+        this.switching.set(false);
+        this.switchOutput.set(failure.error?.error ?? 'Não foi possível falar com o Worker Control.');
+      },
+    });
+  }
+
+  protected async copyInclude(line: string): Promise<void> {
+    this.snack.open((await copyText(line)) ? 'Linha copiada' : 'Não foi possível copiar', undefined, { duration: 2500 });
+  }
+
+  private loadSite(address: string | null | undefined): void {
+    if (!address) {
+      this.site.set(null);
+      return;
+    }
+    this.api.webSite(address).subscribe({
+      next: (site) => {
+        this.site.set(site);
+        this.siteProblem.set('');
+      },
+      error: (failure: HttpErrorResponse) => this.siteProblem.set(failure.status === 501 ? 'O Worker Control instalado é anterior à troca pelo nome (existe a partir da versão 2.27).' : (failure.error?.error ?? '')),
+    });
+  }
+
+  protected choose(name: string): void {
+    this.chosen.set(name);
+    this.loadSite(this.application()?.Address);
   }
 
   protected state(module: WebModule) {
@@ -252,6 +338,7 @@ export class WebPage implements OnInit, OnDestroy {
         this.publications.set(answer.Publications);
         this.problem.set('');
         this.outdated.set(false);
+        this.loadSite(this.application()?.Address);
         this.measure(answer.Frontends.flatMap((application) => application.Modules.map((module) => module.Name)));
       },
       error: (failure: HttpErrorResponse) => {

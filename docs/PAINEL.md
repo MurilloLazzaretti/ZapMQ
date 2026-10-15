@@ -241,7 +241,9 @@ Os parâmetros do ambiente em uma tela, por assunto: **Banco de dados** (a inst�
 os bancos, o usuário e a senha, guardada cifrada para a máquina, e os limites dos alertas),
 **Aplicações** (as pastas em que as aplicações novas são criadas, o nome dos sites, a espera para
 parar, as cópias guardadas e os arquivos do ambiente), **Aplicação web** (cada aplicação, com a
-arquitetura: **MFE**, casca e módulos trocados separados, ou **monolito**, trocado inteiro),
+arquitetura: **MFE**, casca e módulos trocados separados, ou **monolito**, trocado inteiro, que não
+muda depois de gravada; o **nome no DNS** por onde é aberta; e se é **servida** pelo NGINX direto da
+pasta ou passada a um site do IIS),
 **Tráfego HTTP**, **Proxy reverso** e **Worker Control**. Tudo fica no `Environment.json` do Worker Control,
 separado do `ConfigWorkers.json`, que guarda só o que é dele (onde está o ZapMQ, os grupos, os serviços
 acompanhados) e é editado em Micro serviços → Configurar. O Worker Control confere antes de passar a
@@ -251,6 +253,27 @@ ZapMQ (portas, nome do ambiente, retenções, log) é editado no assunto **ZapMQ
 fica em `zapmq.settings.json`, ao lado do executável (`ZapMQ:SettingsFile` diz outro lugar): ele é
 lido por cima do `appsettings.json` que vem com o programa, que nunca é escrito, e passa a valer
 quando o serviço é reiniciado. A tela mostra o que está gravado e o que está em uso até lá.
+
+### 4.13 Várias aplicações no mesmo nome
+
+Duas ou mais aplicações web podem ter o mesmo **nome no DNS** (um monolito e a versão em micro
+frontends, por exemplo), mas só uma responde por ele: a **ativa**. O nome no DNS nunca muda; o que
+muda é o que o NGINX serve por ele, escrito pelo Worker Control num arquivo só daquele nome,
+`conf/zapmq/web-<nome>.conf`, ao lado do `nginx.conf`.
+
+Preparação, uma vez por nome:
+
+1. Na tela **Aplicação web**, com a aplicação que responde hoje, **Criar o arquivo**: ele passa a
+   dizer o que o site já serve, e nada muda para quem usa.
+2. No `server` daquele nome, troque o `root` e o `location /` pela linha que a tela mostra,
+   `include zapmq/web-<nome>.conf;`, e teste e recarregue na tela **Proxy**. (O arquivo precisa
+   existir antes da linha: um include de arquivo que não existe é recusado pelo NGINX.)
+
+Daí em diante, **Ativar** uma aplicação reescreve o arquivo, o NGINX confere a configuração inteira
+(se recusar, o arquivo volta a ser o que era e nada muda), relê sem parar, e as outras aplicações do
+mesmo nome ficam inativas. **Desativar** deixa no lugar uma página de sistema fora do ar (503) até
+outra ser ativada. Voltar é ativar a anterior. Cada troca fica no histórico do Worker Control.
+Quem estiver com a aplicação aberta precisa recarregar a página.
 
 ## 5. O que o servidor ganha
 

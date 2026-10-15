@@ -32,7 +32,7 @@ const STATES: Record<string, { text: string; tone: string; hint: string }> = {
   script: { text: 'script', tone: 'primary', hint: 'Roda como está, dentro de uma transação.' },
   unknown: { text: 'não foi possível comparar', tone: 'warn', hint: '' },
   missing: { text: 'não existe aqui', tone: 'danger', hint: 'Este ambiente não tem esse alvo, e o pacote não diz como instalá-lo (veio de uma versão anterior, ou o tipo não é instalado pelo transporte).' },
-  converts: { text: 'troca o monolito pelo MFE', tone: 'warn', hint: 'Aqui a aplicação web é um monolito. A pasta dela recebe a aplicação de micro frontends inteira; os arquivos do ambiente (env.json, web.config) ficam, o monolito é guardado para reverter, e a aplicação passa a ser de micro frontends: daí em diante cada módulo pode vir em pacote.' },
+  mismatch: { text: 'tipo diferente', tone: 'danger', hint: 'Aqui a aplicação web com esse nome é de outro tipo (monolito ou micro frontends). Um tipo nunca vira o outro: cadastre a aplicação do outro tipo com outro nome e transporte para ela.' },
   install: { text: 'será instalado', tone: 'primary', hint: 'Este ambiente não tem essa aplicação: ela é criada aqui com o que for informado em Instalar aqui.' },
 };
 
@@ -109,11 +109,10 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected readonly warnings = computed(() => {
     const checks = this.checks() ?? [];
     return {
-      blocked: checks.filter((check) => check.state === 'blocked' || check.state === 'missing').length,
+      blocked: checks.filter((check) => check.state === 'blocked' || check.state === 'missing' || check.state === 'mismatch').length,
       conflicts: checks.filter((check) => check.state === 'conflict').length,
       drops: checks.filter((check) => check.state === 'drops').length,
       missing: checks.filter((check) => check.missing.length > 0).length,
-      converts: checks.filter((check) => check.state === 'converts').length,
     };
   });
 
@@ -207,7 +206,6 @@ export class TransportPackagePage implements OnInit, OnDestroy {
       warnings.missing ? `${warnings.missing} item(ns) usam algo que não existe aqui nem vem no pacote` : '',
       warnings.drops ? `${warnings.drops} objeto(s) serão apagados` : '',
       this.installing().length ? `${this.installing().length} aplicação(ões) serão instaladas aqui` : '',
-      warnings.converts ? 'a aplicação web, hoje um monolito, será trocada pela de micro frontends (o monolito fica guardado e volta ao reverter)' : '',
     ].filter(Boolean);
     const at = scheduled ? new Date(this.when) : null;
     if (scheduled && (!this.when || Number.isNaN(at!.getTime()))) {

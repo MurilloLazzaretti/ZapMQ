@@ -96,7 +96,7 @@ public static class TransportEndpoints
         history = record.History,
         // What was there before is given with the item, when it is asked for.
         results = record.Results.Select(result => new { result.Number, result.Status, result.Did, result.Problem, result.Batch, result.Line, result.Messages, result.At, result.Backup, hasPrevious = result.Previous is not null,
-            result.Reverted, result.RevertProblem, result.RevertedAt, result.RevertMessages, result.RevertBackup, result.Installed, result.ModeBefore })
+            result.Reverted, result.RevertProblem, result.RevertedAt, result.RevertMessages, result.RevertBackup, result.Installed })
     };
 
     public static void MapTransport(this IEndpointRouteBuilder routes)

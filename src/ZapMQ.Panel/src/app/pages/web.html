@@ -15,7 +15,7 @@
     </div>
     <span class="spacer"></span>
     @if ((applications()?.length ?? 0) > 1) {
-      <mat-button-toggle-group [value]="application()?.Name" (change)="chosen.set($event.value)" hideSingleSelectionIndicator aria-label="Aplicação">
+      <mat-button-toggle-group [value]="application()?.Name" (change)="choose($event.value)" hideSingleSelectionIndicator aria-label="Aplicação">
         @for (item of applications(); track item.Name) {
           <mat-button-toggle [value]="item.Name">{{ item.Name }}</mat-button-toggle>
         }
@@ -45,8 +45,66 @@
   }
 
   @if (application(); as app) {
-    @if (app.Problem) {
+    @if (app.Problem && app.Active !== false) {
       <div class="notice danger" role="alert"><mat-icon svgIcon="error" /><div><strong>{{ app.Name }}:</strong> {{ app.Problem }}</div></div>
+    }
+
+    @if (app.Address) {
+      <section class="panel address">
+        <div class="line">
+          <mat-icon svgIcon="lan" />
+          <div class="what">
+            <strong class="mono">{{ app.Address }}</strong>
+            <span class="muted">
+              {{ app.Mode === 'monolith' ? 'Monolito' : 'Micro frontends' }} · {{ app.Serve === 'proxy' ? 'site ' + app.ProxyTo : 'NGINX serve a pasta' }}
+            </span>
+          </div>
+          <span class="pill" [class.ok]="app.Active !== false">{{ app.Active !== false ? 'ativa: responde por este nome' : 'inativa' }}</span>
+          <span class="spacer"></span>
+          @if (app.Active === false) {
+            <button mat-flat-button (click)="swap(app, true)" [disabled]="switching()"><mat-icon svgIcon="power_settings_new" /> Ativar</button>
+          } @else {
+            <button mat-button (click)="swap(app, false)" [disabled]="switching()"><mat-icon svgIcon="power_settings_new" /> Desativar</button>
+          }
+        </div>
+        @if (sharing().length > 1) {
+          <p class="muted">
+            Mesmo nome:
+            @for (item of sharing(); track item.Name; let last = $last) {
+              <a class="link" (click)="choose(item.Name)" tabindex="0" (keydown.enter)="choose(item.Name)">{{ item.Name }}</a> ({{ item.Mode === 'monolith' ? 'monolito' : 'MFE' }}{{ item.Active !== false ? ', ativa' : '' }}){{ last ? '' : ' · ' }}
+            }
+          </p>
+        }
+        @if (switchOutput()) {
+          <pre class="output">{{ switchOutput() }}</pre>
+        }
+        @if (siteProblem()) {
+          <p class="muted">{{ siteProblem() }}</p>
+        } @else if (site(); as file) {
+          @if (!file.Exists) {
+            <div class="notice warn" role="status">
+              <mat-icon svgIcon="info" />
+              <div>
+                Ainda não há o arquivo do NGINX para {{ app.Address }}. Primeiro crie-o com a aplicação que responde hoje: nada muda para quem usa, e o NGINX só passa a usá-lo depois de incluído.
+                @if (app.Active !== false) {
+                  <div class="include"><button mat-stroked-button (click)="swap(app, true)" [disabled]="switching()"><mat-icon svgIcon="add" /> Criar o arquivo com {{ app.Name }}</button></div>
+                }
+              </div>
+            </div>
+          } @else if (!file.Included) {
+            <div class="notice warn" role="status">
+              <mat-icon svgIcon="info" />
+              <div>
+                O NGINX ainda não inclui o arquivo deste nome. Uma vez só, no <span class="mono">server</span> de {{ app.Address }}, troque o <span class="mono">root</span> e o <span class="mono">location /</span> por:
+                <div class="include"><code class="mono">{{ file.Include }}</code><button mat-icon-button (click)="copyInclude(file.Include)" matTooltip="Copiar" aria-label="Copiar"><mat-icon svgIcon="content_copy" /></button></div>
+                e teste e recarregue em <a routerLink="/workers/proxy">Proxy</a>. Daí em diante, ativar uma aplicação troca o que o nome abre sem mexer no NGINX à mão.
+              </div>
+            </div>
+          } @else {
+            <p class="muted mono file">{{ file.File }}</p>
+          }
+        }
+      </section>
     }
 
     <section class="grid stats">

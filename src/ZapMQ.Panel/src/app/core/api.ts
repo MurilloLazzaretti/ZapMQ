@@ -7,7 +7,7 @@ import {
   AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
-  HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending, InstallChoice } from './models';
+  HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WebSite, WebSwitched, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending, InstallChoice } from './models';
 
 /**
  * The panel API. Every address is relative, so it follows the <base href> the service writes
@@ -445,6 +445,16 @@ export class Api {
 
   rejectPackage(id: string, reason: string): Observable<PackageDetail> {
     return this.http.post<PackageDetail>(`api/transport/packages/${id}/reject`, { reason });
+  }
+
+  /** The file of the proxy for a name of the DNS. */
+  webSite(address: string): Observable<WebSite> {
+    return this.http.get<WebSite>('api/workers/frontends/site', { params: { address } });
+  }
+
+  /** Makes a web application the one that answers by its name of the DNS, or none. */
+  switchWeb(name: string, activate: boolean): Observable<WebSwitched> {
+    return this.http.post<WebSwitched>(`api/workers/frontends/${encodeURIComponent(name)}/${activate ? 'activate' : 'deactivate'}`, null);
   }
 
   frontends(): Observable<{ Frontends: WebApplication[]; Publications: WebPublication[] }> {

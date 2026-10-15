@@ -367,9 +367,35 @@ export interface WebApplication {
   Mode?: 'mfe' | 'monolith';
   /** When the application around the modules was last published. */
   ShellPublishedAt: string | null;
+  /** The name of the DNS it answers by; several may share one, and only the active one answers. */
+  Address?: string | null;
+  Active?: boolean;
+  /** files: NGINX serves the folder; proxy: NGINX passes the requests to a site (ProxyTo). */
+  Serve?: 'files' | 'proxy';
+  ProxyTo?: string | null;
   /** Folders beside the modules that the manifest does not list. */
   Orphans: string[];
   Modules: WebModule[];
+}
+
+/** The file of the proxy for a name of the DNS, and whether the configuration includes it. */
+export interface WebSite {
+  File: string;
+  Exists: boolean;
+  Included: boolean;
+  Include: string;
+  Content: string | null;
+}
+
+/** What a swap did. */
+export interface WebSwitched {
+  Switched: boolean;
+  Address?: string;
+  Reloaded?: boolean;
+  Included?: boolean;
+  Include?: string;
+  Deactivated?: string[];
+  Output: string;
 }
 
 export interface WebPublication {
@@ -979,8 +1005,6 @@ export interface PackageResult {
   revertBackup: string | null;
   /** The item made here an application that was not here before. */
   installed?: boolean;
-  /** What the web application was registered as before the item changed it. */
-  modeBefore?: string | null;
 }
 
 /** What putting back one applied item would take. */
@@ -1003,7 +1027,7 @@ export interface PackageDetail {
 /** How one item of a package stands against what this environment has. */
 export interface ItemCheck {
   number: number;
-  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'unknown' | 'missing' | 'install' | 'converts';
+  state: 'new' | 'same' | 'clean' | 'changes' | 'conflict' | 'blocked' | 'drops' | 'absent' | 'script' | 'unknown' | 'missing' | 'install' | 'mismatch';
   added: number;
   changed: number;
   removed: number;

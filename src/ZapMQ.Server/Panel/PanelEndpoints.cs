@@ -584,6 +584,12 @@ public static class PanelEndpoints
         // The micro frontends published on the machine of the Worker Control.
         workers.MapGet("/frontends", (WorkerControlClient client, HttpContext context) => Forward(client, context, "Frontends"));
 
+        // Which web application answers by a name of the DNS: the file of the proxy for that name, and the swap.
+        workers.MapGet("/frontends/site", (string? address, WorkerControlClient client, HttpContext context) => Forward(client, context, "WebSite", request => request["Address"] = address));
+        foreach (var (action, command) in new[] { ("activate", "WebActivate"), ("deactivate", "WebDeactivate") })
+            workers.MapPost($"/frontends/{{name}}/{action}", (string name, WorkerControlClient client, HttpContext context, ILoggerFactory loggers) =>
+                Forward(client, context, command, request => request["Name"] = name, loggers, $"Web application {name}: {action}", TimeSpan.FromSeconds(60)));
+
         // The Windows services the Worker Control watches without having started them.
         workers.MapGet("/services/installed", (WorkerControlClient client, HttpContext context) => Forward(client, context, "ListServices"));
 

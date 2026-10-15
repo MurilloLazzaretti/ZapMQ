@@ -33,8 +33,8 @@ Anote, no ambiente de destino:
 4. **Os serviços do Windows** da aplicação que o painel vai acompanhar (nome, pasta).
 5. **As APIs no IIS** (sites, pools, portas, pastas) e o **proxy reverso** (NGINX: pasta, arquivo
    de configuração, formato do log de acesso).
-6. **A aplicação web** (pasta, se é monolito ou micro frontends) e as **pastas de arquivos para
-   download**.
+6. **A aplicação web** (pasta, se é monolito ou micro frontends, o nome no DNS e se o NGINX serve a
+   pasta ou passa a um site do IIS) e as **pastas de arquivos para download**.
 7. **O banco:** instância, bancos usados e o usuário que o agente vai usar (seção 8).
 8. **Rede:** o nome do site no DNS interno e se os servidores dos outros ambientes o alcançam na
    porta 80/443 (para as rotas de transporte).

@@ -866,44 +866,47 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
     }
 
     [Fact]
-    public async Task Micro_frontends_brought_whole_replace_a_monolith_and_go_back_to_it()
+    public async Task A_web_application_goes_only_to_one_of_the_same_kind()
     {
         var origin = new PretendDatabase();
-        origin.Targets["frontend:OJITECH"] = new() { ["index.html"] = "shell", ["assets/mf.manifest.json"] = "{}", ["mfe/producao/remoteEntry.js"] = "p" };
-        origin.Modes["frontend:OJITECH"] = "mfe";
+        origin.Targets["frontend:Portal"] = new() { ["index.html"] = "shell", ["assets/mf.manifest.json"] = "{}", ["mfe/orders/remoteEntry.js"] = "p" };
+        origin.Modes["frontend:Portal"] = "mfe";
         byte[] made;
         await using (await Serve(origin))
         {
             await ClearArea();
-            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "frontend", name = "OJITECH" }), HttpStatusCode.Created);
-            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "OJITECH MFE" }), HttpStatusCode.Created);
+            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { kind = "frontend", name = "Portal" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { name = "Portal MFE" }), HttpStatusCode.Created);
             Assert.Equal("mfe", (string?)closed["items"]![0]!["mode"]);
             made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
         }
 
-        var here = new PretendDatabase
+        // Here the application of that name is a monolith: it is another application, and nothing is applied.
+        var here = new PretendDatabase();
+        here.Targets["frontend:Portal"] = new() { ["index.html"] = "monolith", ["main.js"] = "m" };
+        here.Modes["frontend:Portal"] = "monolith";
+        await using (await Serve(here))
         {
-            OnApply = request => (string?)request["Command"] == "TransportDeploy"
-                ? new JObject { ["Ok"] = true, ["Applied"] = true, ["Did"] = "replaced", ["Backup"] = "/backup/monolith", ["Mode"] = request["Mode"], ["Messages"] = new JArray("replaced") }
-                : null
-        };
-        here.Targets["frontend:OJITECH"] = new() { ["index.html"] = "monolith", ["main.js"] = "m" };
-        here.Modes["frontend:OJITECH"] = "monolith";
-        await using var _ = await Serve(here);
-        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
-        Assert.Equal("converts", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!["state"]);
+            var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+            var check = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!;
+            Assert.Equal("mismatch", (string?)check["state"]);
+            Assert.Contains("um monolito", (string?)check["problem"]);
+            await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }), HttpStatusCode.Conflict);
+            lock (here.Applied)
+                Assert.Empty(here.Applied);
+        }
 
-        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
-        var applied = await WaitFor(id, "Applied", "Partial", "Failed");
-        Assert.Equal(("Applied", "monolith"), ((string?)applied["package"]!["status"], (string?)applied["results"]![0]!["modeBefore"]));
-        lock (here.Applied)
-            Assert.Equal("mfe", (string?)here.Applied.Single(request => (string?)request["Command"] == "TransportDeploy")["Mode"]);
-
-        // Going back puts the monolith back and says what the application was.
-        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/revert", new { }));
-        await WaitFor(id, "Reverted");
-        lock (here.Reverted)
-            Assert.Equal("monolith", (string?)here.Reverted.Single()["Mode"]);
+        // Of the same kind, it is replaced as any other application, and nothing says to change its kind.
+        var same = new PretendDatabase();
+        same.Targets["frontend:Portal"] = new() { ["index.html"] = "older shell" };
+        same.Modes["frontend:Portal"] = "mfe";
+        await using var _ = await Serve(same);
+        var again = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+        Assert.Equal("changes", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{again}/check"))["checks"]![0]!["state"]);
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{again}/approve", new { }));
+        await WaitFor(again, "Applied", "Partial", "Failed");
+        lock (same.Applied)
+            Assert.Null(same.Applied.Single(request => (string?)request["Command"] == "TransportDeploy")["Mode"]);
     }
 
     [Fact]

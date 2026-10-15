@@ -135,6 +135,8 @@
             <p class="muted about">
               <strong>MFE</strong>: uma casca que carrega módulos publicados à parte, listados no manifesto; a casca e cada módulo são trocados separados.
               <strong>Monolito</strong>: uma aplicação só, trocada inteira.
+              O tipo não muda depois de gravado: o outro tipo é outra aplicação, com outro nome.
+              Várias aplicações podem ter o mesmo nome no DNS; só a ativa responde por ele, e a troca é feita em <a routerLink="/web">Aplicação web</a>.
             </p>
             @for (app of frontends(); track $index; let index = $index) {
               <div class="app">
@@ -142,13 +144,25 @@
                   <mat-form-field><mat-label>Nome</mat-label><input matInput [ngModel]="app.Name" (ngModelChange)="setFrontend(index, 'Name', $event)" spellcheck="false" /></mat-form-field>
                   <mat-form-field>
                     <mat-label>Arquitetura</mat-label>
-                    <mat-select [ngModel]="app.Mode || 'mfe'" (ngModelChange)="setFrontend(index, 'Mode', $event)">
+                    <mat-select [ngModel]="app.Mode || 'mfe'" (ngModelChange)="setFrontend(index, 'Mode', $event)" [disabled]="kindLocked(app)">
                       <mat-option value="mfe">MFE (casca e módulos)</mat-option>
                       <mat-option value="monolith">Monolito</mat-option>
                     </mat-select>
+                    @if (kindLocked(app)) { <mat-hint>Não muda depois de gravado.</mat-hint> }
                   </mat-form-field>
+                  <mat-form-field><mat-label>Nome no DNS</mat-label><input matInput class="mono" [ngModel]="app.Address ?? ''" (ngModelChange)="setFrontend(index, 'Address', $event)" placeholder="app.empresa.com.br" spellcheck="false" /><mat-hint>{{ app.Address ? (app.Active === false ? 'Inativa: não responde por ele.' : 'Ativa: responde por ele.') : 'Por onde os usuários a abrem.' }}</mat-hint></mat-form-field>
+                  <mat-form-field>
+                    <mat-label>Servida por</mat-label>
+                    <mat-select [ngModel]="app.Serve || 'files'" (ngModelChange)="setFrontend(index, 'Serve', $event)">
+                      <mat-option value="files">NGINX (os arquivos da pasta)</mat-option>
+                      <mat-option value="proxy">Um site do IIS</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  @if (app.Serve === 'proxy') {
+                    <mat-form-field><mat-label>Endereço do site</mat-label><input matInput class="mono" [ngModel]="app.ProxyTo ?? ''" (ngModelChange)="setFrontend(index, 'ProxyTo', $event)" placeholder="http://127.0.0.1:8080" spellcheck="false" /><mat-hint>Para onde o NGINX passa os pedidos.</mat-hint></mat-form-field>
+                  }
                   <mat-form-field class="wide"><mat-label>Pasta</mat-label><input matInput class="mono" [ngModel]="app.Root" (ngModelChange)="setFrontend(index, 'Root', $event)" spellcheck="false" /><mat-hint>A pasta que o servidor web serve.</mat-hint></mat-form-field>
-                  <mat-form-field><mat-label>Endereço</mat-label><input matInput [ngModel]="app.BaseUrl ?? ''" (ngModelChange)="setFrontend(index, 'BaseUrl', $event)" placeholder="http://127.0.0.1" spellcheck="false" /><mat-hint>Para conferir se responde. Vazio: não confere.</mat-hint></mat-form-field>
+                  <mat-form-field><mat-label>Endereço para conferir</mat-label><input matInput [ngModel]="app.BaseUrl ?? ''" (ngModelChange)="setFrontend(index, 'BaseUrl', $event)" placeholder="http://127.0.0.1" spellcheck="false" /><mat-hint>Para conferir se responde. Vazio: não confere.</mat-hint></mat-form-field>
                   <mat-form-field><mat-label>Site (Host)</mat-label><input matInput [ngModel]="app.Host ?? ''" (ngModelChange)="setFrontend(index, 'Host', $event)" spellcheck="false" /><mat-hint>Quando o endereço é só o da máquina.</mat-hint></mat-form-field>
                   @if ((app.Mode || 'mfe') === 'mfe') {
                     <mat-form-field><mat-label>Manifesto dos módulos</mat-label><input matInput class="mono" [ngModel]="app.Manifest ?? ''" (ngModelChange)="setFrontend(index, 'Manifest', $event)" placeholder="assets/mf.manifest.json" spellcheck="false" /></mat-form-field>

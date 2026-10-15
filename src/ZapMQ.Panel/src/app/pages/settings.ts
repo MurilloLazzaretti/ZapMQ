@@ -139,6 +139,10 @@ interface Frontend {
   Name: string;
   Root: string;
   Mode?: string;
+  Address?: string;
+  Active?: boolean;
+  Serve?: string;
+  ProxyTo?: string;
   BaseUrl?: string;
   Host?: string;
   Manifest?: string;
@@ -251,6 +255,13 @@ export class SettingsPage implements OnInit {
 
   protected readonly frontends = computed(() => (this.config()?.['Frontends'] as Frontend[] | undefined) ?? []);
 
+  /** The kind of each web application already saved, by name: it never changes. */
+  protected readonly savedKinds = signal(new Map<string, string>());
+
+  protected kindLocked(app: Frontend): boolean {
+    return this.savedKinds().has(app.Name.trim().toLowerCase());
+  }
+
   ngOnInit(): void {
     // ?assunto= opens one subject, as the pages that depend on it link here.
     const asked = this.route.snapshot.queryParamMap.get('assunto');
@@ -270,6 +281,7 @@ export class SettingsPage implements OnInit {
       next: ({ environment, defaults, proxy }) => {
         const config = structuredClone(environment.Config) as WorkerConfig;
         this.config.set(config);
+        this.savedKinds.set(new Map(((config['Frontends'] as Frontend[] | undefined) ?? []).map((app) => [app.Name.trim().toLowerCase(), app.Mode || 'mfe'])));
         this.location.set(environment.File);
         this.typed.clear();
         this.problem.set('');
@@ -476,7 +488,8 @@ export class SettingsPage implements OnInit {
 
   protected addFrontend(): void {
     const config = this.config() as Record<string, unknown>;
-    config['Frontends'] = [...this.frontends(), { Name: '', Root: '', Mode: 'mfe' }];
+    // A new application does not answer by its name until it is activated.
+    config['Frontends'] = [...this.frontends(), { Name: '', Root: '', Mode: 'mfe', Active: false }];
     this.touch();
   }
 

@@ -106,3 +106,20 @@
 }
 
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.address {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+
+  .line { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+  .what { display: grid; min-width: 0; }
+  .what strong { overflow-wrap: anywhere; }
+  .spacer { flex: 1; }
+  p { margin: 0; }
+  .link { cursor: pointer; color: var(--mat-sys-primary); text-decoration: underline; }
+  .file { overflow-wrap: anywhere; font-size: 12px; }
+  .include { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
+  .include code { padding: 6px 10px; border-radius: 8px; background: var(--mat-sys-surface-container-high); color: var(--mat-sys-on-surface); overflow-wrap: anywhere; }
+  .output { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--zap-danger-container); color: var(--zap-danger); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+}

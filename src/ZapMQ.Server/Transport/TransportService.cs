@@ -307,6 +307,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         }
     }
 
+    private static string KindText(string mode) => mode == "mfe" ? "uma aplicação de micro frontends" : "um monolito";
+
     private static void RequireFileKind(string? kind, string? name)
     {
         if (kind is null || !FileKinds.Contains(kind))
@@ -593,10 +595,13 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                     else if (found.Target["Problem"]?.GetValue<string>() is { } problem)
                         checks.Add(new ItemCheck(item.Number, "unknown", found.Target["Version"]?.GetValue<string>(), [], problem));
                     else
+                    if (item.Mode is { Length: > 0 } packed && found.Target["Mode"]?.GetValue<string>() is { Length: > 0 } registered && packed != registered)
+                        // A monolith and an application of micro frontends are different applications, registered apart.
+                        checks.Add(new ItemCheck(item.Number, "mismatch", found.Target["Version"]?.GetValue<string>(), [],
+                            $"Aqui {item.Name} é {KindText(registered)}, e o pacote traz {KindText(packed)}. Cadastre a aplicação do outro tipo com outro nome e transporte para ela."));
+                    else
                         checks.Add(new ItemCheck(item.Number,
-                            // Micro frontends where a monolith is: it is replaced whole, and becomes one of micro frontends.
-                            item.Mode == "mfe" && found.Target["Mode"]?.GetValue<string>() == "monolith" ? "converts"
-                            : found.Changes.All(change => change.State == "same") ? "same" : "changes", found.Target["Version"]?.GetValue<string>(), [], null)
+                            found.Changes.All(change => change.State == "same") ? "same" : "changes", found.Target["Version"]?.GetValue<string>(), [], null)
                         {
                             Added = found.Changes.Count(change => change.State == "added"), Changed = found.Changes.Count(change => change.State == "changed"), Removed = found.Changes.Count(change => change.State == "removed")
                         });
@@ -689,6 +694,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
             var item = waiting.Manifest.Items.First(candidate => candidate.Number == absent.Number);
             throw new TransportRefused($"O item {item.Number} ({item.Kind} {item.Name}) não existe neste ambiente, e o pacote não diz como instalá-lo (veio de uma versão anterior, ou o tipo não é instalado pelo transporte). Instale-o aqui e aprove depois.", StatusCodes.Status409Conflict);
         }
+        if (checks.FirstOrDefault(check => check.State == "mismatch") is { } mismatch)
+            throw new TransportRefused($"O item {mismatch.Number}: {mismatch.Problem}", StatusCodes.Status409Conflict);
         if (checks.FirstOrDefault(check => check.State == "blocked") is { } blocked)
         {
             var item = waiting.Manifest.Items.First(candidate => candidate.Number == blocked.Number);
@@ -952,8 +959,6 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                         request["Name"] = item.Name;
                         request["Backup"] = record.Results.First(result => result.Number == step.Number).Backup;
                         request["Force"] = record.Force;
-                        if (record.Results.First(result => result.Number == step.Number).ModeBefore is { } before)
-                            request["Mode"] = before;
                     }, cancellation));
                 else
                 {
@@ -1052,8 +1057,6 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 request["Force"] = force;
                 if (!string.IsNullOrEmpty(item.Version))
                     request["Version"] = item.Version;
-                if (item.Mode is { Length: > 0 })
-                    request["Mode"] = item.Mode;
             }, cancellation);
 
             if (!answer.Reached)
@@ -1074,11 +1077,6 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 result.Problem = body["Problem"]?.GetValue<string>();
                 result.Backup = body["Backup"]?.GetValue<string>();
                 result.Messages = [.. (body["Messages"] as JsonArray ?? []).Select(message => message?.GetValue<string>() ?? "")];
-                // The application changed kind: what it was is what it goes back to.
-                if (body["Mode"]?.GetValue<string>() is { } now)
-                    result.ModeBefore = now == "mfe" ? "monolith" : "mfe";
-                if (body["ModeProblem"]?.GetValue<string>() is { } problem)
-                    result.Messages.Add(problem);
             }
         }
         finally

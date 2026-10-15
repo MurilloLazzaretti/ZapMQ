@@ -134,14 +134,15 @@ tela, cria a pasta e o `versions.json` quando ainda não existem e mostra o trec
 serve em `/<nome>/`, com o tipo dos arquivos. O trecho é incluído pela aba do proxy reverso, que
 testa a configuração antes de recarregar.
 
-**Do monolito para os micro frontends.** Uma aplicação de micro frontends também é um alvo
-**inteiro** (casca, módulos e manifesto), que aparece em *Aplicações* como "(aplicação inteira)".
-Levada a um ambiente onde a aplicação de mesmo nome é um **monolito**, o item aparece como **troca o
-monolito pelo MFE**: a pasta do monolito recebe a aplicação inteira, os arquivos do ambiente
-(`env.json`, `web.config`…) ficam, o monolito é guardado como em toda troca e a aplicação passa a
-ser registrada como de micro frontends; daí em diante cada módulo é um alvo e pode vir em pacote.
-**Reverter** devolve o monolito e o registro de monolito. O nome da aplicação web tem de ser o
-mesmo nos dois ambientes (*Configurações → Aplicação web*).
+**Aplicação web de outro tipo.** Uma aplicação de micro frontends também é um alvo **inteiro**
+(casca, módulos e manifesto), que aparece em *Aplicações* como "(aplicação inteira)". O tipo
+(monolito ou micro frontends) é da aplicação para sempre: um item só vai para a aplicação de mesmo
+nome **e mesmo tipo**. Levado a um ambiente onde a aplicação de mesmo nome é do outro tipo, o item
+aparece como **tipo diferente** e o pacote não pode ser aprovado, só recusado. Para trocar um
+monolito por micro frontends, cadastre no destino uma **segunda aplicação**, do tipo MFE, com outro
+nome, a pasta dela (pode estar vazia) e o mesmo nome no DNS, inativa; transporte a aplicação
+inteira para ela e, quando estiver pronta, **ative-a** na tela *Aplicação web* (seção 4.13 do
+[PAINEL.md](PAINEL.md)). Na origem, a aplicação precisa ter o mesmo nome que tem no destino.
 
 ### 4.1 Alvo que ainda não existe
 
