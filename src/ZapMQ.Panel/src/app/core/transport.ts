@@ -157,10 +157,10 @@ export class Transport {
   }
 
   /**
-   * The open package to put something in: the one chosen last, while it is still open; otherwise
-   * whoever is at the panel says which, or makes one. Null when nobody answered.
+   * The open package to put something in, said every time by whoever is at the panel, with the
+   * one chosen last already marked; or a new one. Null when nobody answered.
    */
-  async draftFor(ask = false): Promise<PackageDraft | null> {
+  async draftFor(fresh = false): Promise<PackageDraft | null> {
     let drafts: PackageDraft[];
     try {
       drafts = (await firstValueFrom(this.api.drafts())).drafts;
@@ -174,12 +174,7 @@ export class Transport {
     } catch {
       remembered = this.current()?.id ?? null;
     }
-    const known = drafts.find((draft) => draft.id === remembered);
-    if (known && !ask) {
-      this.current.set(known);
-      return known;
-    }
-    const chosen = await firstValueFrom(this.dialog.open(DraftPicker, { data: { drafts, current: remembered }, maxWidth: '520px', width: 'calc(100vw - 32px)' }).afterClosed());
+    const chosen = await firstValueFrom(this.dialog.open(DraftPicker, { data: { drafts, current: remembered, fresh }, maxWidth: '520px', width: 'calc(100vw - 32px)' }).afterClosed());
     if (!chosen) {
       return null;
     }

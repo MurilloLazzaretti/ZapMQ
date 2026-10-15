@@ -571,20 +571,31 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
 
         var pending = items.Select((item, index) => (item, index)).OrderBy(pair => Rank(pair.item)).ThenBy(pair => pair.index).Select(pair => pair.item).ToList();
         var placed = new List<(AreaItem Area, PackageItem Item, byte[] Content)>();
+        // By schema and name: a script names what it uses without saying what it is.
+        static string Named(string? schema, string? name) => $"{schema}.{name}".ToLowerInvariant();
+        var inside = pending.Where(item => item.Item.Action == "Define").Select(item => Named(item.Item.Schema, item.Item.Name)).ToHashSet();
         var done = new HashSet<string>();
-        var inside = pending.Where(item => item.Item.Action == "Define").Select(item => Key(item.Item.ObjectKind, item.Item.Schema, item.Item.Name)).ToHashSet();
+
+        // What each item needs among what comes in the package: what an object uses, or what a script names and does not make itself.
+        var needs = pending.ToDictionary(item => item.Item, item =>
+        {
+            var own = Named(item.Item.Schema, item.Item.Name);
+            var named = item.Item.Action == "Script"
+                ? ScriptNames.Read(System.Text.Encoding.UTF8.GetString(item.Content)).Needed.Select(name => name.ToLowerInvariant())
+                : item.Item.Uses.Where(use => use.Database is null).Select(use => Named(use.Schema, use.Name));
+            return named.Where(name => inside.Contains(name) && name != own).ToHashSet();
+        });
 
         while (pending.Count > 0)
         {
             // The first whose every need that comes in the package is already placed; when they go round in a circle, the first.
-            var next = pending.FirstOrDefault(item => item.Item.Uses.All(use => use.Database is not null || !inside.Contains(Key(use.Kind, use.Schema, use.Name))
-                || done.Contains(Key(use.Kind, use.Schema, use.Name)) || Key(use.Kind, use.Schema, use.Name) == Key(item.Item.ObjectKind, item.Item.Schema, item.Item.Name)));
+            var next = pending.FirstOrDefault(item => needs[item.Item].All(done.Contains));
             if (next.Item is null)
                 next = pending[0];
             pending.Remove(next);
             placed.Add(next);
             if (next.Item.Action == "Define")
-                done.Add(Key(next.Item.ObjectKind, next.Item.Schema, next.Item.Name));
+                done.Add(Named(next.Item.Schema, next.Item.Name));
         }
         return placed;
     }
@@ -603,7 +614,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         // A script names objects without saying what they are: by schema and name only.
         static string Named(string key) => key[(key.IndexOf('|') + 1)..].Replace('|', '.');
         var hereNamed = here?.Select(Named).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var broughtNamed = brought.Select(Named).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // What comes before each item, as the items go by: what a script needs has to come before it.
+        var broughtNamed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var checks = new List<ItemCheck>();
         foreach (var item in record.Manifest.Items)
         {
@@ -614,10 +626,15 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 var lacking = names is null || hereNamed is null ? [] : names.Needed.Where(name => !hereNamed.Contains(name) && !broughtNamed.Contains(name)).ToList();
                 if (names is not null)
                     broughtNamed.UnionWith(names.Made);
+                // Named by an object that comes later in the package: it will not be there yet when the script runs.
+                var later = record.Manifest.Items.Where(other => other.Number > item.Number && other.Action == "Define").Select(other => $"{other.Schema}.{other.Name}").ToHashSet(StringComparer.OrdinalIgnoreCase);
                 checks.Add(new ItemCheck(item.Number, RanBefore(record, item) is null ? "script" : "ran", null, lacking,
-                    names is { Problems.Count: > 0 } ? "O script não pôde ser lido para conferir o que ele usa: " + string.Join("; ", names.Problems) : null));
+                    names is { Problems.Count: > 0 } ? "O script não pôde ser lido para conferir o que ele usa: " + string.Join("; ", names.Problems)
+                    : lacking.Any(later.Contains) ? $"{string.Join(", ", lacking.Where(later.Contains))} vem depois deste script no pacote" : null));
                 continue;
             }
+            if (item.Action == "Define")
+                broughtNamed.Add($"{item.Schema}.{item.Name}");
             if (item.Kind != "database")
             {
                 try

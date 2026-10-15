@@ -44,7 +44,7 @@ import { TransportTabs } from '../shared/transport-tabs';
                 <a class="draft" [routerLink]="['/transporte/aberto', draft.id]" [class.current]="transport.current()?.id === draft.id">
                   <mat-icon svgIcon="edit_note" />
                   <span class="what"><strong>{{ draft.name }}</strong> <span class="pill primary">v{{ draft.version }}</span>
-                    @if (transport.current()?.id === draft.id) { <span class="pill ok" matTooltip="O que for incluído pelas telas do painel vai neste">incluindo aqui</span> }
+                    @if (transport.current()?.id === draft.id) { <span class="pill" matTooltip="Vem marcado quando o painel pergunta em qual pacote incluir">último escolhido</span> }
                     <span class="muted">{{ draft.items ?? 0 }} {{ draft.items === 1 ? 'item' : 'itens' }} · {{ draft.createdBy }} · {{ draft.createdAt | ago }}</span></span>
                 </a>
               }

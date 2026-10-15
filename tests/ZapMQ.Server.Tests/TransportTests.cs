@@ -499,6 +499,23 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
     }
 
     [Fact]
+    public async Task A_script_goes_after_the_objects_of_the_package_it_uses()
+    {
+        var origin = new PretendDatabase();
+        origin.Objects["spLoad"] = ("Procedure", "CREATE PROCEDURE dbo.spLoad AS RETURN", []);
+        origin.Objects["Orders"] = ("Table", "CREATE TABLE dbo.Orders (Id int)", []);
+        await using var _ = await Serve(origin);
+        await ClearArea();
+        await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { draft = _draft, title = "Carga", script = "EXEC dbo.spLoad; UPDATE dbo.Orders SET Id = 1" }), HttpStatusCode.Created);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spLoad" }), HttpStatusCode.Created);
+        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Table", schema = "dbo", name = "Orders" }), HttpStatusCode.Created);
+        var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Carga" }), HttpStatusCode.Created);
+
+        // The table first by its kind; the script, which would come before procedures, waits for the one it runs.
+        Assert.Equal(["Orders", "spLoad", null], closed["items"]!.Select(item => (string?)item["name"]));
+    }
+
+    [Fact]
     public async Task A_script_that_names_what_is_neither_here_nor_before_it_in_the_package_is_not_approved()
     {
         var origin = new PretendDatabase();

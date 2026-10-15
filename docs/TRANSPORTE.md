@@ -202,9 +202,8 @@ desliga a criação e a exclusão na máquina.
 ### 5.1 Entrada
 
 Tudo começa por um **pacote aberto**: em *Transporte → Pacotes*, **Novo pacote** pede o nome e o
-que muda, e o que for incluído pelas telas do painel vai nele (o último escolhido fica lembrado no
-navegador; sem nenhum, o painel pergunta em qual incluir ou cria um). Sem pacote aberto não se
-inclui nada. Entram nele de duas formas:
+que muda. A cada inclusão pelas telas do painel, ele pergunta em qual pacote aberto incluir (com
+o último escolhido já marcado) ou cria um novo ali mesmo. Sem pacote aberto não se inclui nada. Entram nele de duas formas:
 
 - **Pelo painel:** escolher objetos do banco, nas abas Objetos e Alterações (esta marca o que
   mudou e ainda não entrou em nenhum pacote); escrever ou importar um script; ou enviar o zip de
@@ -220,8 +219,9 @@ atual do alvo.
 
 No pacote aberto ficam os itens, o nome e a descrição; **Fechar a versão N** fecha. O script de
 cada objeto é capturado nesse momento, não quando ele entrou no pacote. A ordem é calculada pelas
-dependências (types e tabelas antes de functions, views e procedures). Fechada, a versão não muda
-mais.
+dependências (types e tabelas antes de functions, views e procedures; um objeto depois dos do
+pacote que ele usa; um script depois dos objetos do pacote que ele cita). Fechada, a versão não
+muda mais.
 
 **Uma correção é a versão seguinte do mesmo pacote.** Em um pacote feito no ambiente, **Nova
 versão** abre a versão N+1 com tudo o que a última leva (os objetos apontados de novo, os scripts
