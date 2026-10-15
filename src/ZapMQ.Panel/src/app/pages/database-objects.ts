@@ -10,6 +10,7 @@ import { Api } from '../core/api';
 import { kindIcon, kindName, size, variety } from '../core/database';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
 import { CatalogObject, CatalogPage, ScriptHit } from '../core/models';
+import { ObjectListMemory } from '../core/object-memory';
 import { Transport } from '../core/transport';
 import { DatabaseTabs } from '../shared/database-tabs';
 
@@ -31,6 +32,7 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly transport = inject(Transport);
+  protected readonly memory = inject(ObjectListMemory);
   private typing: ReturnType<typeof setTimeout> | null = null;
   private asked = 0;
 
@@ -68,6 +70,7 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
     this.search.set(query.get('busca') ?? '');
     this.where.set(query.get('onde') === 'script' ? 'script' : 'name');
     this.sort.set(query.get('ordem') ?? 'name');
+    this.limit.set(Math.max(PAGE, Number(query.get('qtd')) || PAGE));
     this.api.database().subscribe({ next: (state) => this.databases.set(state.Databases), error: () => undefined });
     this.refresh();
   }
@@ -130,8 +133,8 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
     });
   }
 
-  /** The objects picked to go to the area together, kept across pages and filters. */
-  protected readonly picked = signal<ReadonlyMap<string, CatalogObject & { database: string }>>(new Map());
+  /** The objects picked to go to the area together, kept across pages, filters and the objects opened from here. */
+  protected readonly picked = this.memory.picked;
   protected readonly adding = signal(false);
 
   protected key(item: CatalogObject): string {
@@ -185,6 +188,19 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
     this.refresh();
   }
 
+  /** Whether this is the object that was opened last, to find it again on coming back. */
+  protected isLast(item: CatalogObject): boolean {
+    return this.memory.last() === this.key(item);
+  }
+
+  /** Back from an object, the list goes to where it was. */
+  private showLast(): void {
+    if (!this.memory.last()) {
+      return;
+    }
+    setTimeout(() => document.querySelector('tr.last, li.last')?.scrollIntoView({ block: 'center' }));
+  }
+
   protected link(item: CatalogObject): string[] {
     return ['/banco/objetos', this.page()!.Database, item.Kind, item.Schema, item.Name];
   }
@@ -193,7 +209,7 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
     const mine = ++this.asked;
     this.loading.set(true);
     this.router.navigate([], {
-      queryParams: { banco: this.database() || null, tipo: this.kind() || null, schema: this.schema() || null, busca: this.search() || null, ordem: this.sort() === 'name' ? null : this.sort(), onde: this.where() === 'script' ? 'script' : null },
+      queryParams: { banco: this.database() || null, tipo: this.kind() || null, schema: this.schema() || null, busca: this.search() || null, ordem: this.sort() === 'name' ? null : this.sort(), onde: this.where() === 'script' ? 'script' : null, qtd: this.limit() > PAGE ? this.limit() : null },
       replaceUrl: true,
     });
     if (this.where() === 'script') {
@@ -211,6 +227,7 @@ export class DatabaseObjectsPage implements OnInit, OnDestroy {
             return;
           }
           this.page.set(page);
+          this.showLast();
           this.problem.set('');
           this.unset.set('');
           this.outdated.set(false);

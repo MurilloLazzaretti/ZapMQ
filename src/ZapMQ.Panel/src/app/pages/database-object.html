@@ -1,6 +1,6 @@
 <div class="page">
   <header class="head">
-    <a mat-icon-button routerLink="/banco/objetos" queryParamsHandling="preserve" [queryParams]="{ banco: wanted().database }" matTooltip="Voltar aos objetos" aria-label="Voltar aos objetos"><mat-icon svgIcon="arrow_back" /></a>
+    <button mat-icon-button (click)="back()" matTooltip="Voltar" aria-label="Voltar"><mat-icon svgIcon="arrow_back" /></button>
     <div class="title">
       <h1><span class="muted">{{ wanted().schema }}.</span>{{ wanted().name }}</h1>
       <p class="muted">

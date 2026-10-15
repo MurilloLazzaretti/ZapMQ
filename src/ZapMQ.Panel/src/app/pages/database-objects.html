@@ -124,7 +124,7 @@
               </thead>
               <tbody>
                 @for (item of now.Objects; track item.Kind + item.Schema + item.Name) {
-                  <tr [class.picked]="picked().has(key(item))">
+                  <tr [class.picked]="picked().has(key(item))" [class.last]="isLast(item)">
                     <td class="pick"><input type="checkbox" [checked]="picked().has(key(item))" (change)="pick(item, $any($event.target).checked)" [attr.aria-label]="'Selecionar ' + item.Schema + '.' + item.Name" /></td>
                     <td class="wide" data-label="Objeto">
                       <a class="object" [routerLink]="link(item)"><mat-icon [svgIcon]="kindIcon(item.Kind)" /><span><span class="muted">{{ item.Schema }}.</span><strong>{{ item.Name }}</strong></span></a>

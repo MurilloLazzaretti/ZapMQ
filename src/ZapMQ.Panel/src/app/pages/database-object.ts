@@ -4,13 +4,15 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Location } from '@angular/common';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { Api } from '../core/api';
 import { actionName, actionTone, kindIcon, kindName, size, variety } from '../core/database';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
 import { CatalogColumn, CatalogDetail, CatalogReference, ObjectChange } from '../core/models';
 import { colour } from '../core/sql';
+import { ObjectListMemory } from '../core/object-memory';
 import { Transport } from '../core/transport';
 import { copyText } from '../core/clipboard';
 
@@ -44,6 +46,11 @@ export class DatabaseObjectPage implements OnInit, OnDestroy {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   protected readonly transport = inject(Transport);
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
+  private readonly memory = inject(ObjectListMemory);
+  /** Whether this screen was reached from another of the panel, to go back to it as it was. */
+  private readonly cameFromPanel = ((this.location.getState() as { navigationId?: number } | null)?.navigationId ?? 1) > 1;
   private watching: Subscription | null = null;
   private copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -117,8 +124,22 @@ export class DatabaseObjectPage implements OnInit, OnDestroy {
     this.find.set(this.route.snapshot.queryParamMap.get('texto') ?? '');
     this.watching = this.route.paramMap.subscribe((parameters) => {
       this.wanted.set({ database: parameters.get('database') ?? '', kind: parameters.get('kind') ?? '', schema: parameters.get('schema') ?? '', name: parameters.get('name') ?? '' });
+      const wanted = this.wanted();
+      this.memory.last.set(`${wanted.database}|${wanted.kind}|${wanted.schema}|${wanted.name}`);
       this.load();
     });
+  }
+
+  /**
+   * Back the way it came: through the objects opened one from the other, and then to the list as
+   * it was left, with its filters. Opened straight from an address, to the list of its database.
+   */
+  protected back(): void {
+    if (this.cameFromPanel) {
+      this.location.back();
+    } else {
+      void this.router.navigate(['/banco/objetos'], { queryParams: { banco: this.wanted().database } });
+    }
   }
 
   ngOnDestroy(): void {

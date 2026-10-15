@@ -134,3 +134,8 @@ tr.picked td { background: color-mix(in srgb, var(--mat-sys-primary-container) 4
   .spacer { flex: 1; }
   button:not([mat-flat-button]) { color: inherit; }
 }
+
+/* The object opened last, found again on coming back from it. */
+tr.last td { box-shadow: inset 3px 0 0 var(--mat-sys-primary); }
+tr.last td ~ td { box-shadow: none; }
+tr.last { background: color-mix(in srgb, var(--mat-sys-primary-container) 30%, transparent); }
