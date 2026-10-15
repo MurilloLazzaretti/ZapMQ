@@ -17,6 +17,7 @@ import { Transport } from '../core/transport';
         @if (transport.waiting(); as count) { <span class="count hot" matTooltip="Pedem atenção">{{ count }}</span> }
       </a>
       <a routerLink="/transporte/aplicacoes" routerLinkActive="active"><mat-icon svgIcon="deployed_code" /> Aplicações</a>
+      <a routerLink="/transporte/comparar" routerLinkActive="active"><mat-icon svgIcon="compare_arrows" /> Comparar</a>
       <a routerLink="/transporte/configuracao" routerLinkActive="active"><mat-icon svgIcon="tune" /> Configuração</a>
     </nav>
   `,

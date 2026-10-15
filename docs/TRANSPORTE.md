@@ -351,6 +351,32 @@ no histórico.
 
 Um pacote aplicado pode ser enviado ao ambiente seguinte, onde passa por tudo de novo.
 
+### 5.8 Comparar ambientes
+
+Em *Transporte → Comparar*, o painel de um ambiente se compara com o de outro, escolhido entre as
+**rotas de transporte** dele: o mesmo caminho e a mesma chave do envio de pacotes. O outro lado
+responde só se este for uma origem autorizada lá. DEV → QAS se compara no painel do DEV; QAS → DEV,
+no do QAS, com uma rota de lá para cá.
+
+Cada lado diz o que tem, sem nada do que está nas tabelas nem o conteúdo dos arquivos:
+
+- **objetos do banco**, com a impressão digital do script e a data da última alteração;
+- **aplicações** (micro serviços, serviços, APIs, aplicação web e seus módulos, downloads), com a
+  versão que dizem ser, a impressão digital dos arquivos e a data do arquivo mais recente. Os
+  arquivos do ambiente (configuração, logs) não entram.
+
+Cada coisa aparece como **igual**, **diferente**, **só aqui** ou **só lá**, e o **lado mais novo**
+é marcado: para objetos, o que foi alterado depois; para aplicações, a versão mais alta e, sem
+versão, o arquivo mais recente. Aberta, uma linha mostra as diferenças: o script linha a linha,
+ou os arquivos que diferem, com tamanho e data de cada lado.
+
+**Sugerir equalização** marca o que está mais novo ou só existe neste ambiente, e **Criar pacote
+de equalização** abre um pacote com isso (os objetos como estão, as aplicações como estão
+rodando), para conferir, fechar e enviar. O que está mais novo do outro lado é levado por um
+pacote montado lá: a comparação a partir do painel de lá mostra o mesmo, ao contrário.
+
+Precisa do ZapMQ 2.15 e do Worker Control 2.28 nos dois ambientes.
+
 ## 6. Estados
 
 Em cada ambiente um pacote está em um destes: **em montagem**, **fechado**, **enviado** (com o

@@ -19,6 +19,10 @@ public static class TransportRouteEndpoints
 
     public sealed record CompleteRequest(long Size, string? Sha256);
 
+    public sealed record CompareObjectRequest(string? Kind, string? Schema, string? Name);
+
+    public sealed record CompareTargetRequest(string? Kind, string? Name);
+
     private const string Inbound = "/api/transport/inbound";
 
     private static string User(HttpContext context) => (string)context.Items[PanelHost.UserItem]!;
@@ -143,6 +147,43 @@ public static class TransportRouteEndpoints
 
         api.MapGet("/packages/{id}/sends", (string id, TransportSender sender) => Results.Json(sender.Of(id)));
 
+        // This environment beside another one, reached by a route: what differs, and which side is newer.
+        api.MapPost("/compare/{route}", async (string route, Comparison comparison, HttpContext context) =>
+        {
+            try
+            {
+                return Results.Json(await comparison.Compare(route, User(context), context.RequestAborted));
+            }
+            catch (TransportRefused error)
+            {
+                return Refused(error);
+            }
+        });
+
+        api.MapGet("/compare/{route}/object", async (string route, string? kind, string? schema, string? name, Comparison comparison, HttpContext context) =>
+        {
+            try
+            {
+                return Results.Json(await comparison.Object(route, kind, schema, name, User(context), context.RequestAborted));
+            }
+            catch (TransportRefused error)
+            {
+                return Refused(error);
+            }
+        });
+
+        api.MapGet("/compare/{route}/target", async (string route, string? kind, string? name, Comparison comparison, HttpContext context) =>
+        {
+            try
+            {
+                return Results.Json(await comparison.Target(route, kind, name, User(context), context.RequestAborted));
+            }
+            catch (TransportRefused error)
+            {
+                return Refused(error);
+            }
+        });
+
         MapInbound(routes);
     }
 
@@ -162,6 +203,18 @@ public static class TransportRouteEndpoints
             return (memory.ToArray(), below);
         }
 
+        static T? Parsed<T>(byte[] body) where T : class
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<T>(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
         static IResult Unsigned(string problem) => Results.Json(new { error = "Recusado por este ambiente: " + problem }, statusCode: StatusCodes.Status401Unauthorized);
 
         inbound.MapPost("/hello", async (HttpContext context, TransportInbound door, TransportStore store) =>
@@ -171,6 +224,40 @@ public static class TransportRouteEndpoints
             if (origin is null)
                 return Unsigned(problem!);
             return Results.Json(new { environment = store.Environment, version = ServerHost.Version });
+        });
+
+        // What another environment asks to compare itself with this one: what is here, never what is in the tables.
+        inbound.MapPost("/compare/inventory", async (HttpContext context, TransportInbound door, Comparison comparison) =>
+        {
+            var (body, path) = await Read(context);
+            var (origin, problem) = door.Check(context, path, body);
+            if (origin is null)
+                return Unsigned(problem!);
+            return Results.Json(await comparison.Here("transporte:" + origin, context.RequestAborted));
+        });
+
+        inbound.MapPost("/compare/object", async (HttpContext context, TransportInbound door, Comparison comparison) =>
+        {
+            var (body, path) = await Read(context);
+            var (origin, problem) = door.Check(context, path, body);
+            if (origin is null)
+                return Unsigned(problem!);
+            var request = Parsed<CompareObjectRequest>(body);
+            if (request is not { Kind.Length: > 0, Schema.Length: > 0, Name.Length: > 0 })
+                return Results.Json(new { error = "Pedido inválido" }, statusCode: StatusCodes.Status400BadRequest);
+            return Results.Json(new { script = await comparison.Script(request.Kind!, request.Schema!, request.Name!, "transporte:" + origin, context.RequestAborted) });
+        });
+
+        inbound.MapPost("/compare/target", async (HttpContext context, TransportInbound door, Comparison comparison) =>
+        {
+            var (body, path) = await Read(context);
+            var (origin, problem) = door.Check(context, path, body);
+            if (origin is null)
+                return Unsigned(problem!);
+            var request = Parsed<CompareTargetRequest>(body);
+            if (request is not { Kind.Length: > 0, Name.Length: > 0 })
+                return Results.Json(new { error = "Pedido inválido" }, statusCode: StatusCodes.Status400BadRequest);
+            return Results.Json(new { files = await comparison.Files(request.Kind!, request.Name!, "transporte:" + origin, context.RequestAborted) });
         });
 
         inbound.MapGet("/packages/{id}", async (string id, HttpContext context, TransportInbound door) =>

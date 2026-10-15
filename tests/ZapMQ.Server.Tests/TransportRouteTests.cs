@@ -95,6 +95,97 @@ public sealed class TransportRouteTests : IAsyncLifetime
         throw new TimeoutException("the package was not sent: " + await _dev.Admin.GetStringAsync($"api/transport/packages/{id}/sends"));
     }
 
+    /// <summary>
+    /// A Worker Control for one of the servers that answers only what a comparison asks.
+    /// </summary>
+    private static async Task<V2Client> Agent(ServerFixture server, JObject objects, JObject targets, Dictionary<string, string> scripts, Dictionary<string, JArray> files)
+    {
+        var client = await V2Client.ConnectAsync(server.Port, "WorkerControl");
+        await client.RequestAsync("bind", "WorkerControlAdmin");
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                var delivery = await client.NextPushAsync();
+                var request = (JObject)delivery["message"]!["body"]!;
+                var answer = (string?)request["Command"] switch
+                {
+                    "DatabaseInventory" => objects,
+                    "TransportInventory" => targets,
+                    "DatabaseObject" => scripts.TryGetValue((string)request["Name"]!, out var script)
+                        ? new JObject { ["Ok"] = true, ["Script"] = script, ["Fingerprint"] = "fp-" + script.Length }
+                        : new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "not-found", ["Message"] = "no" } },
+                    "TransportTarget" => new JObject { ["Ok"] = true, ["Files"] = files.GetValueOrDefault((string)request["Name"]!) ?? [] },
+                    _ => new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "unknown-command", ["Message"] = "no" } }
+                };
+                await client.RequestAsync("respond", "WorkerControlAdmin", frame =>
+                {
+                    frame["messageId"] = delivery["message"]!["id"];
+                    frame["response"] = answer;
+                });
+            }
+        });
+        return client;
+    }
+
+    private static JObject Objects(params (string Name, string? Fingerprint, int DaysAgo)[] objects) => new()
+    {
+        ["Ok"] = true, ["Database"] = "Sales",
+        ["Objects"] = new JArray(objects.Select(item => new JObject
+        {
+            ["Kind"] = "Procedure", ["Schema"] = "dbo", ["Name"] = item.Name, ["Fingerprint"] = item.Fingerprint, ["ModifiedAt"] = DateTimeOffset.UtcNow.AddDays(-item.DaysAgo)
+        }))
+    };
+
+    private static JObject Targets(params (string Name, string Version, string Fingerprint)[] targets) => new()
+    {
+        ["Ok"] = true,
+        ["Targets"] = new JArray(targets.Select(item => new JObject
+        {
+            ["Kind"] = "api", ["Name"] = item.Name, ["Version"] = item.Version, ["Fingerprint"] = item.Fingerprint, ["Files"] = 2, ["Bytes"] = 10, ["Newest"] = DateTimeOffset.UtcNow
+        }))
+    };
+
+    [Fact]
+    public async Task Two_environments_are_compared_through_the_route_and_the_newer_side_is_told()
+    {
+        var (route, _) = await Linked();
+        await using var dev = await Agent(_dev,
+            Objects(("spSame", "a", 5), ("spChanged", "b2", 1), ("spOnlyDev", "c", 1), ("spUnread", null, 2)),
+            Targets(("Orders", "2.1.0", "x"), ("Billing", "1.0.0", "y")),
+            new() { ["spChanged"] = "CREATE PROCEDURE dbo.spChanged AS SELECT 2", ["spUnread"] = "CREATE PROCEDURE dbo.spUnread AS RETURN" },
+            new() { ["Orders"] = new JArray(new JObject { ["Path"] = "Orders.dll", ["Size"] = 5, ["Sha256"] = "new", ["Modified"] = DateTimeOffset.UtcNow }) });
+        await using var qas = await Agent(_qas,
+            Objects(("spSame", "a", 30), ("spChanged", "b1", 10), ("spOnlyQas", "d", 3), ("spUnread", "fp-39", 9)),
+            Targets(("Orders", "2.0.3", "z"), ("Billing", "1.0.0", "y")),
+            new() { ["spChanged"] = "CREATE PROCEDURE dbo.spChanged AS SELECT 1" },
+            new() { ["Orders"] = new JArray(new JObject { ["Path"] = "Orders.dll", ["Size"] = 4, ["Sha256"] = "old", ["Modified"] = DateTimeOffset.UtcNow.AddDays(-9) },
+                new JObject { ["Path"] = "Old.dll", ["Size"] = 1, ["Sha256"] = "gone", ["Modified"] = DateTimeOffset.UtcNow.AddDays(-90) }) });
+
+        var compared = await Json(await _dev.Admin.PostAsync($"api/transport/compare/{route}", null), HttpStatusCode.OK);
+        Assert.Equal(("DEV", "QAS"), ((string?)compared["here"]!["environment"], (string?)compared["there"]!["environment"]));
+        var items = compared["items"]!.ToDictionary(item => (string)item["name"]!);
+        Assert.Equal(("same", null), ((string?)items["spSame"]["state"], (string?)items["spSame"]["newer"]));
+        Assert.Equal(("different", "here"), ((string?)items["spChanged"]["state"], (string?)items["spChanged"]["newer"]));
+        Assert.Equal("here", (string?)items["spOnlyDev"]["state"]);
+        Assert.Equal("there", (string?)items["spOnlyQas"]["state"]);
+        // Not read yet by the agent here: read now, and compared like the others.
+        Assert.Equal(("same", null), ((string?)items["spUnread"]["state"], (string?)items["spUnread"]["newer"]));
+        // An application by the version it says it is.
+        Assert.Equal(("different", "here", "2.1.0", "2.0.3"), ((string?)items["Orders"]["state"], (string?)items["Orders"]["newer"], (string?)items["Orders"]["hereVersion"], (string?)items["Orders"]["thereVersion"]));
+        Assert.Equal("same", (string?)items["Billing"]["state"]);
+
+        var scripts = await Json(await _dev.Admin.GetAsync($"api/transport/compare/{route}/object?kind=Procedure&schema=dbo&name=spChanged"), HttpStatusCode.OK);
+        Assert.Equal(("CREATE PROCEDURE dbo.spChanged AS SELECT 2", "CREATE PROCEDURE dbo.spChanged AS SELECT 1"), ((string?)scripts["here"], (string?)scripts["there"]));
+
+        var files = (await Json(await _dev.Admin.GetAsync($"api/transport/compare/{route}/target?kind=api&name=Orders"), HttpStatusCode.OK))["files"]!;
+        Assert.Equal([("Old.dll", "there", null), ("Orders.dll", "different", "here")], files.Select(file => ((string)file["path"]!, (string)file["state"]!, (string?)file["newer"])));
+
+        // Without being an authorized origin there, nothing is told.
+        await Json(await _qas.Admin.DeleteAsync("api/transport/origins/DEV"), HttpStatusCode.NoContent);
+        await Json(await _dev.Admin.PostAsync($"api/transport/compare/{route}", null), HttpStatusCode.BadGateway);
+    }
+
     [Fact]
     public async Task A_package_goes_along_a_route_in_parts_and_arrives_pending_on_the_other_side()
     {

@@ -37,6 +37,7 @@ export const routes: Routes = [
       { path: 'transporte/aberto/:id', title: 'Pacote aberto · ZapMQ', loadComponent: () => import('./pages/transport-area').then((m) => m.TransportAreaPage) },
       { path: 'transporte/aplicacoes', title: 'Aplicações · ZapMQ', loadComponent: () => import('./pages/transport-apps').then((m) => m.TransportAppsPage) },
       { path: 'transporte/aplicacoes/:kind/:name', redirectTo: 'workers/aplicacoes/:kind/:name' },
+      { path: 'transporte/comparar', title: 'Comparar ambientes · ZapMQ', loadComponent: () => import('./pages/transport-compare').then((m) => m.TransportComparePage) },
       { path: 'transporte/configuracao', title: 'Configuração do transporte · ZapMQ', loadComponent: () => import('./pages/transport-settings').then((m) => m.TransportSettingsPage) },
       { path: 'transporte/pacotes', title: 'Pacotes · ZapMQ', loadComponent: () => import('./pages/transport-packages').then((m) => m.TransportPackagesPage) },
       { path: 'transporte/pacotes/:id', title: 'Pacote · ZapMQ', loadComponent: () => import('./pages/transport-package').then((m) => m.TransportPackagePage) },

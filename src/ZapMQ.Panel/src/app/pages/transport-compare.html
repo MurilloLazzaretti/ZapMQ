@@ -1,0 +1,182 @@
+<div class="page">
+  <header class="head">
+    <div>
+      <h1>Transporte</h1>
+      <p class="muted">{{ environment() || 'Este ambiente' }} lado a lado com outro: o que difere e qual lado tem o mais novo.</p>
+    </div>
+    <span class="spacer"></span>
+    <zap-transport-tabs />
+  </header>
+
+  <section class="panel ask">
+    <mat-icon svgIcon="compare_arrows" />
+    <div class="what">
+      <strong>Comparar {{ environment() || 'este ambiente' }} com</strong>
+      <span class="muted">Objetos do banco e aplicações dos dois lados, pela rota de transporte. Nada é alterado, e nada do que está nas tabelas é lido.</span>
+    </div>
+    @if (routes(); as list) {
+      @if (list.length) {
+        <select [(ngModel)]="route" aria-label="Ambiente a comparar" [disabled]="busy()">
+          @for (item of list; track item.id) {
+            <option [value]="item.id">{{ item.name }}</option>
+          }
+        </select>
+        <button mat-flat-button (click)="run()" [disabled]="busy() || !route"><mat-icon svgIcon="compare_arrows" /> {{ busy() ? 'Comparando…' : result() ? 'Comparar de novo' : 'Comparar' }}</button>
+      } @else {
+        <span class="muted">Sem rota de transporte. Crie uma em <a routerLink="/transporte/configuracao">Configuração</a>: é por ela que os dois painéis conversam.</span>
+      }
+    }
+  </section>
+
+  @if (busy()) {
+    <section class="panel empty"><span>Lendo os dois ambientes. Na primeira vez, cada arquivo de cada aplicação é lido, o que pode levar alguns minutos.</span></section>
+  } @else if (problem()) {
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível comparar</strong><span>{{ problem() }}</span></section>
+  }
+
+  @if (result(); as now) {
+    @for (side of [now.here, now.there]; track side.environment) {
+      @if (side.databaseProblem || side.targetsProblem) {
+        <div class="notice" role="status">
+          <mat-icon svgIcon="info" />
+          <div><strong>{{ side.environment }}:</strong> {{ side.databaseProblem ? 'objetos do banco fora da comparação (' + side.databaseProblem + ')' : '' }} {{ side.targetsProblem ? 'aplicações fora da comparação (' + side.targetsProblem + ')' : '' }}</div>
+        </div>
+      }
+    }
+
+    <section class="grid stats">
+      <zap-stat label="Iguais" icon="check_circle" tone="ok" [value]="totals().same | num" hint="nos dois ambientes" />
+      <zap-stat [label]="'Mais novo em ' + here()" icon="arrow_forward" [tone]="totals().newerHere + totals().onlyHere ? 'info' : 'neutral'" [value]="(totals().newerHere + totals().onlyHere) | num"
+        [hint]="totals().onlyHere + ' só existem aqui · ' + there() + ' está defasado'" />
+      <zap-stat [label]="'Mais novo em ' + there()" icon="arrow_back" [tone]="totals().newerThere + totals().onlyThere ? 'warn' : 'neutral'" [value]="(totals().newerThere + totals().onlyThere) | num"
+        [hint]="totals().onlyThere + ' só existem lá · ' + here() + ' está defasado'" />
+      <zap-stat label="Diferentes, sem dizer qual" icon="info" tone="neutral" [value]="totals().undecided | num" hint="mesma data ou versão nos dois" />
+    </section>
+
+    @if (totals().newerThere + totals().onlyThere) {
+      <div class="notice" role="status">
+        <mat-icon svgIcon="info" />
+        <div>{{ there() }} tem {{ totals().newerThere + totals().onlyThere }} {{ totals().newerThere + totals().onlyThere === 1 ? 'item mais novo' : 'itens mais novos' }} do que {{ here() }}. Um pacote é montado no ambiente que tem a versão nova: para trazê-los, compare a partir do painel de {{ there() }}.</div>
+      </div>
+    }
+
+    <section class="panel">
+      <div class="tools">
+        <label class="search">
+          <mat-icon svgIcon="search" />
+          <input type="search" placeholder="Buscar pelo nome" [ngModel]="search()" (ngModelChange)="search.set($event)" aria-label="Buscar" />
+        </label>
+        <div class="chips" role="tablist" aria-label="O que mostrar">
+          @for (item of filters; track item.id) {
+            <button type="button" [class.on]="filter() === item.id" (click)="filter.set(item.id)">{{ item.text }}</button>
+          }
+        </div>
+        <span class="spacer"></span>
+        <button mat-button (click)="suggest()" [matTooltip]="'Marca o que está mais novo ou só existe em ' + here() + ': o que falta em ' + there()"><mat-icon svgIcon="task_alt" /> Sugerir equalização</button>
+      </div>
+      <div class="chips kinds" role="tablist" aria-label="Tipo">
+        <button type="button" [class.on]="!kind()" (click)="kind.set('')">Todos</button>
+        @for (section of ['database', 'worker', 'service', 'api', 'frontend', 'download']; track section) {
+          <button type="button" [class.on]="kind() === section" [disabled]="!counts()[section] && kind() !== section" (click)="kind.set(section)">{{ kindLabel(section) }} <span class="count">{{ counts()[section] }}</span></button>
+        }
+      </div>
+
+      @for (section of sections(); track section.kind) {
+        <div class="section">
+          <h2>
+            <input type="checkbox" class="pick" [checked]="allPicked(section.items)" (change)="pickAll(section.items, $any($event.target).checked)" [attr.aria-label]="'Marcar o que pode ir: ' + kindLabel(section.kind)" />
+            {{ kindLabel(section.kind) }} <span class="muted">{{ section.items.length }}</span>
+          </h2>
+          <div class="legend muted"><span></span><span></span><span></span><span class="sides"><span>{{ here() }}</span><span></span><span>{{ there() }}</span></span><span></span></div>
+          @for (item of section.items; track key(item)) {
+            <div class="item" [class.picked]="picked().has(key(item))" [class.open]="opened().has(key(item))">
+              <div class="row">
+                <input type="checkbox" class="pick" [checked]="picked().has(key(item))" [disabled]="!carriable(item)" (change)="pick(item, $any($event.target).checked)"
+                  [matTooltip]="carriable(item) ? '' : 'Não sai daqui: ' + (item.state === 'same' ? 'é igual' : 'o mais novo está em ' + there())" [attr.aria-label]="'Marcar ' + label(item)" />
+                <span class="who">
+                  <mat-icon [svgIcon]="icon(item)" [matTooltip]="item.kind === 'database' ? kindName(item.objectKind) : ''" />
+                  <span class="name">@if (item.schema) { <span class="muted">{{ item.schema }}.</span> }<strong>{{ item.name }}</strong></span>
+                </span>
+                <span><span class="pill" [class]="'pill ' + state(item).tone" [matTooltip]="state(item).hint">{{ state(item).text }}</span></span>
+                <span class="sides">
+                  <span class="side" [class.newer]="item.newer === 'here' || item.state === 'here'" [class.absent]="item.state === 'there'">
+                    @if (item.state === 'there') { — } @else {
+                      @if (item.hereVersion) { <strong>{{ item.hereVersion }}</strong> }
+                      <span [matTooltip]="item.hereAt | when">{{ item.hereAt ? (item.hereAt | ago) : 'sem data' }}</span>
+                    }
+                  </span>
+                  <span class="arrow">
+                    @if (item.state !== 'same' && (item.newer === 'here' || item.state === 'here')) { <mat-icon svgIcon="arrow_forward" [matTooltip]="there() + ' está defasado'" /> }
+                    @else if (item.state !== 'same' && (item.newer === 'there' || item.state === 'there')) { <mat-icon svgIcon="arrow_back" [matTooltip]="here() + ' está defasado'" class="back" /> }
+                    @else if (item.state === 'same') { <span class="equal">=</span> }
+                    @else { <span class="equal">≠</span> }
+                  </span>
+                  <span class="side" [class.newer]="item.newer === 'there' || item.state === 'there'" [class.absent]="item.state === 'here'">
+                    @if (item.state === 'here') { — } @else {
+                      @if (item.thereVersion) { <strong>{{ item.thereVersion }}</strong> }
+                      <span [matTooltip]="item.thereAt | when">{{ item.thereAt ? (item.thereAt | ago) : 'sem data' }}</span>
+                    }
+                  </span>
+                </span>
+                <span class="open">
+                  @if (item.state !== 'same' || item.kind !== 'database') {
+                    <button mat-icon-button (click)="toggle(item)" [attr.aria-expanded]="opened().has(key(item))" [matTooltip]="item.kind === 'database' ? 'Ver as diferenças linha a linha' : 'Ver os arquivos que diferem'"
+                      [attr.aria-label]="'Diferenças de ' + label(item)">
+                      <mat-icon [svgIcon]="opened().has(key(item)) ? 'keyboard_arrow_down' : 'chevron_right'" />
+                    </button>
+                  }
+                </span>
+              </div>
+              @if (opened().get(key(item)); as open) {
+                <div class="detail">
+                  @if (open.loading) {
+                    <span class="muted">Lendo os dois lados…</span>
+                  } @else if (open.problem) {
+                    <span class="bad">{{ open.problem }}</span>
+                  } @else if (open.lines) {
+                    <p class="muted legend-diff"><span class="minus">− como está em {{ there() }}</span> <span class="plus">+ como está em {{ here() }}</span></p>
+                    <zap-diff [lines]="open.lines" [compared]="item.state === 'different' || item.state === 'unknown'" />
+                  } @else if (open.files) {
+                    @if (changedFiles(open.files).length) {
+                      <div class="table-wrap">
+                        <table class="data stack files">
+                          <thead><tr><th>Arquivo</th><th>Situação</th><th class="right">{{ here() }}</th><th class="right">{{ there() }}</th></tr></thead>
+                          <tbody>
+                            @for (file of changedFiles(open.files); track file.path) {
+                              <tr>
+                                <td class="wide mono" data-label="Arquivo">{{ file.path }}</td>
+                                <td data-label="Situação">
+                                  <span class="pill" [class]="'pill ' + (file.state === 'different' ? 'danger' : file.state === 'here' ? 'info' : 'warn')">{{ file.state === 'different' ? 'diferente' : file.state === 'here' ? 'só aqui' : 'só lá' }}</span>
+                                </td>
+                                <td class="right" [attr.data-label]="here()" [class.newer]="file.newer === 'here'">@if (file.hereSize !== null) { {{ size(file.hereSize / 1024) }} · <span [matTooltip]="file.hereAt | when">{{ file.hereAt | ago }}</span> } @else { — }</td>
+                                <td class="right" [attr.data-label]="there()" [class.newer]="file.newer === 'there'">@if (file.thereSize !== null) { {{ size(file.thereSize / 1024) }} · <span [matTooltip]="file.thereAt | when">{{ file.thereAt | ago }}</span> } @else { — }</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+                    }
+                    <p class="muted">{{ sameFiles(open.files) | num }} {{ sameFiles(open.files) === 1 ? 'arquivo igual' : 'arquivos iguais' }} nos dois. Os arquivos do ambiente (configuração, logs) não entram na comparação.</p>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      } @empty {
+        <div class="empty"><mat-icon svgIcon="check_circle" /><strong>{{ filter() === 'differ' ? 'Nada difere' : 'Nada com esse filtro' }}</strong></div>
+      }
+    </section>
+
+    @if (pickedItems().length) {
+      <div class="selection" role="region" aria-label="Marcados">
+        <strong>{{ pickedItems().length }} {{ pickedItems().length === 1 ? 'marcado' : 'marcados' }}</strong>
+        <button mat-button (click)="clearPicked()" [disabled]="creating()">Limpar</button>
+        <span class="spacer"></span>
+        <button mat-flat-button (click)="equalize()" [disabled]="creating()" [matTooltip]="'Abre um pacote com os objetos como estão e as aplicações como estão rodando em ' + here() + ', para conferir, fechar e enviar a ' + there()">
+          <mat-icon svgIcon="inventory_2" /> {{ creating() ? 'Criando…' : 'Criar pacote de equalização' }}
+        </button>
+      </div>
+    }
+  }
+</div>

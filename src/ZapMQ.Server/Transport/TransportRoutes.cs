@@ -505,7 +505,7 @@ public sealed class TransportSender(TransportRouteStore routes, TransportStore s
         if (body.Length > 0 || method != HttpMethod.Get)
         {
             request.Content = new ByteArrayContent(body);
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue(below.EndsWith("/complete", StringComparison.Ordinal) || below == "/hello" ? "application/json" : "application/octet-stream");
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue(below.EndsWith("/complete", StringComparison.Ordinal) || below == "/hello" || below.StartsWith("/compare/", StringComparison.Ordinal) ? "application/json" : "application/octet-stream");
         }
         TransportSignature.Apply(request, store.Environment, key, below, body, time.GetUtcNow());
         return await client.SendAsync(request, stopping);
@@ -560,6 +560,45 @@ public sealed class TransportSender(TransportRouteStore routes, TransportStore s
             throw new TransportRefused(message, StatusCodes.Status502BadGateway);
         }
     }
+
+    /// <summary>
+    /// Asks the other side something, signed, and gives its answer as it came. Used to compare
+    /// what the two environments have; nothing is changed there.
+    /// </summary>
+    public async Task<string> QueryAsync(string routeId, string below, object body, TimeSpan patience, CancellationToken stopping)
+    {
+        var (route, key) = Resolve(routeId);
+        try
+        {
+            using var client = Client();
+            try
+            {
+                client.Timeout = patience;
+            }
+            catch (InvalidOperationException)
+            {
+                // Already used: it keeps the patience it has.
+            }
+            using var response = await Ask(client, route, key, HttpMethod.Post, below, JsonSerializer.SerializeToUtf8Bytes(body), stopping);
+            if (!response.IsSuccessStatusCode)
+                throw new TransportRefused(response.StatusCode == System.Net.HttpStatusCode.NotFound
+                    ? $"{route.Name} não sabe comparar ambientes: o ZapMQ de lá é anterior à versão 2.15"
+                    : await Problem(response), StatusCodes.Status502BadGateway);
+            routes.Used(routeId, time.GetUtcNow(), null);
+            return await response.Content.ReadAsStringAsync(stopping);
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        {
+            var message = Describe(error);
+            routes.Used(routeId, time.GetUtcNow(), message);
+            throw new TransportRefused(message, StatusCodes.Status502BadGateway);
+        }
+    }
+
+    /// <summary>
+    /// The name of a route, for whoever shows what it compared.
+    /// </summary>
+    public string RouteName(string routeId) => routes.Route(routeId)?.Name ?? throw new TransportRefused("Não existe essa rota", StatusCodes.Status404NotFound);
 
     private static string Describe(Exception error) => error switch
     {

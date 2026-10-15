@@ -1146,6 +1146,52 @@ export interface TransportRoutes {
   origins: TransportOrigin[];
 }
 
+/** One thing compared between this environment and another. */
+export interface ComparedItem {
+  /** database, or the kind of application: worker, service, api, frontend, download. */
+  kind: string;
+  objectKind: CatalogKind | null;
+  schema: string | null;
+  name: string;
+  /** same, different, here (only here), there (only there), unknown (could not be told). */
+  state: 'same' | 'different' | 'here' | 'there' | 'unknown';
+  /** Which side changed later, or says the higher version; null when it cannot be told. */
+  newer: 'here' | 'there' | null;
+  hereAt: string | null;
+  thereAt: string | null;
+  hereVersion: string | null;
+  thereVersion: string | null;
+  hereFiles: number | null;
+  thereFiles: number | null;
+  hereBytes: number | null;
+  thereBytes: number | null;
+  mode: string | null;
+}
+
+export interface ComparedSide {
+  environment: string;
+  at: string;
+  database: string | null;
+  databaseProblem: string | null;
+  targetsProblem: string | null;
+}
+
+export interface Comparison {
+  here: ComparedSide;
+  there: ComparedSide;
+  items: ComparedItem[];
+}
+
+export interface ComparedFile {
+  path: string;
+  state: 'same' | 'different' | 'here' | 'there';
+  newer: 'here' | 'there' | null;
+  hereSize: number | null;
+  thereSize: number | null;
+  hereAt: string | null;
+  thereAt: string | null;
+}
+
 /** A package on its way along a route. */
 export interface TransportSending {
   package: string;

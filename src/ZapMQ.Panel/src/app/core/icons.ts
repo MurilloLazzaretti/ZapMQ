@@ -4,6 +4,8 @@ import { DomSanitizer } from '@angular/platform-browser';
 
 import accountCircle from '@material-symbols/svg-400/rounded/account_circle.svg';
 import arrowBack from '@material-symbols/svg-400/rounded/arrow_back.svg';
+import arrowForward from '@material-symbols/svg-400/rounded/arrow_forward.svg';
+import compareArrows from '@material-symbols/svg-400/rounded/compare_arrows.svg';
 import arrowDownward from '@material-symbols/svg-400/rounded/arrow_downward.svg';
 import arrowUpward from '@material-symbols/svg-400/rounded/arrow_upward.svg';
 import block from '@material-symbols/svg-400/rounded/block.svg';
@@ -114,7 +116,7 @@ const ICONS: Record<string, string> = {
   send, bookmark,
   hub, open_in_new: openInNew, deployed_code: deployedCode,
   memory, history, restart_alt: restartAlt, add, remove, monitor_heart: monitorHeart, data_object: dataObject, save, rocket_launch: rocketLaunch, recycling, trending_up: trendingUp, edit, precision_manufacturing: precisionManufacturing,
-  account_circle: accountCircle, arrow_back: arrowBack, arrow_downward: arrowDownward, arrow_upward: arrowUpward, block, bolt,
+  account_circle: accountCircle, arrow_back: arrowBack, arrow_forward: arrowForward, compare_arrows: compareArrows, arrow_downward: arrowDownward, arrow_upward: arrowUpward, block, bolt,
   check_circle: checkCircle, chevron_right: chevronRight, close, cloud_off: cloudOff, content_copy: contentCopy, dark_mode: darkMode,
   dashboard, delete: deleteIcon, edit_note: editNote, device_hub: deviceHub, dns, error, hourglass_empty: hourglassEmpty, inbox, info,
   keyboard_arrow_down: keyboardArrowDown, lan, light_mode: lightMode, logout, mail, menu, more_vert: moreVert, power_settings_new: powerSettingsNew, pause, pending,

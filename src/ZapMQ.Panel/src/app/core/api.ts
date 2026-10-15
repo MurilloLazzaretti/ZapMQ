@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult,
   PanelUser,
-  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageDraft, PackageItemDetail, PackageSummary, TransportSummary,
+  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageDraft, Comparison, ComparedFile, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
   HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WebSite, WebSwitched, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending, InstallChoice } from './models';
@@ -328,6 +328,19 @@ export class Api {
 
   removeApplication(kind: string, name: string, force: boolean): Observable<RemovedApplication> {
     return this.http.delete<RemovedApplication>(`api/transport/applications/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`, { params: { force } });
+  }
+
+  /** This environment beside the one at the end of a route. */
+  compare(route: string): Observable<Comparison> {
+    return this.http.post<Comparison>(`api/transport/compare/${route}`, null);
+  }
+
+  compareObject(route: string, kind: string, schema: string, name: string): Observable<{ here: string | null; there: string | null }> {
+    return this.http.get<{ here: string | null; there: string | null }>(`api/transport/compare/${route}/object`, { params: { kind, schema, name } });
+  }
+
+  compareTarget(route: string, kind: string, name: string): Observable<{ files: ComparedFile[] }> {
+    return this.http.get<{ files: ComparedFile[] }>(`api/transport/compare/${route}/target`, { params: { kind, name } });
   }
 
   transportRoutes(): Observable<TransportRoutes> {
