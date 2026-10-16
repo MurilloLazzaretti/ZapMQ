@@ -135,3 +135,7 @@
 
 .notice { display: flex; gap: 12px; padding: 12px 16px; border-radius: 14px; background: var(--zap-warn-container); color: var(--zap-warn); }
 .notice mat-icon { flex: none; }
+
+.needs { display: flex; gap: 8px; align-items: flex-start; margin: 0 16px 10px 52px; padding: 8px 12px; border-radius: 12px; background: var(--zap-warn-container); color: var(--zap-warn); font-size: 12.5px; }
+.needs mat-icon { flex: none; width: 18px; height: 18px; }
+.needs .mono { overflow-wrap: anywhere; }

@@ -1072,7 +1072,7 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
             await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { draft = _draft, kind = "service", name = "Sockets" }), HttpStatusCode.Created);
             var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Sockets" }), HttpStatusCode.Created);
             var install = closed["items"]![0]!["install"]!;
-            Assert.Equal(("C:\\Program Files\\nodejs\\node.exe", "index.js"), ((string?)install["program"], (string?)install["executable"]));
+            Assert.Equal(("C:\\Program Files\\nodejs\\node.exe", "index.js", "D:\\install\\nssm\\nssm.exe"), ((string?)install["program"], (string?)install["executable"], (string?)install["wrapper"]));
             made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
         }
 
@@ -1081,13 +1081,13 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
         await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new
         {
-            installs = new Dictionary<string, object> { ["1"] = new { folder = "D:\\OjiTec\\services\\sockets", executable = "index.js", program = "C:\\node\\node.exe" } }
+            installs = new Dictionary<string, object> { ["1"] = new { folder = "D:\\OjiTec\\services\\sockets", executable = "index.js", program = "C:\\node\\node.exe", wrapper = "E:\\nssm\\nssm.exe" } }
         }));
         await WaitFor(id, "Applied");
         JObject created;
         lock (here.Applied)
             created = here.Applied.Single(request => (string?)request["Command"] == "ApplicationCreate");
-        Assert.Equal(("service", "index.js", "C:\\node\\node.exe"), ((string?)created["Kind"], (string?)created["Executable"], (string?)created["Program"]));
+        Assert.Equal(("service", "index.js", "C:\\node\\node.exe", "E:\\nssm\\nssm.exe"), ((string?)created["Kind"], (string?)created["Executable"], (string?)created["Program"], (string?)created["Wrapper"]));
     }
 
     [Fact]

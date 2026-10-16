@@ -166,11 +166,13 @@ da origem, para copiar e incluir pela aba **Proxy reverso**, que testa a configu
 recarregar: o proxy não é mudado sozinho.
 
 **Serviço que roda pelo nssm** (um `index.js` com o Node, um `.jar` com o Java): a origem anota o
-**programa** (`C:\Program Files\nodejs\node.exe`) e o **script** dentro da pasta (`index.js`). No
-destino, *Instalar aqui* pede os dois (o programa onde ele está instalado ali), e o serviço é criado
-pelo nssm que algum outro serviço da máquina já usa (`install`, `AppDirectory` na pasta, nome de
-exibição e início). Sem nenhum serviço pelo nssm na máquina, a instalação é recusada e o serviço é
-criado à mão; dali em diante o transporte só troca os arquivos dele. Precisa do Worker Control 2.29
+**programa** (`C:\Program Files\nodejs\node.exe`), o **nssm** e o **script** dentro da pasta
+(`index.js`): o caminho do programa e do nssm, nunca os arquivos deles. No destino, *Instalar aqui*
+pede os três: o programa e o nssm onde estão instalados ali (o nssm sugerido é o que outro serviço
+da máquina já usa; sem nenhum, o da origem), e o serviço é criado por esse nssm (`install`,
+`AppDirectory` na pasta, nome de exibição e início). **O programa e o nssm precisam já estar
+instalados no destino**: o pacote leva só os arquivos do serviço, e a origem e o destino avisam
+disso. Sem eles ali, a instalação é recusada e nada é criado. Precisa do Worker Control 2.29
 na origem e no destino.
 
 Ao aplicar, o agente cria a aplicação como o assistente de 4.2 cria uma nova, com os arquivos do

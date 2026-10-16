@@ -872,8 +872,10 @@ export interface ApplicationDefaults {
   SharedFolder?: boolean;
   Sites: { Name: string; Port: number; Path: string }[];
   Groups: { Name: string; Path: string; Workers: number }[];
-  Services: { Name: string; DisplayName: string; Path: string | null; StartType: string }[];
+  Services: { Name: string; DisplayName: string; Path: string | null; StartType: string; Program?: string | null; Script?: string | null }[];
   Listening: number[];
+  /** The nssm some service of this machine already runs through. */
+  Wrapper?: string | null;
 }
 
 /** What a zip brought to become an application has in it. */
@@ -985,6 +987,8 @@ export interface InstallInfo {
   executable: string | null;
   /** For a service run by nssm: the program it runs where it came from (node, java). */
   program?: string | null;
+  /** For a service run by nssm: where nssm is where it came from. */
+  wrapper?: string | null;
   instances: number;
   ports: number[];
   displayName: string | null;
@@ -998,6 +1002,8 @@ export interface InstallChoice {
   executable: string | null;
   /** For a service run by nssm: the program, where it is installed here. */
   program?: string | null;
+  /** For a service run by nssm: where nssm is here. */
+  wrapper?: string | null;
   instances: number;
   port: number;
   siteName: string | null;

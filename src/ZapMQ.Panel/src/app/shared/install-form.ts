@@ -34,9 +34,17 @@ export function adaptProxy(proxy: string, from: number[], to: number[]): string 
       <div class="fields">
         <label class="wide">Pasta<input class="mono" [ngModel]="choice().folder" (ngModelChange)="set('folder', $event)" spellcheck="false" /></label>
         @if (item().install?.program) {
+          <p class="needs" role="note">
+            <strong>Antes de aprovar:</strong> em {{ origin() }} este serviço roda pelo nssm. O <strong>programa</strong> que ele roda (o Node, por exemplo) e o <strong>nssm</strong>
+            precisam já estar instalados nesta máquina, nos caminhos abaixo: o transporte leva só os arquivos do serviço, não os instala.
+          </p>
           <label class="wide">Programa, nesta máquina<input class="mono" [ngModel]="choice().program" (ngModelChange)="set('program', $event)" spellcheck="false" /></label>
+          <label class="wide">nssm, nesta máquina<input class="mono" [ngModel]="choice().wrapper" (ngModelChange)="set('wrapper', $event)" spellcheck="false" /></label>
           <label class="wide">Script, dentro da pasta<input class="mono" [ngModel]="choice().executable" (ngModelChange)="set('executable', $event)" spellcheck="false" /></label>
-          <p class="muted wrapped">Em {{ origin() }} este serviço roda pelo nssm. Aqui ele é criado pelo nssm que os outros serviços desta máquina já usam, rodando o programa com o script, na pasta acima.</p>
+          <p class="muted wrapped">
+            @if (defaults()?.Wrapper) { O nssm sugerido é o que os outros serviços desta máquina já usam. } @else { Nenhum serviço desta máquina usa o nssm: o caminho sugerido é o de {{ origin() }}; confira se ele está instalado aí. }
+            O serviço é criado por ele, rodando o programa com o script, na pasta acima.
+          </p>
         } @else if (item().kind !== 'api') {
           <label class="wide">Executável, dentro da pasta<input class="mono" [ngModel]="choice().executable" (ngModelChange)="set('executable', $event)" spellcheck="false" /></label>
         }
@@ -83,6 +91,7 @@ export function adaptProxy(proxy: string, from: number[], to: number[]): string 
   `,
   styles: `
     .wrapped { grid-column: 1 / -1; margin: 0; font-size: 12.5px; }
+    .needs { grid-column: 1 / -1; margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--zap-warn-container); color: var(--zap-warn); font-size: 13px; }
     .install { display: grid; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--zap-border); }
     .title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .title mat-icon { color: var(--mat-sys-primary); }
@@ -135,6 +144,10 @@ export class InstallForm implements OnInit {
         if (!this.choice().siteName && defaults?.SiteName) {
           this.set('siteName', defaults.SiteName);
         }
+        // The nssm of this machine, where nobody said another one.
+        if (defaults?.Wrapper && item.install?.program && (!this.choice().wrapper || this.choice().wrapper === item.install.wrapper)) {
+          this.set('wrapper', defaults.Wrapper);
+        }
       });
     });
   }
@@ -160,6 +173,7 @@ export class InstallForm implements OnInit {
       folder: base ? `${base.replace(/[\\/]+$/, '')}${separator}${item.name}` : '',
       executable: install.executable,
       program: install.program ?? null,
+      wrapper: defaults?.Wrapper ?? install.wrapper ?? null,
       instances: install.instances || 1,
       port: 0,
       siteName: defaults?.SiteName ?? '{name} {n}',

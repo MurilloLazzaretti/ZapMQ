@@ -153,6 +153,11 @@ public sealed class InstallInfo
     /// For a service run by nssm: the program it runs (node, java), where it is installed there.
     /// </summary>
     public string? Program { get; set; }
+
+    /// <summary>
+    /// For a service run by nssm: where nssm is there.
+    /// </summary>
+    public string? Wrapper { get; set; }
     /// <summary>
     /// Processes of a group, or instances of an API.
     /// </summary>
@@ -195,6 +200,11 @@ public sealed class InstallChoice
     /// For a service run by nssm: the program, where it is installed here.
     /// </summary>
     public string? Program { get; set; }
+
+    /// <summary>
+    /// For a service run by nssm: where nssm is here.
+    /// </summary>
+    public string? Wrapper { get; set; }
     public int Instances { get; set; } = 1;
     public int Port { get; set; }
     public string? SiteName { get; set; }

@@ -238,6 +238,12 @@
               </span>
               <mat-icon class="chevron" svgIcon="keyboard_arrow_down" />
             </button>
+            @if (!now.package.received && item.install?.program) {
+              <p class="needs" role="note">
+                <mat-icon svgIcon="info" />
+                <span>Serviço que roda pelo nssm. Para ser instalado em outro ambiente, lá precisam já estar instalados o programa (<span class="mono">{{ item.install!.program }}</span>) e o nssm (<span class="mono">{{ item.install!.wrapper }}</span>): o pacote leva só os arquivos do serviço.</span>
+              </p>
+            }
 
             @if (result(item.number); as done) {
               @if (done.problem) {
