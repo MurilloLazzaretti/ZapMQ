@@ -7,7 +7,13 @@
     </div>
   </header>
 
-  @if (problem()) {
+  @if (transport.policy() && !transport.manual()) {
+    <section class="panel empty">
+      <mat-icon svgIcon="shield_lock" />
+      <strong>Neste ambiente as aplicações novas chegam só por transporte</strong>
+      <span>Um pacote vindo de outro ambiente instala o que falta aqui. Quem pode mudar isso é o usuário master, em <a routerLink="/configuracoes" [queryParams]="{ assunto: 'regras' }">Configurações → Regras do ambiente</a>.</span>
+    </section>
+  } @else if (problem()) {
     <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível começar</strong><span>{{ problem() }}</span></section>
   } @else if (!defaults()) {
     <section class="panel empty"><span>Perguntando ao Worker Control o que há nesta máquina…</span></section>

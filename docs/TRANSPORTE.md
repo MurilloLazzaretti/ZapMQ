@@ -397,6 +397,22 @@ transporte escreve no banco de propósito. As duas coisas ficam separadas:
 
 ## 8. Configuração
 
+**Regras do ambiente** (*Configurações → Regras do ambiente*; só o master altera, valem assim que
+gravadas, em `transport/policy.json` ao lado do painel):
+
+- **Versões novas: apenas via transporte** (o padrão) ou **permitir versões manuais**. Manual é o
+  *Upload versão* de uma aplicação, a pasta de entrada, um script escrito ou importado no painel e
+  a *Nova aplicação* a partir de um zip. Apenas via transporte, o que é novo chega só em pacotes de
+  outro ambiente; ainda se empacota o que já está ali (objetos do banco, o que está rodando) para
+  levar adiante. O painel esconde os botões manuais, e o serviço recusa os pedidos (403).
+- **Quem montou o pacote não o aprova**: o usuário que aprova tem de ser outro que não o que
+  montou o pacote na origem.
+- **Janela de aplicação**: das HH:MM às HH:MM, na hora da máquina (pode passar da meia-noite).
+  Fora dela, a aprovação para aplicar agora é recusada e pede um horário dentro da janela.
+
+Sugestão: DEV com versões manuais; QAS apenas via transporte; PRD apenas via transporte, com
+aprovação por outra pessoa e janela.
+
 No agente:
 
 ```json

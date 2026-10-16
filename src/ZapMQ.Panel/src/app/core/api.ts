@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult,
   PanelUser,
-  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageDraft, Comparison, ComparedFile, PackageItemDetail, PackageSummary, TransportSummary,
+  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageDraft, Comparison, ComparedFile, TransportPolicy, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
   HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WebSite, WebSwitched, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending, InstallChoice } from './models';
@@ -258,6 +258,14 @@ export class Api {
 
   transportSummary(): Observable<TransportSummary> {
     return this.http.get<TransportSummary>('api/transport/summary');
+  }
+
+  policy(): Observable<TransportPolicy> {
+    return this.http.get<TransportPolicy>('api/transport/policy');
+  }
+
+  setPolicy(policy: { manualVersions: boolean; separateApprover: boolean; windowStart: string | null; windowEnd: string | null }): Observable<TransportPolicy> {
+    return this.http.put<TransportPolicy>('api/transport/policy', policy);
   }
 
   /** The packages open here. */

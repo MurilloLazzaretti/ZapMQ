@@ -25,8 +25,10 @@
         <a mat-button routerLink="/banco/alteracoes" (click)="includeHere()"><mat-icon svgIcon="history" /> Alterações do banco</a>
         <a mat-button routerLink="/banco/objetos" (click)="includeHere()"><mat-icon svgIcon="table" /> Objetos do banco</a>
         <a mat-button routerLink="/transporte/aplicacoes" (click)="includeHere()"><mat-icon svgIcon="deployed_code" /> Aplicações</a>
-        <button mat-button (click)="writing.set(!writing())"><mat-icon svgIcon="code" /> Escrever script</button>
-        <button mat-button (click)="file.click()"><mat-icon svgIcon="upload" /> Importar .sql</button>
+        @if (transport.manual()) {
+          <button mat-button (click)="writing.set(!writing())"><mat-icon svgIcon="code" /> Escrever script</button>
+          <button mat-button (click)="file.click()"><mat-icon svgIcon="upload" /> Importar .sql</button>
+        }
         <input #file type="file" accept=".sql,text/plain" hidden (change)="pick($event)" />
       </div>
 

@@ -75,6 +75,8 @@ public sealed class ServerFixture : IAsyncLifetime
             builder.Services.AddSingleton<global::ZapMQ.Server.V1.IPeerResolver>(new Peers(this));
         });
         await _app.StartAsync();
+        // The tests bring versions by hand; an environment starts allowing only packages.
+        _app.Services.GetRequiredService<global::ZapMQ.Server.Transport.TransportPolicyStore>().Set(new() { ManualVersions = true }, "test", DateTimeOffset.UtcNow);
 
         // In the order they were opened: messaging first, panel second.
         var ports = _app.Urls.Select(url => new Uri(url.Replace("[::]", "localhost").Replace("0.0.0.0", "localhost")).Port).ToList();

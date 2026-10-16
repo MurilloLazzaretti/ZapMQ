@@ -499,6 +499,43 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
     }
 
     [Fact]
+    public async Task The_rules_of_the_environment_say_what_comes_by_hand_who_approves_and_when()
+    {
+        var policy = server.Services.GetRequiredService<global::ZapMQ.Server.Transport.TransportPolicyStore>();
+        var origin = new PretendDatabase();
+        origin.Objects["spClose"] = ("Procedure", "CREATE PROCEDURE dbo.spClose AS RETURN", []);
+        await using var _ = await Serve(origin);
+        await ClearArea();
+        try
+        {
+            // Only by transport: nothing comes in by hand, and only the master changes that.
+            await Json(await Api.PutAsJsonAsync("api/transport/policy", new { manualVersions = false }));
+            Assert.False((bool)JObject.Parse(await Api.GetStringAsync("api/transport/policy"))["manualVersions"]!);
+            var refused = await Json(await Api.PostAsJsonAsync("api/transport/area/scripts", new { draft = _draft, title = "x", script = "SELECT 1" }), HttpStatusCode.Forbidden);
+            Assert.Contains("só por transporte", (string?)refused["error"]);
+            await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders", new ByteArrayContent([1, 2])), HttpStatusCode.Forbidden);
+            await Json(await Api.PostAsync("api/transport/applications/files", new ByteArrayContent([1, 2])), HttpStatusCode.Forbidden);
+            // What is already here still goes in a package.
+            await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spClose" }), HttpStatusCode.Created);
+            var made = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Regras" }), HttpStatusCode.Created))["package"]!["id"]!;
+
+            // Whoever made it does not approve it; and packages go in only within the hours.
+            await Json(await Api.PutAsJsonAsync("api/transport/policy", new { manualVersions = true, separateApprover = true }));
+            Assert.Contains("não o aprova", (string?)(await Json(await Api.PostAsJsonAsync($"api/transport/packages/{made}/approve", new { }), HttpStatusCode.Forbidden))["error"]);
+            var now = DateTimeOffset.Now;
+            await Json(await Api.PutAsJsonAsync("api/transport/policy", new { manualVersions = true, windowStart = now.AddHours(2).ToString("HH:00"), windowEnd = now.AddHours(3).ToString("HH:00") }));
+            Assert.Contains("só entre", (string?)(await Json(await Api.PostAsJsonAsync($"api/transport/packages/{made}/approve", new { }), HttpStatusCode.Conflict))["error"]);
+            var inside = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, 30, 0, now.Offset).AddHours(2);
+            await Json(await Api.PostAsJsonAsync($"api/transport/packages/{made}/approve", new { at = inside }));
+            await Json(await Api.PutAsJsonAsync("api/transport/policy", new { windowStart = "22:00" }), HttpStatusCode.BadRequest);
+        }
+        finally
+        {
+            policy.Set(new() { ManualVersions = true }, "test", DateTimeOffset.UtcNow);
+        }
+    }
+
+    [Fact]
     public async Task A_script_goes_after_the_objects_of_the_package_it_uses()
     {
         var origin = new PretendDatabase();

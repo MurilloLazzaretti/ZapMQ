@@ -43,11 +43,15 @@
           @if (section.kind === 'download') {
             <p class="muted where">
               Cada arquivo é trocado sozinho, pelo mesmo nome: o endereço de download não muda. A versão informada no upload fica no <span class="mono">versions.json</span> da pasta.
-              <button mat-button class="add" (click)="newFile.click()" [disabled]="busy()"><mat-icon svgIcon="add" /> Novo arquivo</button>
+              @if (transport.manual()) { <button mat-button class="add" (click)="newFile.click()" [disabled]="busy()"><mat-icon svgIcon="add" /> Novo arquivo</button> }
               <input #newFile type="file" hidden (change)="uploadNew($event)" />
             </p>
           } @else {
-            <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Upload versão</em>. <em>Empacotar</em> leva a versão que está rodando agora.</p>
+            @if (transport.manual()) {
+              <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Upload versão</em>. <em>Empacotar</em> leva a versão que está rodando agora.</p>
+            } @else {
+              <p class="muted where">Neste ambiente as versões novas chegam só por transporte (<a routerLink="/configuracoes" [queryParams]="{ assunto: 'regras' }">Regras do ambiente</a>). <em>Empacotar</em> leva a versão que está rodando agora.</p>
+            }
           }
           @if (section.kind === 'frontend') {
             @for (group of groups(); track group.name) {
@@ -117,10 +121,12 @@
     </section>
     <ng-template #actions let-target let-whole="whole">
       <span class="actions">
-        @if (target.Incoming; as left) {
+        @if (transport.manual() && target.Incoming; as left) {
           <button mat-flat-button (click)="incoming(target)" [disabled]="busy()" [matTooltip]="'Deixada na pasta de entrada ' + (left.At | ago)">Versão nova na entrada</button>
         }
+        @if (transport.manual()) {
         <button mat-button (click)="zip.click()" [disabled]="busy()" [matTooltip]="whole ? 'Faz o upload do .zip da aplicação inteira (casca, módulos e manifesto) e inclui no pacote aberto' : 'Faz o upload do .zip da pasta publicada e inclui no pacote aberto'">Upload versão</button>
+        }
         <input #zip type="file" [accept]="target.Kind === 'download' ? '' : '.zip'" hidden (change)="upload(target, $event)" />
         <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" [matTooltip]="whole ? 'Empacota a aplicação inteira que está rodando agora: casca, módulos e manifesto' : 'Empacota a versão que está rodando nesta máquina agora e inclui no pacote aberto'">{{ whole ? 'Empacotar inteira' : 'Empacotar' }}</button>
       </span>
@@ -131,7 +137,7 @@
         <strong>{{ picked().size }} {{ picked().size === 1 ? 'selecionada' : 'selecionadas' }}</strong>
         <button mat-button (click)="picked.set(emptySet())" [disabled]="busy()">Limpar</button>
         <span class="spacer"></span>
-        @if (pickedIncoming().length) {
+        @if (transport.manual() && pickedIncoming().length) {
           <button mat-stroked-button (click)="packPicked(true)" [disabled]="busy()" matTooltip="As que têm versão nova na pasta de entrada: essa versão vai para o pacote aberto">Versão nova na entrada ({{ pickedIncoming().length }})</button>
         }
         <button mat-flat-button (click)="packPicked(false)" [disabled]="busy()" matTooltip="Empacota a versão que está rodando agora de cada uma e inclui no pacote aberto">{{ busy() ? 'Empacotando…' : 'Empacotar ' + picked().size }}</button>

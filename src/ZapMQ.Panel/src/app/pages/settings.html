@@ -24,6 +24,7 @@
     <div class="layout">
       <nav class="panel subjects" aria-label="Assuntos">
         <button type="button" [class.on]="current() === 'ambiente'" (click)="current.set('ambiente')"><mat-icon svgIcon="hub" /> ZapMQ</button>
+        <button type="button" [class.on]="current() === 'regras'" (click)="current.set('regras')"><mat-icon svgIcon="shield_lock" /> Regras do ambiente</button>
         @for (item of sections; track item.id) {
           <button type="button" [class.on]="current() === item.id" (click)="current.set(item.id)"><mat-icon [svgIcon]="item.icon" /> {{ item.title }}</button>
           @if (item.id === 'aplicacoes') {
@@ -86,6 +87,49 @@
               <li><a routerLink="/workers/proxy"><mat-icon svgIcon="dns" /> Arquivos do NGINX</a></li>
               @if (auth.master()) { <li><a routerLink="/usuarios"><mat-icon svgIcon="manage_accounts" /> Usuários do painel</a></li> }
             </ul>
+          } @else if (current() === 'regras') {
+            <div class="title">
+              <h2>Regras do ambiente</h2>
+              <span class="spacer"></span>
+              @if (auth.master()) {
+                <button mat-flat-button (click)="saveRules()" [disabled]="!rulesDirty() || rulesSaving()"><mat-icon svgIcon="save" /> Gravar</button>
+              }
+            </div>
+            <p class="muted about">
+              O que pode mudar <strong>{{ transport.summary()?.environment || 'este ambiente' }}</strong> e como. Valem assim que gravadas, sem reiniciar nada.
+              @if (!auth.master()) { Só o usuário master as altera. }
+              @if (transport.policy()?.changedBy; as who) { Alteradas por {{ who }} em {{ transport.policy()!.changedAt | when }}. }
+            </p>
+            @if (rulesProblem()) { <p class="refused-line"><mat-icon svgIcon="error" /> {{ rulesProblem() }}</p> }
+
+            <h3>Versões novas</h3>
+            <div class="rule">
+              <mat-slide-toggle [checked]="rules.manualVersions" (change)="rules.manualVersions = $event.checked; rulesChanged()" [disabled]="!auth.master()">Permitir versões manuais neste ambiente</mat-slide-toggle>
+              <p class="muted">
+                @if (rules.manualVersions) {
+                  Versões novas podem entrar à mão: <em>Upload versão</em> de uma aplicação, a pasta de entrada, um script escrito ou importado aqui e <em>Nova aplicação</em> a partir de um zip. Para ambientes de desenvolvimento.
+                } @else {
+                  <strong>Apenas via transporte</strong> (o padrão): o que é novo chega só em pacotes vindos de outro ambiente. Ainda dá para empacotar o que já está aqui (objetos do banco, o que está rodando) e levar adiante.
+                }
+              </p>
+            </div>
+
+            <h3>Aprovação</h3>
+            <div class="rule">
+              <mat-slide-toggle [checked]="rules.separateApprover" (change)="rules.separateApprover = $event.checked; rulesChanged()" [disabled]="!auth.master()">Quem montou o pacote não o aprova</mat-slide-toggle>
+              <p class="muted">Exige uma segunda pessoa para aplicar: o usuário que aprova tem de ser outro que não o que montou o pacote na origem. Indicado para PRD.</p>
+            </div>
+
+            <h3>Janela de aplicação</h3>
+            <div class="rule">
+              <div class="fields window">
+                <mat-form-field><mat-label>De</mat-label><input matInput type="time" [(ngModel)]="rules.windowStart" (ngModelChange)="rulesChanged()" [disabled]="!auth.master()" /></mat-form-field>
+                <mat-form-field><mat-label>Até</mat-label><input matInput type="time" [(ngModel)]="rules.windowEnd" (ngModelChange)="rulesChanged()" [disabled]="!auth.master()" /></mat-form-field>
+              </div>
+              <p class="muted">
+                Pacotes aprovados só para aplicar dentro desse horário (o desta máquina); fora dele, a aprovação pede para agendar. Pode passar da meia-noite (22:00 até 06:00). Vazio: a qualquer hora.
+              </p>
+            </div>
           } @else if (problem()) {
           <div class="empty">
             <mat-icon svgIcon="cloud_off" />

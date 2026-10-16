@@ -1146,6 +1146,19 @@ export interface TransportRoutes {
   origins: TransportOrigin[];
 }
 
+/** The rules of this environment for what changes it. Only the master changes them. */
+export interface TransportPolicy {
+  /** A version may come in by hand: upload, inbox, a script written here, an application from a zip. */
+  manualVersions: boolean;
+  /** Whoever made a package does not approve it here. */
+  separateApprover: boolean;
+  /** The hours packages are applied in, "22:00"; both null: at any time. */
+  windowStart: string | null;
+  windowEnd: string | null;
+  changedAt: string | null;
+  changedBy: string | null;
+}
+
 /** One thing compared between this environment and another. */
 export interface ComparedItem {
   /** database, or the kind of application: worker, service, api, frontend, download. */

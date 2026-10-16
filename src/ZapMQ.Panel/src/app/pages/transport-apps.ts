@@ -46,7 +46,7 @@ export class TransportAppsPage implements OnInit {
   private readonly snack = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
   private readonly router = inject(Router);
-  private readonly transport = inject(Transport);
+  protected readonly transport = inject(Transport);
 
   protected readonly targets = signal<TransportTarget[] | null>(null);
   protected readonly inboxes = signal<Record<string, string>>({});

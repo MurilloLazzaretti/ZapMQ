@@ -121,6 +121,20 @@ public static class TransportEndpoints
             });
         });
 
+        // ── The rules of this environment ───────────────────────────────────
+
+        api.MapGet("/policy", (TransportPolicyStore policy) => Results.Json(policy.Current()));
+
+        api.MapPut("/policy", (TransportPolicy wanted, TransportPolicyStore policy, PanelUserStore users, HttpContext context, TimeProvider time, ILoggerFactory loggers) => Guarded(() =>
+        {
+            if (users.Find(User(context)) is not { Master: true })
+                return Task.FromResult(Results.Json(new { error = "Só o usuário master muda as regras do ambiente" }, statusCode: StatusCodes.Status403Forbidden));
+            var saved = policy.Set(wanted, User(context), time.GetUtcNow());
+            loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: rules of the environment changed: manual versions {Manual}, separate approver {Separate}, window {Start}-{End} (by {User})",
+                saved.ManualVersions, saved.SeparateApprover, saved.WindowStart ?? "any", saved.WindowEnd ?? "any", User(context));
+            return Task.FromResult(Results.Json(saved));
+        }));
+
         // ── Open packages ───────────────────────────────────────────────────
 
         api.MapGet("/drafts", (TransportStore store) =>

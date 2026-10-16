@@ -16,6 +16,7 @@ import { Auth } from '../core/auth';
 import { Transport } from '../core/transport';
 import { ApplicationDefaults, ProxyState, WorkerConfig, ZapMQSettings } from '../core/models';
 import { copyText } from '../core/clipboard';
+import { WhenPipe } from '../core/format';
 
 type Kind = 'text' | 'number' | 'bool' | 'list' | 'secret';
 
@@ -156,7 +157,7 @@ interface Frontend {
  */
 @Component({
   selector: 'zap-settings',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, MatSlideToggleModule, MatTooltipModule],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, MatSlideToggleModule, MatTooltipModule, WhenPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings.html',
   styleUrl: './settings.scss',
@@ -189,6 +190,42 @@ export class SettingsPage implements OnInit {
   protected readonly ownDirty = signal(false);
   protected readonly ownSaving = signal(false);
   protected readonly ownProblem = signal('');
+
+  /** The rules of the environment being edited: they hold as soon as they are saved. */
+  protected rules = { manualVersions: false, separateApprover: false, windowStart: '', windowEnd: '' };
+  protected readonly rulesDirty = signal(false);
+  protected readonly rulesSaving = signal(false);
+  protected readonly rulesProblem = signal('');
+
+  private loadRules(): void {
+    this.api.policy().subscribe({
+      next: (policy) => {
+        this.transport.policy.set(policy);
+        this.rules = { manualVersions: policy.manualVersions, separateApprover: policy.separateApprover, windowStart: policy.windowStart ?? '', windowEnd: policy.windowEnd ?? '' };
+        this.rulesDirty.set(false);
+      },
+      error: () => undefined,
+    });
+  }
+
+  protected rulesChanged(): void {
+    this.rulesDirty.set(true);
+  }
+
+  protected async saveRules(): Promise<void> {
+    this.rulesSaving.set(true);
+    this.rulesProblem.set('');
+    try {
+      const saved = await firstValueFrom(this.api.setPolicy({ ...this.rules, windowStart: this.rules.windowStart || null, windowEnd: this.rules.windowEnd || null }));
+      this.transport.policy.set(saved);
+      this.rulesDirty.set(false);
+      this.snack.open('Regras gravadas: já valem.', undefined, { duration: 4000 });
+    } catch (failure) {
+      this.rulesProblem.set((failure as HttpErrorResponse).error?.error ?? 'As regras não foram gravadas.');
+    } finally {
+      this.rulesSaving.set(false);
+    }
+  }
 
   protected readonly ownGroups = computed(() => {
     const all = this.own()?.settings ?? [];
@@ -265,10 +302,11 @@ export class SettingsPage implements OnInit {
   ngOnInit(): void {
     // ?assunto= opens one subject, as the pages that depend on it link here.
     const asked = this.route.snapshot.queryParamMap.get('assunto');
-    if (asked && ['ambiente', 'web', 'downloads', ...SECTIONS.map((section) => section.id)].includes(asked))
+    if (asked && ['ambiente', 'regras', 'web', 'downloads', ...SECTIONS.map((section) => section.id)].includes(asked))
       this.current.set(asked);
     this.load();
     this.loadOwn();
+    this.loadRules();
   }
 
   protected load(): void {

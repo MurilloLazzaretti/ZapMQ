@@ -1,12 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 import { Api } from './api';
 import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { DraftPicker } from '../shared/draft-picker';
-import { PackageDraft, PackageStatus, TransportSummary } from './models';
+import { PackageDraft, PackageStatus, TransportPolicy, TransportSummary } from './models';
 
 const STATUS: Record<PackageStatus, { text: string; tone: string }> = {
   Closed: { text: 'fechado', tone: 'info' },
@@ -117,6 +117,10 @@ export class Transport {
   private readonly dialog = inject(MatDialog);
   private readonly router = inject(Router);
 
+  /** The rules of this environment: until they are read, nothing comes in by hand. */
+  readonly policy = signal<TransportPolicy | null>(null);
+  readonly manual = computed(() => this.policy()?.manualVersions === true);
+
   /** The open package things go in from the screens, as chosen last in this browser. */
   readonly current = signal<PackageDraft | null>(null);
 
@@ -138,12 +142,17 @@ export class Transport {
       this.api.drafts().subscribe({ next: (answer) => this.current.set(answer.drafts.find((draft) => draft.id === remembered) ?? null), error: () => undefined });
     }
     this.refresh();
+    this.loadPolicy();
     setInterval(() => this.refresh(), 30000);
   }
 
   /** Reads the names of the packages again; whoever shows what a package brought asks for it. */
   loadNames(): void {
     this.api.packages().subscribe({ next: (answer) => this.names.set(Object.fromEntries(answer.packages.map((item) => [item.id, item.name]))), error: () => undefined });
+  }
+
+  loadPolicy(): void {
+    this.api.policy().subscribe({ next: (policy) => this.policy.set(policy), error: () => undefined });
   }
 
   refresh(): void {

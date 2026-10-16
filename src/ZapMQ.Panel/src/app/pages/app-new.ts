@@ -11,7 +11,7 @@ import { jsonProblem, uploadProblem } from '../core/settings';
 import { size } from '../core/database';
 import { NumPipe } from '../core/format';
 import { ApplicationDefaults, CreatedApplication, InspectedFiles } from '../core/models';
-import { targetIcon, targetName } from '../core/transport';
+import { Transport, targetIcon, targetName } from '../core/transport';
 
 type Kind = 'worker' | 'api' | 'service';
 
@@ -31,6 +31,7 @@ const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 })
 export class AppNewPage implements OnInit {
   private readonly api = inject(Api);
+  protected readonly transport = inject(Transport);
 
   protected readonly steps = STEPS;
   protected readonly kinds: Kind[] = ['worker', 'api', 'service'];

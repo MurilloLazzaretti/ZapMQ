@@ -32,7 +32,7 @@ public sealed record FileChange(string Path, string State, long Size);
 /// and changes the machine: taking the script of an object when a package is closed, comparing
 /// a package that arrived with what is here, and applying what was approved.
 /// </summary>
-public sealed partial class TransportService(TransportStore store, WorkerControlClient worker, TimeProvider time, ILogger<TransportService> logger)
+public sealed partial class TransportService(TransportStore store, WorkerControlClient worker, TimeProvider time, ILogger<TransportService> logger, TransportPolicyStore policy)
 {
     /// <summary>
     /// For how long an answer to "apply this" is waited for. A script may take minutes.
@@ -132,6 +132,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     public AreaItem AddScript(string? draft, string? database, string? title, string? script, string by)
     {
         RequireDraft(draft);
+        policy.RequireManual();
         if (string.IsNullOrWhiteSpace(title))
             throw new TransportRefused("Dê um título ao script: é como ele aparece para quem aprova");
         if (string.IsNullOrWhiteSpace(script))
@@ -242,6 +243,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// </summary>
     public Inspected Inspect(byte[] brought)
     {
+        policy.RequireManual();
         var (zip, files) = Normalize(brought, everything: true);
         var token = Guid.NewGuid().ToString("N");
         var work = store.WorkFile($"new-{token}.zip");
@@ -271,6 +273,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// </summary>
     public async Task<JsonNode> CreateApplication(NewApplication wanted, string by, CancellationToken cancellation)
     {
+        policy.RequireManual();
         if (!GoodToken(wanted.Token) || !File.Exists(store.WorkFile($"new-{wanted.Token}.zip")))
             throw new TransportRefused("Os arquivos enviados não estão mais guardados: envie o zip de novo", StatusCodes.Status409Conflict);
         var work = store.WorkFile($"new-{wanted.Token}.zip");
@@ -337,6 +340,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     {
         RequireFileKind(kind, name);
         RequireDraft(draft);
+        if (incoming)
+            policy.RequireManual();
         // Either what the target is running, or the new version somebody left for it in the inbox of the machine.
         var body = await Ask("TransportCapture", by, request =>
         {
@@ -367,6 +372,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     {
         RequireFileKind(kind, name);
         RequireDraft(draft);
+        policy.RequireManual();
         if (kind == "download")
         {
             // A file to be downloaded is brought as it is, not zipped: it is put in a zip of one, under its own name.
@@ -738,6 +744,11 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     public async Task<PackageRecord> Approve(string id, DateTimeOffset? at, bool force, string by, CancellationToken cancellation, IReadOnlyDictionary<int, InstallChoice>? installs = null)
     {
         var waiting = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
+        var rules = policy.Current();
+        if (rules.SeparateApprover && string.Equals(waiting.Manifest.CreatedBy, by, StringComparison.OrdinalIgnoreCase))
+            throw new TransportRefused($"Neste ambiente quem montou o pacote ({waiting.Manifest.CreatedBy}) não o aprova: peça a outra pessoa.", StatusCodes.Status403Forbidden);
+        if (!rules.InWindow(at ?? time.GetUtcNow()))
+            throw new TransportRefused($"Neste ambiente os pacotes são aplicados só entre {rules.WindowStart} e {rules.WindowEnd}: agende para dentro da janela.", StatusCodes.Status409Conflict);
         if (store.Newer(waiting.Manifest) is { } newer)
             throw new TransportRefused($"Este ambiente já tem a versão {newer} deste pacote: aprove a mais nova, que leva tudo o que esta leva", StatusCodes.Status409Conflict);
         var checks = Waits(waiting) ? await Check(waiting, by, cancellation) : [];
