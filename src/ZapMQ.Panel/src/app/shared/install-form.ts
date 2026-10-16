@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -112,6 +112,27 @@ export class InstallForm implements OnInit {
   protected readonly choice = signal<InstallChoice>({ folder: '', executable: null, instances: 1, port: 0, siteName: null, sharedFolder: false, displayName: null, startType: 'Automatic', settings: [] });
 
   protected readonly busyPorts = computed(() => this.defaults()?.Listening ?? []);
+
+  constructor() {
+    // What is usual here arrives after the form is shown: the folder is filled then, if nobody typed one.
+    effect(() => {
+      const defaults = this.defaults();
+      const item = this.item();
+      const base = defaults?.Folders?.[item.kind];
+      if (!base || item.chosen) {
+        return;
+      }
+      untracked(() => {
+        if (!this.choice().folder) {
+          const separator = base.includes('/') && !base.includes('\\') ? '/' : '\\';
+          this.set('folder', `${base.replace(/[\\/]+$/, '')}${separator}${item.name}`);
+        }
+        if (!this.choice().siteName && defaults?.SiteName) {
+          this.set('siteName', defaults.SiteName);
+        }
+      });
+    });
+  }
 
   protected readonly proxy = computed(() => {
     const install = this.item().install;
