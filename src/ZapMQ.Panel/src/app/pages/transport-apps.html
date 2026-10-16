@@ -48,7 +48,7 @@
             </p>
           } @else {
             @if (transport.manual()) {
-              <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Upload versão</em>. <em>Empacotar</em> leva a versão que está rodando agora.</p>
+              <p class="muted where">Versão nova: copie a pasta publicada para <span class="mono">{{ inboxes()[section.kind] }}\nome</span>, ou use <em>Upload e aplicar</em>, que aplica aqui na hora. <em>Empacotar</em> leva a versão que está rodando agora.</p>
             } @else {
               <p class="muted where">Neste ambiente as versões novas chegam só por transporte (<a routerLink="/configuracoes" [queryParams]="{ assunto: 'regras' }">Regras do ambiente</a>). <em>Empacotar</em> leva a versão que está rodando agora.</p>
             }
@@ -125,7 +125,7 @@
           <button mat-flat-button (click)="incoming(target)" [disabled]="busy()" [matTooltip]="'Deixada na pasta de entrada ' + (left.At | ago)">Versão nova na entrada</button>
         }
         @if (transport.manual()) {
-        <button mat-button (click)="zip.click()" [disabled]="busy()" [matTooltip]="whole ? 'Faz o upload do .zip da aplicação inteira (casca, módulos e manifesto) e inclui no pacote aberto' : 'Faz o upload do .zip da pasta publicada e inclui no pacote aberto'">Upload versão</button>
+        <button mat-button (click)="zip.click()" [disabled]="busy()" [matTooltip]="whole ? 'Faz o upload do .zip da aplicação inteira (casca, módulos e manifesto) e aplica neste ambiente, num pacote que pode seguir adiante' : 'Faz o upload do .zip da pasta publicada e aplica neste ambiente, num pacote que pode seguir adiante'">Upload e aplicar</button>
         }
         <input #zip type="file" [accept]="target.Kind === 'download' ? '' : '.zip'" hidden (change)="upload(target, $event)" />
         <button mat-button (click)="running(target)" [disabled]="busy() || !!target.Problem" [matTooltip]="whole ? 'Empacota a aplicação inteira que está rodando agora: casca, módulos e manifesto' : 'Empacota a versão que está rodando nesta máquina agora e inclui no pacote aberto'">{{ whole ? 'Empacotar inteira' : 'Empacotar' }}</button>

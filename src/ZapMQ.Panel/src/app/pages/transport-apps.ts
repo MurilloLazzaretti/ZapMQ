@@ -10,7 +10,7 @@ import { Router, RouterLink } from '@angular/router';
 import { Observable, catchError, firstValueFrom, of } from 'rxjs';
 import { Api } from '../core/api';
 import { uploadProblem } from '../core/settings';
-import { ask } from '../shared/dialogs';
+import { ask, confirm } from '../shared/dialogs';
 import { MatDialog } from '@angular/material/dialog';
 import { AgoPipe } from '../core/format';
 import { AreaItem, TransportTarget, WebApplication } from '../core/models';
@@ -265,11 +265,63 @@ export class TransportAppsPage implements OnInit {
     if (target.Kind === 'download') {
       const version = await this.versionOf(target.Name, target.Version);
       if (version) {
-        await this.place((draft) => this.api.addFiles(draft, target.Kind, target.Name, file, version), `${target.Name} ${version} foi`);
+        await this.uploadAndApply(target.Kind, target.Name, file, version);
       }
       return;
     }
-    await this.place((draft) => this.api.addFiles(draft, target.Kind, target.Name, file), `${target.Name}: ${file.name} foi`);
+    await this.uploadAndApply(target.Kind, target.Name, file, null);
+  }
+
+  /**
+   * A version brought by hand, applied here in one go: a package is made with it, closed and
+   * approved to apply now. The version that was there is kept to go back to, what happened is
+   * recorded, and the same package can go on to the next environment.
+   */
+  private async uploadAndApply(kind: string, name: string, file: File, version: string | null): Promise<void> {
+    const sure = await confirm(this.dialog, {
+      title: `Aplicar ${file.name} em ${name} agora?`,
+      message: `Um pacote é criado com este arquivo e aplicado neste ambiente: ${kind === 'download' ? 'o arquivo passa a estar na pasta de distribuição' : 'a aplicação para, os arquivos dela são trocados (os de configuração ficam) e ela inicia de novo'}.`,
+      warning: 'A versão atual fica guardada para reverter, e o pacote pode depois seguir para outros ambientes.',
+      action: 'Aplicar',
+    });
+    if (!sure) {
+      return;
+    }
+    this.busy.set(true);
+    let draft: string | null = null;
+    try {
+      const stamp = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+      draft = (await firstValueFrom(this.api.createDraft({ name: `${name} ${version ?? stamp}`, description: `Upload de ${file.name} aplicado em ${this.transport.summary()?.environment || 'este ambiente'}.` }))).id;
+      await firstValueFrom(this.api.addFiles(draft, kind, name, file, version));
+    } catch (failure) {
+      // Nothing was applied: the package that was being made goes away.
+      if (draft) {
+        await firstValueFrom(this.api.deleteDraft(draft)).catch(() => undefined);
+      }
+      this.busy.set(false);
+      this.snack.open(uploadProblem(failure, 'O arquivo não foi aceito'), 'Fechar', { duration: 12000 });
+      return;
+    }
+    let made: string;
+    try {
+      made = (await firstValueFrom(this.api.closePackage({ draft }))).package.id;
+    } catch (failure) {
+      this.busy.set(false);
+      this.snack.open(uploadProblem(failure, 'O pacote não pôde ser fechado'), 'Fechar', { duration: 12000 });
+      void this.router.navigate(['/transporte/aberto', draft]);
+      return;
+    }
+    try {
+      await firstValueFrom(this.api.approvePackage(made, null));
+      this.snack.open(`${name}: sendo aplicado`, undefined, { duration: 4000 });
+    } catch (failure) {
+      this.snack.open(uploadProblem(failure, 'O pacote foi criado, mas não pôde ser aplicado'), 'Fechar', { duration: 12000 });
+    } finally {
+      this.busy.set(false);
+      this.transport.refresh();
+    }
+    // The package page follows the application, item by item.
+    void this.router.navigate(['/transporte/pacotes', made]);
   }
 
   /** A file to download that is not in the folder yet: it goes in under the name it has. */
@@ -285,12 +337,12 @@ export class TransportAppsPage implements OnInit {
     const folder = existing.find((target) => target.Name.includes('/'))?.Name.split('/')[0];
     const name = folder ? `${folder}/${file.name}` : file.name;
     if (existing.some((target) => target.Name.toLowerCase() === name.toLowerCase())) {
-      this.snack.open(`${file.name} já existe: use Upload versão na linha dele`, 'Fechar', { duration: 8000 });
+      this.snack.open(`${file.name} já existe: use Upload e aplicar na linha dele`, 'Fechar', { duration: 8000 });
       return;
     }
     const version = await this.versionOf(name, null);
     if (version) {
-      await this.place((draft) => this.api.addFiles(draft, 'download', name, file, version), `${name} ${version} (aplicado, passa a existir na pasta) foi`);
+      await this.uploadAndApply('download', name, file, version);
     }
   }
 

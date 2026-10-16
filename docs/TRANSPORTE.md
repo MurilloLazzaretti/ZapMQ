@@ -225,6 +225,11 @@ o último escolhido já marcado) ou cria um novo ali mesmo. Sem pacote aberto n�
 Em DEV também se pode montar um item **a partir do que está rodando**: o agente empacota a pasta
 atual do alvo.
 
+**Upload e aplicar** (em *Transporte → Aplicações*, só onde as versões manuais são permitidas): o
+zip escolhido vira um pacote que é fechado e aprovado para aplicar ali mesmo, numa ação só. A
+versão que estava fica guardada para reverter, tudo fica registrado no pacote, e o mesmo pacote
+segue depois para os outros ambientes.
+
 ### 5.2 Montagem e versões
 
 No pacote aberto ficam os itens, o nome e a descrição; **Fechar a versão N** fecha. O script de
@@ -415,7 +420,7 @@ transporte escreve no banco de propósito. As duas coisas ficam separadas:
 gravadas, em `transport/policy.json` ao lado do painel):
 
 - **Versões novas: apenas via transporte** (o padrão) ou **permitir versões manuais**. Manual é o
-  *Upload versão* de uma aplicação, a pasta de entrada, um script escrito ou importado no painel e
+  *Upload e aplicar* de uma aplicação, a pasta de entrada, um script escrito ou importado no painel e
   a *Nova aplicação* a partir de um zip. Apenas via transporte, o que é novo chega só em pacotes de
   outro ambiente; ainda se empacota o que já está ali (objetos do banco, o que está rodando) para
   levar adiante. O painel esconde os botões manuais, e o serviço recusa os pedidos (403).
@@ -539,7 +544,7 @@ Transporte → *Configuração* guarda as pastas de entrada.
 **Entrada.** Em Transporte → *Aplicações*, para cada alvo:
 
 - *Empacotar*: o agente empacota a versão que está rodando, a pasta como está agora.
-- *Upload versão*: o `.zip` da pasta publicada, escolhido na máquina de quem está no painel, com
+- *Upload e aplicar*: o `.zip` da pasta publicada, escolhido na máquina de quem está no painel, com
   ou sem a pasta de fora.
 - *Versão nova na entrada*: aparece quando alguém deixou uma versão nova para aquele alvo na
   **pasta de entrada** do servidor. É o começo do caminho de uma versão: o programador copia a
