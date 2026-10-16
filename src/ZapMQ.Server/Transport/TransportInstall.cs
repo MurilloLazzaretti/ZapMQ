@@ -234,7 +234,9 @@ public sealed partial class TransportService
                 {
                     var name = target["Service"]?.GetValue<string>() ?? item.Name;
                     var found = (defaults["Services"] as JsonArray ?? []).FirstOrDefault(entry => string.Equals(entry?["Name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase));
-                    info.Executable = Inside(found?["Path"]?.GetValue<string>()?.Trim('"'), folder);
+                    // Run by nssm: the program and the script given to it, which is the file of the application.
+                    info.Program = found?["Program"]?.GetValue<string>();
+                    info.Executable = info.Program is null ? Inside(found?["Path"]?.GetValue<string>()?.Trim('"'), folder) : Inside(found?["Script"]?.GetValue<string>(), folder);
                     info.DisplayName = found?["DisplayName"]?.GetValue<string>();
                     info.StartType = found?["StartType"]?.GetValue<string>();
                     break;
@@ -334,6 +336,8 @@ public sealed partial class TransportService
                 request["Folder"] = choice.Folder.Trim();
                 request["File"] = work;
                 request["Executable"] = choice.Executable?.Trim();
+                if (item.Kind == "service" && !string.IsNullOrWhiteSpace(choice.Program))
+                    request["Program"] = choice.Program.Trim();
                 request["Instances"] = choice.Instances;
                 request["Port"] = choice.Port;
                 request["SiteName"] = string.IsNullOrWhiteSpace(choice.SiteName) ? null : choice.SiteName.Trim();

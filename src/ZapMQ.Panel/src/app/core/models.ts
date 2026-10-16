@@ -983,6 +983,8 @@ export interface PackageItem {
 
 export interface InstallInfo {
   executable: string | null;
+  /** For a service run by nssm: the program it runs where it came from (node, java). */
+  program?: string | null;
   instances: number;
   ports: number[];
   displayName: string | null;
@@ -994,6 +996,8 @@ export interface InstallInfo {
 export interface InstallChoice {
   folder: string;
   executable: string | null;
+  /** For a service run by nssm: the program, where it is installed here. */
+  program?: string | null;
   instances: number;
   port: number;
   siteName: string | null;

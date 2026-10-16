@@ -33,7 +33,11 @@ export function adaptProxy(proxy: string, from: number[], to: number[]): string 
       <div class="title"><mat-icon [svgIcon]="targetIcon(item().kind)" /><strong>{{ item().name }}</strong><span class="muted">· {{ targetName(item().kind) }} que {{ environment() }} ainda não tem</span></div>
       <div class="fields">
         <label class="wide">Pasta<input class="mono" [ngModel]="choice().folder" (ngModelChange)="set('folder', $event)" spellcheck="false" /></label>
-        @if (item().kind !== 'api') {
+        @if (item().install?.program) {
+          <label class="wide">Programa, nesta máquina<input class="mono" [ngModel]="choice().program" (ngModelChange)="set('program', $event)" spellcheck="false" /></label>
+          <label class="wide">Script, dentro da pasta<input class="mono" [ngModel]="choice().executable" (ngModelChange)="set('executable', $event)" spellcheck="false" /></label>
+          <p class="muted wrapped">Em {{ origin() }} este serviço roda pelo nssm. Aqui ele é criado pelo nssm que os outros serviços desta máquina já usam, rodando o programa com o script, na pasta acima.</p>
+        } @else if (item().kind !== 'api') {
           <label class="wide">Executável, dentro da pasta<input class="mono" [ngModel]="choice().executable" (ngModelChange)="set('executable', $event)" spellcheck="false" /></label>
         }
         @switch (item().kind) {
@@ -78,6 +82,7 @@ export function adaptProxy(proxy: string, from: number[], to: number[]): string 
     </div>
   `,
   styles: `
+    .wrapped { grid-column: 1 / -1; margin: 0; font-size: 12.5px; }
     .install { display: grid; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--zap-border); }
     .title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .title mat-icon { color: var(--mat-sys-primary); }
@@ -154,6 +159,7 @@ export class InstallForm implements OnInit {
     this.choice.set(item.chosen ?? {
       folder: base ? `${base.replace(/[\\/]+$/, '')}${separator}${item.name}` : '',
       executable: install.executable,
+      program: install.program ?? null,
       instances: install.instances || 1,
       port: 0,
       siteName: defaults?.SiteName ?? '{name} {n}',

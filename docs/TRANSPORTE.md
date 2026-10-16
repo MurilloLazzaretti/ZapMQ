@@ -165,6 +165,14 @@ preenchida a partir do modelo. As linhas do proxy aparecem com as portas escolhi
 da origem, para copiar e incluir pela aba **Proxy reverso**, que testa a configuração antes de
 recarregar: o proxy não é mudado sozinho.
 
+**Serviço que roda pelo nssm** (um `index.js` com o Node, um `.jar` com o Java): a origem anota o
+**programa** (`C:\Program Files\nodejs\node.exe`) e o **script** dentro da pasta (`index.js`). No
+destino, *Instalar aqui* pede os dois (o programa onde ele está instalado ali), e o serviço é criado
+pelo nssm que algum outro serviço da máquina já usa (`install`, `AppDirectory` na pasta, nome de
+exibição e início). Sem nenhum serviço pelo nssm na máquina, a instalação é recusada e o serviço é
+criado à mão; dali em diante o transporte só troca os arquivos dele. Precisa do Worker Control 2.29
+na origem e no destino.
+
 Ao aplicar, o agente cria a aplicação como o assistente de 4.2 cria uma nova, com os arquivos do
 item e a configuração preenchida. Reverter o pacote não a tira: isso é feito na tela da
 aplicação. Um pacote de versão anterior, ou um tipo que não é instalado assim (módulo web,

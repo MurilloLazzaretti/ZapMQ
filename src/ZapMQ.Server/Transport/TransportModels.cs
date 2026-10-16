@@ -144,9 +144,15 @@ public sealed class PackageItem
 public sealed class InstallInfo
 {
     /// <summary>
-    /// The program, as a path inside the folder of the application.
+    /// The program, as a path inside the folder of the application. For a service run by nssm,
+    /// the file of the application given to the program, such as a script.
     /// </summary>
     public string? Executable { get; set; }
+
+    /// <summary>
+    /// For a service run by nssm: the program it runs (node, java), where it is installed there.
+    /// </summary>
+    public string? Program { get; set; }
     /// <summary>
     /// Processes of a group, or instances of an API.
     /// </summary>
@@ -184,6 +190,11 @@ public sealed class InstallChoice
 {
     public string Folder { get; set; } = "";
     public string? Executable { get; set; }
+
+    /// <summary>
+    /// For a service run by nssm: the program, where it is installed here.
+    /// </summary>
+    public string? Program { get; set; }
     public int Instances { get; set; } = 1;
     public int Port { get; set; }
     public string? SiteName { get; set; }

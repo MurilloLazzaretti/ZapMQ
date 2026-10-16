@@ -1056,6 +1056,41 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
     }
 
     [Fact]
+    public async Task A_service_run_by_nssm_is_installed_with_its_program_and_its_script()
+    {
+        var origin = new PretendDatabase();
+        origin.Targets["service:Sockets"] = new() { ["index.js"] = "server", ["package.json"] = "{}" };
+        origin.Defaults["Services"] = new JArray(new JObject
+        {
+            ["Name"] = "Sockets", ["DisplayName"] = "Ojitech Sockets", ["StartType"] = "Automatic", ["Path"] = "D:\\install\\nssm\\nssm.exe",
+            ["Program"] = "C:\\Program Files\\nodejs\\node.exe", ["Script"] = "D:\\Apps\\Sockets\\index.js"
+        });
+        byte[] made;
+        await using (await Serve(origin))
+        {
+            await ClearArea();
+            await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { draft = _draft, kind = "service", name = "Sockets" }), HttpStatusCode.Created);
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Sockets" }), HttpStatusCode.Created);
+            var install = closed["items"]![0]!["install"]!;
+            Assert.Equal(("C:\\Program Files\\nodejs\\node.exe", "index.js"), ((string?)install["program"], (string?)install["executable"]));
+            made = await Api.GetByteArrayAsync($"api/transport/packages/{(string?)closed["package"]!["id"]}/download");
+        }
+
+        var here = new PretendDatabase();
+        await using var _ = await Serve(here);
+        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new
+        {
+            installs = new Dictionary<string, object> { ["1"] = new { folder = "D:\\OjiTec\\services\\sockets", executable = "index.js", program = "C:\\node\\node.exe" } }
+        }));
+        await WaitFor(id, "Applied");
+        JObject created;
+        lock (here.Applied)
+            created = here.Applied.Single(request => (string?)request["Command"] == "ApplicationCreate");
+        Assert.Equal(("service", "index.js", "C:\\node\\node.exe"), ((string?)created["Kind"], (string?)created["Executable"], (string?)created["Program"]));
+    }
+
+    [Fact]
     public async Task A_web_application_goes_only_to_one_of_the_same_kind()
     {
         var origin = new PretendDatabase();
