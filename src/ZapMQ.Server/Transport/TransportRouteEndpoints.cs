@@ -160,6 +160,10 @@ public static class TransportRouteEndpoints
             }
         });
 
+        // The last comparison with the route, while it is kept.
+        api.MapGet("/compare/{route}", (string route, Comparison comparison) =>
+            comparison.Last(route) is { } last ? Results.Content(last.ToJsonString(), "application/json; charset=utf-8") : Results.NoContent());
+
         api.MapGet("/compare/{route}/object", async (string route, string? kind, string? schema, string? name, Comparison comparison, HttpContext context) =>
         {
             try

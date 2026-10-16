@@ -385,6 +385,10 @@ pacote…** põe o que está marcado (os objetos como estão, as aplicações co
 pacote aberto escolhido, ou num novo, já com o nome da equalização, para conferir, fechar e enviar. O que está mais novo do outro lado é levado por um
 pacote montado lá: a comparação a partir do painel de lá mostra o mesmo, ao contrário.
 
+A última comparação com cada ambiente fica guardada no painel por 7 dias (`transport/comparisons`),
+para todos: ao abrir a tela ela aparece como foi feita, com quando e por quem, e **Verificar de novo**
+refaz. Com mais de uma hora, a tela avisa que os ambientes podem ter mudado.
+
 Precisa do ZapMQ 2.15 e do Worker Control 2.28 nos dois ambientes.
 
 ## 6. Estados

@@ -16,7 +16,7 @@
     </div>
     @if (routes(); as list) {
       @if (list.length) {
-        <select [(ngModel)]="route" aria-label="Ambiente a comparar" [disabled]="busy()">
+        <select [(ngModel)]="route" (ngModelChange)="showLast()" aria-label="Ambiente a comparar" [disabled]="busy()">
           @for (item of list; track item.id) {
             <option [value]="item.id">{{ item.name }}</option>
           }
@@ -34,7 +34,20 @@
     <section class="panel empty"><mat-icon svgIcon="cloud_off" /><strong>Não foi possível comparar</strong><span>{{ problem() }}</span></section>
   }
 
+  @if (!busy() && !result() && !loadingLast() && route && !problem()) {
+    <section class="panel empty"><mat-icon svgIcon="compare_arrows" /><strong>Ainda não há comparação com este ambiente</strong><span>Clique em Comparar. O resultado fica guardado por 7 dias, para todos, até a próxima verificação.</span></section>
+  }
+
   @if (result(); as now) {
+    <div class="when" [class.stale]="stale()" role="status">
+      <mat-icon [svgIcon]="stale() ? 'warning' : 'history'" />
+      <span>
+        Comparado {{ now.comparedAt | ago }} ({{ now.comparedAt | when }}){{ now.comparedBy ? ' por ' + now.comparedBy : '' }}.
+        @if (stale()) { Os ambientes podem ter mudado desde então. }
+      </span>
+      <span class="spacer"></span>
+      <button mat-button (click)="run()" [disabled]="busy()"><mat-icon svgIcon="refresh" /> Verificar de novo</button>
+    </div>
     @for (side of [now.here, now.there]; track side.environment) {
       @if (side.databaseProblem || side.targetsProblem) {
         <div class="notice" role="status">

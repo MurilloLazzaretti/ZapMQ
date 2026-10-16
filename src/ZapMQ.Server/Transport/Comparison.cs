@@ -121,7 +121,54 @@ public sealed class Comparison(WorkerControlClient worker, TransportSender sende
         JsonSerializer.Deserialize<Inventory>(await sender.QueryAsync(route, "/compare/inventory", new { }, Patience, cancellation), Format)
         ?? throw new TransportRefused("A resposta do outro ambiente não pôde ser lida", StatusCodes.Status502BadGateway);
 
-    public async Task<object> Compare(string route, string by, CancellationToken cancellation)
+    /// <summary>
+    /// How long the last comparison with a route is kept to be shown again.
+    /// </summary>
+    public static readonly TimeSpan Kept = TimeSpan.FromDays(7);
+
+    private string Saved(string route) => Path.Combine(store.Root, "comparisons", string.Concat(route.Where(char.IsAsciiLetterOrDigit)) + ".json");
+
+    /// <summary>
+    /// The last comparison with a route, as it was, while it is kept; null when there is none.
+    /// </summary>
+    public JsonNode? Last(string route)
+    {
+        var path = Saved(route);
+        try
+        {
+            if (!File.Exists(path) || time.GetUtcNow() - File.GetLastWriteTimeUtc(path) > Kept)
+                return null;
+            return JsonNode.Parse(File.ReadAllText(path));
+        }
+        catch (Exception error) when (error is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Compares this environment with the one at the end of a route, and keeps what was found to show again.
+    /// </summary>
+    public async Task<JsonNode> Compare(string route, string by, CancellationToken cancellation)
+    {
+        var result = JsonSerializer.SerializeToNode(await Compared(route, by, cancellation), Format)!;
+        result["comparedAt"] = time.GetUtcNow();
+        result["comparedBy"] = by;
+        try
+        {
+            var path = Saved(route);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path + ".tmp", result.ToJsonString());
+            File.Move(path + ".tmp", path, overwrite: true);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning("The comparison with route {Route} could not be kept: {Error}", route, error.Message);
+        }
+        return result;
+    }
+
+    private async Task<object> Compared(string route, string by, CancellationToken cancellation)
     {
         var there = await There(route, cancellation);
         var here = await Here(by, cancellation);

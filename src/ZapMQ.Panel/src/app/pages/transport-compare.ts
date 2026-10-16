@@ -13,6 +13,7 @@ import { DiffLine, diff } from '../core/diff';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
 import { ComparedFile, ComparedItem, Comparison, TransportRoute } from '../core/models';
 import { Transport, targetIcon, targetName } from '../core/transport';
+import { CompareMemory } from '../core/compare-memory';
 import { DiffView } from '../shared/diff-view';
 import { Stat } from '../shared/stat';
 import { TransportTabs } from '../shared/transport-tabs';
@@ -66,9 +67,18 @@ export class TransportComparePage implements OnInit {
   protected readonly busy = signal(false);
   protected readonly started = signal<number | null>(null);
   protected readonly problem = signal('');
-  protected readonly filter = signal<Filter>('differ');
-  protected readonly kind = signal('');
-  protected readonly search = signal('');
+  /** What was being looked at is kept while the panel is open. */
+  private readonly memory = inject(CompareMemory);
+  protected readonly filter = this.memory.filter as ReturnType<typeof signal<Filter>>;
+  protected readonly kind = this.memory.kind;
+  protected readonly search = this.memory.search;
+  /** Loading the comparison kept from before. */
+  protected readonly loadingLast = signal(false);
+  /** A comparison more than an hour old: the environments may have changed since. */
+  protected readonly stale = computed(() => {
+    const at = this.result()?.comparedAt;
+    return !!at && Date.now() - Date.parse(at) > 3600000;
+  });
   protected readonly picked = signal<ReadonlySet<string>>(new Set());
   protected readonly opened = signal<ReadonlyMap<string, Opened>>(new Map());
   protected readonly creating = signal(false);
@@ -125,7 +135,8 @@ export class TransportComparePage implements OnInit {
       next: (answer) => {
         this.routes.set(answer.routes);
         this.environment.set(answer.environment);
-        this.route = answer.routes[0]?.id ?? '';
+        this.route = answer.routes.some((item) => item.id === this.memory.route()) ? this.memory.route() : (answer.routes[0]?.id ?? '');
+        this.showLast();
       },
       error: (failure: HttpErrorResponse) => failure.status !== 401 && this.problem.set(failure.error?.error ?? 'Não foi possível ler as rotas de transporte.'),
     });
@@ -176,6 +187,29 @@ export class TransportComparePage implements OnInit {
     }
   }
 
+  /** The comparison with the chosen environment kept by the service, as it was found. */
+  protected showLast(): void {
+    this.memory.route.set(this.route);
+    this.result.set(null);
+    this.picked.set(new Set());
+    this.opened.set(new Map());
+    if (!this.route) {
+      return;
+    }
+    this.loadingLast.set(true);
+    const route = this.route;
+    this.api.lastComparison(route).subscribe({
+      next: (last) => {
+        if (route === this.route) {
+          this.result.set(last);
+          this.compared = route;
+        }
+        this.loadingLast.set(false);
+      },
+      error: () => this.loadingLast.set(false),
+    });
+  }
+
   protected async run(): Promise<void> {
     if (!this.route) {
       return;
@@ -188,6 +222,7 @@ export class TransportComparePage implements OnInit {
     try {
       this.result.set(await firstValueFrom(this.api.compare(this.route)));
       this.compared = this.route;
+      this.memory.route.set(this.route);
     } catch (failure) {
       this.problem.set((failure as HttpErrorResponse).error?.error ?? 'A comparação não pôde ser feita.');
     } finally {

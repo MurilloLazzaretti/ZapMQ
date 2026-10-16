@@ -183,3 +183,19 @@
   .row .open { grid-row: 1; grid-column: 3; }
   .detail { padding-left: 20px; }
 }
+
+.when {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 8px 6px 16px;
+  border-radius: 14px;
+  background: var(--mat-sys-surface-container-low);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+
+  mat-icon { flex: none; width: 20px; height: 20px; }
+  .spacer { flex: 1; }
+  &.stale { background: var(--zap-warn-container); color: var(--zap-warn); }
+}

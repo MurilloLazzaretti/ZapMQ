@@ -1203,6 +1203,8 @@ export interface Comparison {
   here: ComparedSide;
   there: ComparedSide;
   items: ComparedItem[];
+  comparedAt?: string;
+  comparedBy?: string;
 }
 
 export interface ComparedFile {

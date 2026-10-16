@@ -162,7 +162,13 @@ public sealed class TransportRouteTests : IAsyncLifetime
             new() { ["Orders"] = new JArray(new JObject { ["Path"] = "Orders.dll", ["Size"] = 4, ["Sha256"] = "old", ["Modified"] = DateTimeOffset.UtcNow.AddDays(-9) },
                 new JObject { ["Path"] = "Old.dll", ["Size"] = 1, ["Sha256"] = "gone", ["Modified"] = DateTimeOffset.UtcNow.AddDays(-90) }) });
 
+        // Nothing compared yet: nothing to show.
+        Assert.Equal(HttpStatusCode.NoContent, (await _dev.Admin.GetAsync($"api/transport/compare/{route}")).StatusCode);
         var compared = await Json(await _dev.Admin.PostAsync($"api/transport/compare/{route}", null), HttpStatusCode.OK);
+        // Kept, to be shown again as it was, with when and by whom.
+        var kept = await Json(await _dev.Admin.GetAsync($"api/transport/compare/{route}"), HttpStatusCode.OK);
+        Assert.Equal(("admin", compared["items"]!.Count()), ((string?)kept["comparedBy"], kept["items"]!.Count()));
+        Assert.NotNull((DateTimeOffset?)kept["comparedAt"]);
         Assert.Equal(("DEV", "QAS"), ((string?)compared["here"]!["environment"], (string?)compared["there"]!["environment"]));
         var items = compared["items"]!.ToDictionary(item => (string)item["name"]!);
         Assert.Equal(("same", null), ((string?)items["spSame"]["state"], (string?)items["spSame"]["newer"]));

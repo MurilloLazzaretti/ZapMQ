@@ -343,6 +343,11 @@ export class Api {
     return this.http.post<Comparison>(`api/transport/compare/${route}`, null);
   }
 
+  /** The last comparison with a route, kept by the service; null when there is none. */
+  lastComparison(route: string): Observable<Comparison | null> {
+    return this.http.get<Comparison | null>(`api/transport/compare/${route}`);
+  }
+
   compareObject(route: string, kind: string, schema: string, name: string): Observable<{ here: string | null; there: string | null }> {
     return this.http.get<{ here: string | null; there: string | null }>(`api/transport/compare/${route}/object`, { params: { kind, schema, name } });
   }
