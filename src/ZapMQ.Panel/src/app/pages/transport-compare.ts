@@ -272,13 +272,18 @@ export class TransportComparePage implements OnInit {
     if (!items.length) {
       return;
     }
+    const day = new Date().toLocaleDateString('pt-BR');
+    // An open package, or a new one with the name of the equalization.
+    const draft = await this.transport.draftFor(false, {
+      name: `Equalização ${this.here()} → ${this.there()} ${day}`,
+      description: `O que estava mais novo em ${this.here()} do que em ${this.there()}, ou só existia em ${this.here()}, na comparação de ${day}.`,
+    });
+    if (!draft) {
+      return;
+    }
     this.creating.set(true);
     const failed: string[] = [];
     try {
-      const day = new Date().toLocaleDateString('pt-BR');
-      const draft = await firstValueFrom(
-        this.api.createDraft({ name: `Equalização ${this.here()} → ${this.there()} ${day}`, description: `O que estava mais novo em ${this.here()} do que em ${this.there()}, ou só existia em ${this.here()}, na comparação de ${day}.` }),
-      );
       for (const item of items) {
         try {
           if (item.kind === 'database') {
@@ -291,10 +296,14 @@ export class TransportComparePage implements OnInit {
         }
       }
       this.transport.choose(draft);
-      this.snack.open(failed.length ? `Pacote criado; não ${failed.length === 1 ? 'entrou' : 'entraram'}: ${failed.join(' · ')}` : `Pacote criado com ${items.length} ${items.length === 1 ? 'item' : 'itens'}`, 'Fechar', { duration: failed.length ? 15000 : 4000 });
+      this.snack.open(
+        failed.length
+          ? `${items.length - failed.length} em ${draft.name} v${draft.version}; não ${failed.length === 1 ? 'entrou' : 'entraram'}: ${failed.join(' · ')}`
+          : `${items.length} ${items.length === 1 ? 'item foi' : 'itens foram'} para ${draft.name} v${draft.version}`,
+        'Fechar', { duration: failed.length ? 15000 : 4000 });
       void this.router.navigate(['/transporte/aberto', draft.id]);
     } catch (failure) {
-      this.snack.open((failure as HttpErrorResponse).error?.error ?? 'O pacote não pôde ser criado', 'Fechar', { duration: 8000 });
+      this.snack.open((failure as HttpErrorResponse).error?.error ?? 'Não foi possível incluir no pacote', 'Fechar', { duration: 8000 });
     } finally {
       this.creating.set(false);
     }

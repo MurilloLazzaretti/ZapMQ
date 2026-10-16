@@ -72,15 +72,16 @@ import { PackageDraft } from '../core/models';
   `,
 })
 export class DraftPicker {
-  protected readonly data = inject<{ drafts: PackageDraft[]; current: string | null; fresh?: boolean }>(MAT_DIALOG_DATA);
+  protected readonly data = inject<{ drafts: PackageDraft[]; current: string | null; fresh?: boolean; name?: string; description?: string }>(MAT_DIALOG_DATA);
   private readonly ref = inject(MatDialogRef<DraftPicker, PackageDraft>);
   private readonly api = inject(Api);
 
   protected readonly chosen = signal(this.data.fresh ? '' : this.data.drafts.some((draft) => draft.id === this.data.current) ? this.data.current! : (this.data.drafts[0]?.id ?? ''));
   protected readonly busy = signal(false);
   protected readonly problem = signal('');
-  protected name = '';
-  protected description = '';
+  /** A new package comes with the name and the description suggested by whoever asked. */
+  protected name = this.data.name ?? '';
+  protected description = this.data.description ?? '';
 
   protected async go(): Promise<void> {
     if (this.chosen()) {

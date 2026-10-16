@@ -380,9 +380,9 @@ Cada coisa aparece como **igual**, **diferente**, **só aqui** ou **só lá**, e
 versão, o arquivo mais recente. Aberta, uma linha mostra as diferenças: o script linha a linha,
 ou os arquivos que diferem, com tamanho e data de cada lado.
 
-**Sugerir equalização** marca o que está mais novo ou só existe neste ambiente, e **Criar pacote
-de equalização** abre um pacote com isso (os objetos como estão, as aplicações como estão
-rodando), para conferir, fechar e enviar. O que está mais novo do outro lado é levado por um
+**Sugerir equalização** marca o que está mais novo ou só existe neste ambiente, e **Incluir em
+pacote…** põe o que está marcado (os objetos como estão, as aplicações como estão rodando) num
+pacote aberto escolhido, ou num novo, já com o nome da equalização, para conferir, fechar e enviar. O que está mais novo do outro lado é levado por um
 pacote montado lá: a comparação a partir do painel de lá mostra o mesmo, ao contrário.
 
 Precisa do ZapMQ 2.15 e do Worker Control 2.28 nos dois ambientes.

@@ -173,8 +173,8 @@
         <strong>{{ pickedItems().length }} {{ pickedItems().length === 1 ? 'marcado' : 'marcados' }}</strong>
         <button mat-button (click)="clearPicked()" [disabled]="creating()">Limpar</button>
         <span class="spacer"></span>
-        <button mat-flat-button (click)="equalize()" [disabled]="creating()" [matTooltip]="'Abre um pacote com os objetos como estão e as aplicações como estão rodando em ' + here() + ', para conferir, fechar e enviar a ' + there()">
-          <mat-icon svgIcon="inventory_2" /> {{ creating() ? 'Criando…' : 'Criar pacote de equalização' }}
+        <button mat-flat-button (click)="equalize()" [disabled]="creating()" [matTooltip]="'Inclui num pacote aberto, ou num novo, os objetos como estão e as aplicações como estão rodando em ' + here() + ', para conferir, fechar e enviar a ' + there()">
+          <mat-icon svgIcon="inventory_2" /> {{ creating() ? 'Incluindo…' : 'Incluir em pacote…' }}
         </button>
       </div>
     }
