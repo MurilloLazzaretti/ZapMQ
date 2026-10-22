@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -14,9 +14,10 @@ import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { kindIcon, kindName } from '../core/database';
 import { size } from '../core/database';
-import { AgoPipe } from '../core/format';
+import { Auth } from '../core/auth';
+import { AgoPipe, WhenPipe } from '../core/format';
 import { AreaItem, PackageDraft } from '../core/models';
-import { Transport, itemAction, itemTone, targetIcon, targetName } from '../core/transport';
+import { Transport, groupItems, itemAction, itemTone, targetIcon, targetName } from '../core/transport';
 import { TransportTabs } from '../shared/transport-tabs';
 
 /**
@@ -25,7 +26,7 @@ import { TransportTabs } from '../shared/transport-tabs';
  */
 @Component({
   selector: 'zap-transport-area',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatTooltipModule, TransportTabs, AgoPipe],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatTooltipModule, TransportTabs, AgoPipe, WhenPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './transport-area.html',
   styleUrl: './transport-area.scss',
@@ -37,6 +38,7 @@ export class TransportAreaPage implements OnInit {
   protected readonly transport = inject(Transport);
   private readonly route = inject(ActivatedRoute);
   private readonly dialog = inject(MatDialog);
+  protected readonly auth = inject(Auth);
 
   /** The open package; null once it is not open any more. */
   protected readonly draft = signal<PackageDraft | null | undefined>(undefined);
@@ -62,6 +64,34 @@ export class TransportAreaPage implements OnInit {
   protected readonly kindIcon = kindIcon;
   protected readonly itemAction = itemAction;
   protected readonly itemTone = itemTone;
+
+  /** The items by who put them in, then by kind; and who has not said theirs may go yet. */
+  protected readonly groups = computed(() => groupItems(this.items() ?? [], (item) => item.addedBy, this.draft()?.releases ?? []));
+  protected readonly waiting = computed(() => this.groups().filter((group) => !group.release).map((group) => group.user));
+
+  protected mine(user: string): boolean {
+    return user.toLowerCase() === (this.auth.user() ?? '').toLowerCase();
+  }
+
+  /** All the items of a person may go: theirs, or, for the master, somebody else's. */
+  protected async release(user: string): Promise<void> {
+    await this.releasing(() => this.api.releaseDraft(this.id, this.mine(user) ? null : user));
+  }
+
+  protected async withdraw(user: string): Promise<void> {
+    await this.releasing(() => this.api.withdrawDraft(this.id, this.mine(user) ? null : user));
+  }
+
+  private async releasing(ask: () => ReturnType<Api['releaseDraft']>): Promise<void> {
+    this.busy.set(true);
+    try {
+      this.draft.set(await firstValueFrom(ask()));
+    } catch (failure) {
+      this.say(failure);
+    } finally {
+      this.busy.set(false);
+    }
+  }
 
   private get id(): string {
     return this.route.snapshot.paramMap.get('id') ?? '';

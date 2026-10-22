@@ -128,3 +128,29 @@ textarea {
     span { overflow-wrap: anywhere; }
   }
 }
+
+.copies .keep { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 20px 6px; }
+.copies .keep .spacer { flex: 1; }
+.keep-field { display: inline-flex; align-items: center; gap: 6px; }
+.keep-field input { width: 64px; height: 34px; padding: 0 8px; border: 1px solid var(--zap-border); border-radius: 10px; background: var(--zap-surface); color: var(--mat-sys-on-surface); font: var(--mat-sys-body-medium); }
+.copies .about { margin: 0; padding: 0 20px 12px; font-size: 12.5px; }
+.kept-list { list-style: none; margin: 0; padding: 0 20px 12px; display: grid; gap: 8px; }
+.kept-list li { border: 1px solid var(--zap-border); border-radius: 14px; }
+.kept-list li.open { border-color: var(--mat-sys-primary); }
+.kept-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+.kept-row > mat-icon { flex: none; color: var(--mat-sys-primary); }
+.kept-row .what { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; flex: 1; min-width: 0; }
+.kept-row .muted { font-size: 12.5px; }
+.kept-row .reason { flex-basis: 100%; font-size: 12.5px; font-style: italic; overflow-wrap: anywhere; }
+.restore { display: grid; gap: 10px; padding: 0 14px 14px; }
+.restore label { display: grid; gap: 6px; }
+.restore label em { color: var(--mat-sys-on-surface-variant); font-size: 12px; }
+.restore textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--zap-border); border-radius: 10px; background: var(--zap-surface); color: var(--mat-sys-on-surface); font: var(--mat-sys-body-medium); resize: vertical; }
+.restore .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.restore .bar .muted { font-size: 12.5px; flex: 1 1 260px; }
+.restore .bar .spacer { display: none; }
+.restored { display: grid; gap: 6px; margin: 0 20px 12px; padding: 10px 14px; border-radius: 12px; background: var(--zap-ok-container); color: var(--zap-ok); }
+.restored.failed { background: var(--zap-danger-container); color: var(--zap-danger); }
+.history-title { margin: 8px 20px 4px; font: var(--mat-sys-title-small); }
+.nowrap { white-space: nowrap; }
+.reason-cell { max-width: 48ch; overflow-wrap: anywhere; }

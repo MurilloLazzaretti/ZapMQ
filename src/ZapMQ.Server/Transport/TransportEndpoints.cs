@@ -21,6 +21,10 @@ public static class TransportEndpoints
 
     public sealed record DraftRequest(string? Name, string? Description);
 
+    public sealed record RestoreRequest(string? Kind, string? Name, string? Backup, string? Reason, bool Force);
+
+    public sealed record KeepRequest(string? Kind, string? Name, int? Value);
+
     public sealed record WriteFileRequest(string? Kind, string? Name, int Instance, string? Path, string? Content, string? Sha256, bool Restart);
 
     /// <summary>
@@ -55,6 +59,23 @@ public static class TransportEndpoints
 
     public sealed record RejectRequest(string? Reason);
 
+    /// <summary>
+    /// Whose items are said to be free to go: one's own, or, for the master, somebody else's.
+    /// </summary>
+    public sealed record ReleaseRequest(string? User);
+
+    /// <summary>
+    /// The user a release is for: whoever asks, unless the master asks it for somebody else.
+    /// </summary>
+    private static string ReleaseFor(ReleaseRequest? request, HttpContext context, PanelUserStore users)
+    {
+        var by = User(context);
+        var user = string.IsNullOrWhiteSpace(request?.User) ? by : request.User.Trim();
+        if (!string.Equals(user, by, StringComparison.OrdinalIgnoreCase) && users.Find(by) is not { Master: true })
+            throw new TransportRefused("Cada um libera os próprios itens; só o usuário master libera em nome de outra pessoa", StatusCodes.Status403Forbidden);
+        return user;
+    }
+
     private static string User(HttpContext context) => (string)context.Items[PanelHost.UserItem]!;
 
     private static async Task<IResult> Guarded(Func<Task<IResult>> action)
@@ -79,6 +100,10 @@ public static class TransportEndpoints
 
     private static object Summary(PackageRecord record, TransportStore store) => new
     {
+        // Who put items in it and who of them said they may go, and what the items are: to find a package by any of it.
+        contributors = Releases.Contributors(record.Manifest), releases = record.Releases, waiting = Releases.Waiting(record),
+        kinds = record.Manifest.Items.Select(item => item.Kind).Distinct(),
+        names = record.Manifest.Items.Select(item => item.Kind == "database" && item.Action == "Script" ? item.Title : item.Schema is null ? item.Name : $"{item.Schema}.{item.Name}").Where(name => !string.IsNullOrEmpty(name)).Distinct(),
         id = record.Manifest.Id, line = Versions.LineOf(record.Manifest), version = Versions.VersionOf(record.Manifest), newer = store.Newer(record.Manifest), name = record.Manifest.Name, description = record.Manifest.Description, origin = record.Manifest.Origin,
         createdAt = record.Manifest.CreatedAt, createdBy = record.Manifest.CreatedBy, items = record.Manifest.Items.Count,
         status = record.Status, received = record.Received, deliveries = record.Deliveries, applyAt = record.ApplyAt, approvedBy = record.ApprovedBy, revertBy = record.RevertBy, force = record.Force, acknowledgedBy = record.AcknowledgedBy, size = record.Size,
@@ -96,6 +121,7 @@ public static class TransportEndpoints
         items = record.Manifest.Items.Select(item => new
         {
             item.Number, item.Kind, item.Action, item.ObjectKind, item.Variety, item.Schema, item.Name, item.Title, item.Database, item.Fingerprint, item.Base, item.Earlier, item.Size,
+            addedBy = string.IsNullOrEmpty(item.AddedBy) ? record.Manifest.CreatedBy : item.AddedBy,
             item.Version, files = item.Files.Count, uses = item.Uses.Count, install = item.Install, chosen = record.Installs.GetValueOrDefault(item.Number), mode = item.Mode
         }),
         history = record.History,
@@ -130,8 +156,8 @@ public static class TransportEndpoints
             if (users.Find(User(context)) is not { Master: true })
                 return Task.FromResult(Results.Json(new { error = "Só o usuário master muda as regras do ambiente" }, statusCode: StatusCodes.Status403Forbidden));
             var saved = policy.Set(wanted, User(context), time.GetUtcNow());
-            loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: rules of the environment changed: manual versions {Manual}, separate approver {Separate}, window {Start}-{End} (by {User})",
-                saved.ManualVersions, saved.SeparateApprover, saved.WindowStart ?? "any", saved.WindowEnd ?? "any", User(context));
+            loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: rules of the environment changed: packages made here {Packages}, manual versions {Manual}, separate approver {Separate}, window {Start}-{End} (by {User})",
+                saved.CreatePackages, saved.ManualVersions, saved.SeparateApprover, saved.WindowStart ?? "any", saved.WindowEnd ?? "any", User(context));
             return Task.FromResult(Results.Json(saved));
         }));
 
@@ -143,12 +169,17 @@ public static class TransportEndpoints
             return Results.Json(new
             {
                 environment = store.Environment,
-                drafts = store.Drafts().Select(draft => new { draft.Id, draft.Line, draft.Version, draft.Name, draft.Description, draft.CreatedBy, draft.CreatedAt, items = area.Count(item => item.Draft == draft.Id) })
+                drafts = store.Drafts().Select(draft => new
+                {
+                    draft.Id, draft.Line, draft.Version, draft.Name, draft.Description, draft.CreatedBy, draft.CreatedAt, items = area.Count(item => item.Draft == draft.Id),
+                    contributors = Releases.Contributors(area.Where(item => item.Draft == draft.Id).Select(item => item.AddedBy), draft.CreatedBy), draft.Releases
+                })
             });
         });
 
-        api.MapPost("/drafts", (DraftRequest request, TransportStore store, HttpContext context, TimeProvider time) => Guarded(() =>
+        api.MapPost("/drafts", (DraftRequest request, TransportStore store, TransportPolicyStore policy, HttpContext context, TimeProvider time) => Guarded(() =>
         {
+            policy.RequirePackages();
             if (string.IsNullOrWhiteSpace(request.Name))
                 throw new TransportRefused("Dê um nome ao pacote");
             return Task.FromResult(Results.Json(store.CreateDraft(request.Name, request.Description, null, 1, User(context), time.GetUtcNow()), statusCode: StatusCodes.Status201Created));
@@ -159,9 +190,24 @@ public static class TransportEndpoints
 
         api.MapDelete("/drafts/{id}", (string id, TransportStore store) => store.DeleteDraft(id) ? Results.NoContent() : Results.NotFound());
 
+        // What one put in an open package may go, said before it is closed; taken back when what they put in changes.
+        api.MapPost("/drafts/{id}/release", (string id, ReleaseRequest? request, TransportStore store, PanelUserStore users, HttpContext context, TimeProvider time, ILoggerFactory loggers) => Guarded(() =>
+        {
+            var user = ReleaseFor(request, context, users);
+            var draft = store.ReleaseDraft(id, user, User(context), time.GetUtcNow());
+            loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: the items of {Released} in the open package {Name} released (by {User})", user, draft.Name, User(context));
+            return Task.FromResult(Results.Json(draft));
+        }));
+
+        api.MapPost("/drafts/{id}/withdraw", (string id, ReleaseRequest? request, TransportStore store, PanelUserStore users, HttpContext context) => Guarded(() =>
+            Task.FromResult(Results.Json(store.WithdrawDraft(id, ReleaseFor(request, context, users))))));
+
         // The next version of a package made here, open with what the newest one carries.
-        api.MapPost("/packages/{id}/versions", (string id, TransportStore store, HttpContext context, TimeProvider time) => Guarded(() =>
-            Task.FromResult(Results.Json(store.NewVersion(id, User(context), time.GetUtcNow()), statusCode: StatusCodes.Status201Created))));
+        api.MapPost("/packages/{id}/versions", (string id, TransportStore store, TransportPolicyStore policy, HttpContext context, TimeProvider time) => Guarded(() =>
+        {
+            policy.RequirePackages();
+            return Task.FromResult(Results.Json(store.NewVersion(id, User(context), time.GetUtcNow()), statusCode: StatusCodes.Status201Created));
+        }));
 
         // ── What goes in them ───────────────────────────────────────────────
 
@@ -212,6 +258,42 @@ public static class TransportEndpoints
                     said[kind] = path;
                 request["Inboxes"] = said;
             }, loggers, "Transport: inboxes changed"));
+
+        // The copies kept of an application each time its files were replaced, and what was done to it.
+        api.MapGet("/backups", (string? kind, string? name, WorkerControlClient worker, HttpContext context) =>
+            Relay(worker, context, "TransportBackups", request => { request["Kind"] = kind; request["Name"] = name; }));
+
+        // Back to one of them without a package; what it had is kept as a copy too, to come forward again.
+        api.MapPost("/backups/restore", (RestoreRequest body, WorkerControlClient worker, HttpContext context, ILoggerFactory loggers) =>
+        {
+            if (string.IsNullOrWhiteSpace(body.Reason))
+                return Task.FromResult(Results.Json(new { error = "Diga por que a aplicação volta para essa cópia" }, statusCode: StatusCodes.Status400BadRequest));
+            return Relay(worker, context, "TransportRestore", request =>
+            {
+                request["Kind"] = body.Kind;
+                request["Name"] = body.Name;
+                request["Backup"] = body.Backup;
+                request["Reason"] = body.Reason.Trim();
+                request["Force"] = body.Force;
+            }, loggers, $"Transport: {body.Kind} {body.Name} put back as the copy {body.Backup}: {body.Reason.Trim().ReplaceLineEndings(" ")}", TransportService.ReplacePatience);
+        });
+
+        // How many copies are kept: the number of every application is the master's; one application may keep another.
+        api.MapPut("/backups/keep", (KeepRequest body, WorkerControlClient worker, PanelUserStore users, HttpContext context, ILoggerFactory loggers) =>
+        {
+            var every = string.IsNullOrEmpty(body.Kind) && string.IsNullOrEmpty(body.Name);
+            if (every && users.Find(User(context)) is not { Master: true })
+                return Task.FromResult(Results.Json(new { error = "Só o usuário master muda o número de cópias de todas as aplicações" }, statusCode: StatusCodes.Status403Forbidden));
+            return Relay(worker, context, "SetTransportKeepVersions", request =>
+            {
+                if (!every)
+                {
+                    request["Kind"] = body.Kind;
+                    request["Name"] = body.Name;
+                }
+                request["Value"] = body.Value;
+            }, loggers, every ? $"Transport: copies kept of every application: {body.Value}" : $"Transport: copies kept of {body.Kind} {body.Name}: {(body.Value is null ? "as every application" : body.Value)}");
+        });
 
         // The files of an application that belong to the environment: its configuration.
         api.MapGet("/files", (string? kind, string? name, WorkerControlClient worker, HttpContext context) =>
@@ -284,10 +366,24 @@ public static class TransportEndpoints
             return Task.FromResult(Results.NoContent());
         }));
 
+        // A package made here goes on, by a route or as a file, only once everybody who put items in it said so.
+        api.MapPost("/packages/{id}/release", (string id, ReleaseRequest? request, TransportStore store, PanelUserStore users, HttpContext context, TimeProvider time, ILoggerFactory loggers) => Guarded(() =>
+        {
+            var user = ReleaseFor(request, context, users);
+            var record = store.Release(id, user, User(context), time.GetUtcNow());
+            loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: the items of {Released} in package {Name} ({Id}) released (by {User})", user, record.Manifest.Name, id, User(context));
+            return Task.FromResult(Results.Json(Detail(record, store)));
+        }));
+
+        api.MapPost("/packages/{id}/withdraw", (string id, ReleaseRequest? request, TransportStore store, PanelUserStore users, HttpContext context, TimeProvider time) => Guarded(() =>
+            Task.FromResult(Results.Json(Detail(store.Withdraw(id, ReleaseFor(request, context, users), User(context), time.GetUtcNow()), store)))));
+
         api.MapGet("/packages/{id}/download", (string id, TransportStore store, HttpContext context, TimeProvider time) =>
         {
             if (store.Find(id) is not { } record || !File.Exists(store.FilePath(id)))
                 return Results.NotFound();
+            if (Releases.Waiting(record) is { Count: > 0 } waiting)
+                return Results.Json(new { error = $"O pacote só segue adiante quando todos que incluíram itens nele liberarem. Falta: {string.Join(", ", waiting)}." }, statusCode: StatusCodes.Status409Conflict);
             store.Update(id, downloaded => downloaded.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = User(context), What = "downloaded" }));
             var name = string.Concat(record.Manifest.Name.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-')).Trim('-');
             return Results.File(store.FilePath(id), "application/zip", $"{(name.Length == 0 ? "pacote" : name)}-{id[..8]}.zpkg");

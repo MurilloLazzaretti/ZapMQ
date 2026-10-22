@@ -51,32 +51,68 @@
       }
 
       @if (list.length) {
-        <div class="table-wrap">
-          <table class="data stack">
-            <thead><tr><th>Item</th><th>O que fazer no destino</th><th>Incluído</th><th></th></tr></thead>
-            <tbody>
-              @for (item of list; track item.id) {
-                <tr>
-                  <td class="wide" data-label="Item">
-                    @if (item.kind !== 'database') {
-                      <span class="object"><mat-icon [svgIcon]="targetIcon(item.kind)" [matTooltip]="targetName(item.kind)" /><span><strong>{{ item.name }}</strong>
-                        <span class="muted"> · {{ item.version || 'sem versão' }} · {{ item.files.length }} arquivos · {{ size(item.size / 1024) }}</span></span></span>
-                    } @else if (item.action === 'Script') {
-                      <span class="object"><mat-icon svgIcon="code" /><strong>{{ item.title }}</strong></span>
-                    } @else {
-                      <a class="object" [routerLink]="item.action === 'Drop' || !(item.database || database()) ? null : ['/banco/objetos', item.database || database(), item.objectKind, item.schema, item.name]">
-                        <mat-icon [svgIcon]="kindIcon(item.objectKind)" [matTooltip]="kindName(item.objectKind)" /><span><span class="muted">{{ item.schema }}.</span><strong>{{ item.name }}</strong></span>
-                      </a>
-                    }
-                  </td>
-                  <td data-label="O que fazer no destino"><span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span></td>
-                  <td data-label="Incluído">{{ item.addedAt | ago }} <span class="muted">por {{ item.addedBy }}</span></td>
-                  <td class="actions"><button mat-icon-button (click)="remove(item)" matTooltip="Tirar do pacote" [attr.aria-label]="'Tirar do pacote'"><mat-icon svgIcon="close" /></button></td>
-                </tr>
-              }
-            </tbody>
-          </table>
+        <div class="release-line" [class.done]="!waiting().length">
+          <mat-icon [svgIcon]="waiting().length ? 'hourglass_empty' : 'task_alt'" />
+          <span>
+            @if (waiting().length) {
+              Liberado por {{ groups().length - waiting().length }} de {{ groups().length }}. Falta: <strong>{{ waiting().join(', ') }}</strong>.
+              A versão pode ser fechada antes; o pacote só segue a outro ambiente depois que todos liberarem.
+            } @else {
+              Todos que incluíram itens liberaram: fechada a versão, o pacote pode seguir a outro ambiente.
+            }
+          </span>
         </div>
+        @for (group of groups(); track group.user) {
+          <div class="group">
+            <div class="group-head">
+              <mat-icon svgIcon="account_circle" />
+              <strong>{{ group.user }}</strong>
+              <span class="muted">{{ group.count }} {{ group.count === 1 ? 'item' : 'itens' }}</span>
+              @if (group.release; as release) {
+                <span class="pill ok" [matTooltip]="'Em ' + (release.at | when) + (release.by.toLowerCase() !== release.user.toLowerCase() ? ', pelo master ' + release.by : '')">liberado {{ release.at | ago }}@if (release.by.toLowerCase() !== release.user.toLowerCase()) { por {{ release.by }} }</span>
+              } @else {
+                <span class="pill warn">não liberado</span>
+              }
+              <span class="spacer"></span>
+              @if (mine(group.user) || auth.master()) {
+                @if (group.release) {
+                  <button mat-button (click)="withdraw(group.user)" [disabled]="busy()">Desfazer liberação</button>
+                } @else {
+                  <button mat-flat-button (click)="release(group.user)" [disabled]="busy()"><mat-icon svgIcon="task_alt" /> {{ mine(group.user) ? 'Liberar meus itens' : 'Liberar em nome de ' + group.user }}</button>
+                }
+              }
+            </div>
+            <div class="table-wrap">
+              <table class="data stack">
+                <thead><tr><th>Item</th><th>O que fazer no destino</th><th>Incluído</th><th></th></tr></thead>
+                @for (kind of group.kinds; track kind.kind) {
+                  <tbody>
+                    <tr class="kind"><th colspan="4"><mat-icon [svgIcon]="kind.icon" /> {{ kind.label }} <span class="muted">{{ kind.items.length }}</span></th></tr>
+                    @for (item of kind.items; track item.id) {
+                      <tr>
+                        <td class="wide" data-label="Item">
+                          @if (item.kind !== 'database') {
+                            <span class="object"><mat-icon [svgIcon]="targetIcon(item.kind)" [matTooltip]="targetName(item.kind)" /><span><strong>{{ item.name }}</strong>
+                              <span class="muted"> · {{ item.version || 'sem versão' }} · {{ item.files.length }} arquivos · {{ size(item.size / 1024) }}</span></span></span>
+                          } @else if (item.action === 'Script') {
+                            <span class="object"><mat-icon svgIcon="code" /><strong>{{ item.title }}</strong></span>
+                          } @else {
+                            <a class="object" [routerLink]="item.action === 'Drop' || !(item.database || database()) ? null : ['/banco/objetos', item.database || database(), item.objectKind, item.schema, item.name]">
+                              <mat-icon [svgIcon]="kindIcon(item.objectKind)" [matTooltip]="kindName(item.objectKind)" /><span><span class="muted">{{ item.schema }}.</span><strong>{{ item.name }}</strong></span>
+                            </a>
+                          }
+                        </td>
+                        <td data-label="O que fazer no destino"><span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span></td>
+                        <td data-label="Incluído">{{ item.addedAt | ago }}</td>
+                        <td class="actions"><button mat-icon-button (click)="remove(item)" matTooltip="Tirar do pacote" [attr.aria-label]="'Tirar do pacote'"><mat-icon svgIcon="close" /></button></td>
+                      </tr>
+                    }
+                  </tbody>
+                }
+              </table>
+            </div>
+          </div>
+        }
       } @else if (!writing()) {
         <div class="empty">
           <mat-icon svgIcon="playlist_add" />

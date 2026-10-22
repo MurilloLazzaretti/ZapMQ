@@ -39,3 +39,13 @@ form.script { border-bottom: 1px solid var(--zap-border); }
 
 a.object[href]:hover strong { text-decoration: underline; }
 .actions { width: 48px; text-align: right; }
+
+.release-line { display: flex; align-items: flex-start; gap: 10px; margin: 0 20px 12px; padding: 10px 14px; border-radius: 12px; background: var(--zap-warn-container, var(--mat-sys-surface-container-high)); color: var(--zap-warn, inherit); font-size: 13.5px; }
+.release-line.done { background: var(--zap-ok-container, var(--mat-sys-surface-container-high)); color: var(--zap-ok, inherit); }
+.release-line mat-icon { flex: none; width: 20px; height: 20px; }
+.group { border-top: 1px solid var(--zap-border); }
+.group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 12px 20px 6px; }
+.group-head mat-icon { color: var(--mat-sys-primary); }
+.group-head .spacer { flex: 1; }
+tr.kind th { padding-top: 12px; text-align: left; font: var(--mat-sys-label-large); color: var(--mat-sys-on-surface-variant); }
+tr.kind mat-icon { width: 18px; height: 18px; vertical-align: -4px; margin-right: 4px; }

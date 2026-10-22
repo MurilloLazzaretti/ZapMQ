@@ -102,12 +102,26 @@
             </p>
             @if (rulesProblem()) { <p class="refused-line"><mat-icon svgIcon="error" /> {{ rulesProblem() }}</p> }
 
+            <h3>Pacotes</h3>
+            <div class="rule">
+              <mat-slide-toggle [checked]="rules.createPackages" (change)="rules.createPackages = $event.checked; rules.manualVersions = rules.manualVersions && $event.checked; rulesChanged()" [disabled]="!auth.master()">Permitir criar pacotes neste ambiente</mat-slide-toggle>
+              <p class="muted">
+                @if (rules.createPackages) {
+                  Pacotes podem ser montados aqui: pacote novo, nova versão de um pacote e a sugestão de equalização da comparação, para depois seguir a outros ambientes.
+                } @else {
+                  <strong>Não se criam pacotes aqui:</strong> os que chegam de outros ambientes são aprovados, aplicados e seguem adiante. As versões manuais (inclusive o <em>Upload e aplicar</em>) ficam desligadas junto, porque toda versão manual vira um pacote.
+                }
+              </p>
+            </div>
+
             <h3>Versões novas</h3>
             <div class="rule">
-              <mat-slide-toggle [checked]="rules.manualVersions" (change)="rules.manualVersions = $event.checked; rulesChanged()" [disabled]="!auth.master()">Permitir versões manuais neste ambiente</mat-slide-toggle>
+              <mat-slide-toggle [checked]="rules.manualVersions" (change)="rules.manualVersions = $event.checked; rulesChanged()" [disabled]="!auth.master() || !rules.createPackages">Permitir versões manuais neste ambiente</mat-slide-toggle>
               <p class="muted">
-                @if (rules.manualVersions) {
-                  Versões novas podem entrar à mão: <em>Upload versão</em> de uma aplicação, a pasta de entrada, um script escrito ou importado aqui e <em>Nova aplicação</em> a partir de um zip. Para ambientes de desenvolvimento.
+                @if (!rules.createPackages) {
+                  Desligadas porque neste ambiente não se criam pacotes.
+                } @else if (rules.manualVersions) {
+                  Versões novas podem entrar à mão: <em>Upload e aplicar</em> de uma aplicação, a pasta de entrada, um script escrito ou importado aqui e <em>Nova aplicação</em> a partir de um zip. Para ambientes de desenvolvimento.
                 } @else {
                   <strong>Apenas via transporte</strong> (o padrão): o que é novo chega só em pacotes vindos de outro ambiente. Ainda dá para empacotar o que já está aqui (objetos do banco, o que está rodando) e levar adiante.
                 }

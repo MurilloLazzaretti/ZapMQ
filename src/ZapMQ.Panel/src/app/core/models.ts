@@ -928,6 +928,16 @@ export interface PackageDraft {
   createdBy: string;
   createdAt: string;
   items?: number;
+  /** Who put items in it, and who of them already said they may go. */
+  contributors?: string[];
+  releases: PackageRelease[];
+}
+
+/** Somebody said the items they put in a package may go: all of theirs at once. `by` differs when the master said it for them. */
+export interface PackageRelease {
+  user: string;
+  by: string;
+  at: string;
 }
 
 export interface PackageSummary {
@@ -957,10 +967,19 @@ export interface PackageSummary {
   acknowledgedBy: string | null;
   size: number;
   changedAt: string;
+  /** Who put items in it; who of them said they may go; who it still waits for to go on (never for one that arrived). */
+  contributors: string[];
+  releases: PackageRelease[];
+  waiting: string[];
+  /** What the items are, to find the package by them. */
+  kinds: string[];
+  names: string[];
 }
 
 export interface PackageItem {
   number: number;
+  /** Who put it in the package. */
+  addedBy: string;
   kind: string;
   action: 'Define' | 'Drop' | 'Script' | 'Replace';
   /** For what is made of files. */
@@ -1106,6 +1125,47 @@ export interface TransportSettings {
   Inboxes: Record<string, { Path: string; Exists: boolean; Said: boolean }>;
   Keep: string[];
   KeepVersions: number;
+  /** By "kind:name": the applications that keep another number of copies. */
+  KeepVersionsBy?: Record<string, number>;
+}
+
+/** A copy of an application kept when its files were replaced, to go back to. */
+export interface KeptCopy {
+  Id: string;
+  At: string | null;
+  /** The version that was running when the copy was made. */
+  Version: string | null;
+  Package: string | null;
+  /** package: a package replaced the files; before-revert / before-restore: what it had before going back. */
+  Why: 'package' | 'before-revert' | 'before-restore' | string;
+  By: string | null;
+  Reason: string | null;
+  Files: number;
+  Bytes: number;
+}
+
+/** Something that changed the files of an application, with who did it and why. */
+export interface CopyChange {
+  At: string;
+  By: string | null;
+  What: 'replaced' | 'reverted' | 'restored' | string;
+  Package: string | null;
+  Backup: string | null;
+  FromVersion: string | null;
+  ToVersion: string | null;
+  Reason: string | null;
+  Ok: boolean;
+  Problem: string | null;
+}
+
+export interface KeptCopies {
+  Target: TransportTarget;
+  Folder: string;
+  KeepVersions: number;
+  KeepVersionsDefault: number;
+  KeepVersionsOwn: number | null;
+  Backups: KeptCopy[];
+  History: CopyChange[];
 }
 
 /** An object whose script has the text that was searched for. */
@@ -1158,6 +1218,8 @@ export interface TransportRoutes {
 
 /** The rules of this environment for what changes it. Only the master changes them. */
 export interface TransportPolicy {
+  /** Packages are made here. Off: they only arrive, and versions by hand go off with it. */
+  createPackages: boolean;
   /** A version may come in by hand: upload, inbox, a script written here, an application from a zip. */
   manualVersions: boolean;
   /** Whoever made a package does not approve it here. */

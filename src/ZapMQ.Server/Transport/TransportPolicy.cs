@@ -4,12 +4,20 @@ using System.Text.Json;
 namespace ZapMQ.Server.Transport;
 
 /// <summary>
-/// The rules of this environment for what changes it: whether a new version may come in by hand,
-/// or only in a package from another environment; whether whoever made a package may also approve
-/// it; and at what hours packages are applied. Only the master changes them; they hold at once.
+/// The rules of this environment for what changes it: whether packages are made here at all;
+/// whether a new version may come in by hand, or only in a package from another environment;
+/// whether whoever made a package may also approve it; and at what hours packages are applied.
+/// Only the master changes them; they hold at once.
 /// </summary>
 public sealed class TransportPolicy
 {
+    /// <summary>
+    /// Packages are made here: open, put together, closed, new versions. Off, this environment
+    /// only receives them, approves and applies them, and sends on the ones applied here. A
+    /// version by hand is always made into a package, so it goes off with this.
+    /// </summary>
+    public bool CreatePackages { get; set; } = true;
+
     /// <summary>
     /// A version brought here by hand: the zip of a folder, what was left in the inbox, a script
     /// written or imported, an application created from a zip. Off: only what arrives in a package.
@@ -86,7 +94,7 @@ public sealed class TransportPolicyStore
             throw new TransportRefused("A janela começa e termina na mesma hora");
         var policy = new TransportPolicy
         {
-            ManualVersions = wanted.ManualVersions, SeparateApprover = wanted.SeparateApprover,
+            CreatePackages = wanted.CreatePackages, ManualVersions = wanted.CreatePackages && wanted.ManualVersions, SeparateApprover = wanted.SeparateApprover,
             WindowStart = string.IsNullOrEmpty(start) ? null : TransportPolicy.Hour(start)!.Value.ToString(@"hh\:mm"),
             WindowEnd = string.IsNullOrEmpty(end) ? null : TransportPolicy.Hour(end)!.Value.ToString(@"hh\:mm"),
             ChangedAt = now, ChangedBy = by
@@ -103,10 +111,20 @@ public sealed class TransportPolicyStore
     }
 
     /// <summary>
+    /// Refuses making or changing a package where packages are not made.
+    /// </summary>
+    public void RequirePackages()
+    {
+        if (!Current().CreatePackages)
+            throw new TransportRefused("Neste ambiente não se criam pacotes: os que chegam de outros ambientes são aprovados, aplicados e seguem adiante. Quem pode mudar isso é o usuário master, em Configurações → Regras do ambiente.", StatusCodes.Status403Forbidden);
+    }
+
+    /// <summary>
     /// Refuses what brings a version by hand where only packages may.
     /// </summary>
     public void RequireManual()
     {
+        RequirePackages();
         if (!Current().ManualVersions)
             throw new TransportRefused("Neste ambiente as versões novas chegam só por transporte. Quem pode mudar isso é o usuário master, em Configurações → Regras do ambiente.", StatusCodes.Status403Forbidden);
     }

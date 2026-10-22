@@ -125,6 +125,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
 
     private void RequireDraft(string? draft)
     {
+        policy.RequirePackages();
         if (store.Draft(draft) is null)
             throw new TransportRefused("Escolha um pacote aberto, ou crie um, para incluir isso nele", StatusCodes.Status409Conflict);
     }
@@ -483,6 +484,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// </summary>
     public async Task<PackageRecord> Close(string? draftId, string? name, string? description, IReadOnlyList<string>? ids, bool keepOrder, string by, CancellationToken cancellation)
     {
+        policy.RequirePackages();
         var draft = store.Draft(draftId) ?? throw new TransportRefused("Esse pacote não está mais aberto", StatusCodes.Status404NotFound);
         name = string.IsNullOrWhiteSpace(name) ? draft.Name : name;
         if (string.IsNullOrWhiteSpace(name))
@@ -505,7 +507,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         {
             var item = new PackageItem
             {
-                Kind = area_.Kind, Action = area_.Action, ObjectKind = area_.ObjectKind, Variety = area_.Variety, Schema = area_.Schema, Name = area_.Name, Title = area_.Title, Database = area_.Database
+                Kind = area_.Kind, Action = area_.Action, ObjectKind = area_.ObjectKind, Variety = area_.Variety, Schema = area_.Schema, Name = area_.Name, Title = area_.Title, Database = area_.Database,
+                AddedBy = string.IsNullOrEmpty(area_.AddedBy) ? by : area_.AddedBy
             };
             if (area_.Kind != "database")
             {

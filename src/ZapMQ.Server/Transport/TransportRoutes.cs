@@ -618,6 +618,7 @@ public sealed class TransportSender(TransportRouteStore routes, TransportStore s
             throw new TransportRefused(record.Received
                 ? "Um pacote que chegou de outro ambiente só segue adiante depois de aplicado aqui"
                 : "Só um pacote fechado (ou já aplicado) pode ser enviado");
+        Releases.Require(record);
         // Each version is whole: only the newest one goes on.
         if (store.Newer(record.Manifest) is { } newer)
             throw new TransportRefused($"Este ambiente já tem a versão {newer} deste pacote: envie a mais nova, que leva tudo o que esta leva", StatusCodes.Status409Conflict);

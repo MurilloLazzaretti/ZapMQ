@@ -53,7 +53,7 @@ import { TransportTabs } from '../shared/transport-tabs';
           <div class="keep">
             @for (pattern of now.Keep; track pattern) { <span class="pill mono">{{ pattern }}</span> }
           </div>
-          <p class="muted note pad">São guardadas as últimas {{ now.KeepVersions }} cópias de cada aplicação substituída. Estes dois ajustes ficam em <code>Transport</code>, no <code>Environment.json</code>.</p>
+          <p class="muted note pad">São guardadas as últimas {{ now.KeepVersions }} cópias de cada aplicação substituída (o padrão; cada aplicação pode guardar outro número, em Processos e serviços → Aplicações). Estes dois ajustes ficam em <code>Transport</code>, no <code>Environment.json</code>.</p>
         </section>
       } @else {
         <section class="panel empty"><span>Lendo…</span></section>

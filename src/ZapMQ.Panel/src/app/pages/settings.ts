@@ -76,7 +76,7 @@ const SECTIONS: Section[] = [
       { key: 'SiteName', label: 'Nome dos sites de uma API nova', kind: 'text', hint: '{name} é o nome da API, {n} o número da instância. Vazio: o padrão dos sites que existem.' },
       { key: 'AllowCreate', label: 'Permitir criar e excluir aplicações pelo painel', kind: 'bool', fallback: 'true' },
       { key: 'StopSeconds', label: 'Espera para parar antes de trocar (s)', kind: 'number', fallback: '90' },
-      { key: 'KeepVersions', label: 'Cópias guardadas de cada aplicação', kind: 'number', fallback: '3', hint: 'As versões substituídas, para reverter.' },
+      { key: 'KeepVersions', label: 'Cópias guardadas de cada aplicação', kind: 'number', fallback: '3', hint: 'O padrão de todas: as versões substituídas, para voltar a elas. Cada aplicação pode guardar outro número, na tela dela. Atingido, a próxima troca apaga a cópia mais antiga.' },
       { key: 'Keep', label: 'Arquivos do ambiente', kind: 'list', hint: 'Nunca levados num pacote nem substituídos por um. Um por linha; pasta termina com /. Vazio: o padrão.', fallback: 'appsettings*.json\nweb.config\nConfigWorkers.json\n*.ini\nenvironment.js\nenv.json\n*.db\n*.db-wal\n*.db-shm\nlogs/' },
       { key: 'Directory', label: 'Pasta de trabalho do transporte', kind: 'text', fallback: 'transport', hint: 'Cópias guardadas e entradas. Relativa à pasta de dados do Worker Control.' },
     ],
@@ -192,7 +192,7 @@ export class SettingsPage implements OnInit {
   protected readonly ownProblem = signal('');
 
   /** The rules of the environment being edited: they hold as soon as they are saved. */
-  protected rules = { manualVersions: false, separateApprover: false, windowStart: '', windowEnd: '' };
+  protected rules = { createPackages: true, manualVersions: false, separateApprover: false, windowStart: '', windowEnd: '' };
   protected readonly rulesDirty = signal(false);
   protected readonly rulesSaving = signal(false);
   protected readonly rulesProblem = signal('');
@@ -201,7 +201,7 @@ export class SettingsPage implements OnInit {
     this.api.policy().subscribe({
       next: (policy) => {
         this.transport.policy.set(policy);
-        this.rules = { manualVersions: policy.manualVersions, separateApprover: policy.separateApprover, windowStart: policy.windowStart ?? '', windowEnd: policy.windowEnd ?? '' };
+        this.rules = { createPackages: policy.createPackages !== false, manualVersions: policy.manualVersions, separateApprover: policy.separateApprover, windowStart: policy.windowStart ?? '', windowEnd: policy.windowEnd ?? '' };
         this.rulesDirty.set(false);
       },
       error: () => undefined,

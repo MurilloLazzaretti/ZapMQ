@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult,
   PanelUser,
-  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, TransportTarget, PackageDetail, PackageDraft, Comparison, ComparedFile, TransportPolicy, PackageItemDetail, PackageSummary, TransportSummary,
+  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, KeptCopies, TransportTarget, PackageDetail, PackageDraft, Comparison, ComparedFile, TransportPolicy, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
   HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WebSite, WebSwitched, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending, InstallChoice } from './models';
@@ -264,7 +264,7 @@ export class Api {
     return this.http.get<TransportPolicy>('api/transport/policy');
   }
 
-  setPolicy(policy: { manualVersions: boolean; separateApprover: boolean; windowStart: string | null; windowEnd: string | null }): Observable<TransportPolicy> {
+  setPolicy(policy: { createPackages: boolean; manualVersions: boolean; separateApprover: boolean; windowStart: string | null; windowEnd: string | null }): Observable<TransportPolicy> {
     return this.http.put<TransportPolicy>('api/transport/policy', policy);
   }
 
@@ -288,6 +288,23 @@ export class Api {
   /** The next version of a package made here, open with what the newest one carries. */
   newVersion(id: string): Observable<PackageDraft> {
     return this.http.post<PackageDraft>(`api/transport/packages/${id}/versions`, null);
+  }
+
+  /** Says the items of a user in an open package may go; the master may say it for somebody else. */
+  releaseDraft(id: string, user: string | null = null): Observable<PackageDraft> {
+    return this.http.post<PackageDraft>(`api/transport/drafts/${id}/release`, { user });
+  }
+
+  withdrawDraft(id: string, user: string | null = null): Observable<PackageDraft> {
+    return this.http.post<PackageDraft>(`api/transport/drafts/${id}/withdraw`, { user });
+  }
+
+  releasePackage(id: string, user: string | null = null): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/release`, { user });
+  }
+
+  withdrawPackage(id: string, user: string | null = null): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/withdraw`, { user });
   }
 
   area(draft: string): Observable<{ environment: string; draft: PackageDraft | null; items: AreaItem[] }> {
@@ -426,6 +443,20 @@ export class Api {
   }
 
   /** The files of an application that belong to the environment. */
+  /** The copies kept of an application, what was done to it and how many it keeps. */
+  keptCopies(kind: string, name: string): Observable<KeptCopies> {
+    return this.http.get<KeptCopies>('api/transport/backups', { params: { kind, name } });
+  }
+
+  restoreCopy(kind: string, name: string, backup: string, reason: string, force: boolean): Observable<{ Applied: boolean; Problem: string | null; Backup: string | null; Messages: string[] }> {
+    return this.http.post<{ Applied: boolean; Problem: string | null; Backup: string | null; Messages: string[] }>('api/transport/backups/restore', { kind, name, backup, reason, force });
+  }
+
+  /** How many copies are kept: of one application (null goes back to the number of every one), or, without kind and name, of every one. */
+  setKeptCopies(kind: string | null, name: string | null, value: number | null): Observable<unknown> {
+    return this.http.put('api/transport/backups/keep', { kind, name, value });
+  }
+
   targetFiles(kind: string, name: string): Observable<{ Target: TransportTarget; Files: TargetFile[] }> {
     return this.http.get<{ Target: TransportTarget; Files: TargetFile[] }>('api/transport/files', { params: { kind, name } });
   }

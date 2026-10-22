@@ -62,6 +62,53 @@ public sealed class PackageDraft
     public string Description { get; set; } = "";
     public string CreatedBy { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>
+    /// Who already said what they put in it may go. Changing what one put in takes their word back.
+    /// </summary>
+    public List<Release> Releases { get; set; } = [];
+}
+
+/// <summary>
+/// Somebody who put items in a package said they may go: all of theirs at once. Given by the
+/// master in their place, it says so.
+/// </summary>
+public sealed class Release
+{
+    public string User { get; set; } = "";
+    public string By { get; set; } = "";
+    public DateTimeOffset At { get; set; }
+}
+
+/// <summary>
+/// Whose word a package made here waits for before it goes to another environment: everybody who
+/// put something in it.
+/// </summary>
+public static class Releases
+{
+    /// <summary>
+    /// Who put items in, in the order they first appear. An item of before this was known is of whoever closed the package.
+    /// </summary>
+    public static List<string> Contributors(IEnumerable<string?> addedBy, string fallback) =>
+        [.. addedBy.Select(user => string.IsNullOrEmpty(user) ? fallback : user!).Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    public static List<string> Contributors(PackageManifest manifest) => Contributors(manifest.Items.Select(item => item.AddedBy), manifest.CreatedBy);
+
+    /// <summary>
+    /// Who has not said their items may go yet. Nobody, for a package that came from somewhere else,
+    /// nor for one closed before who put each item in was kept: it went on as it did then.
+    /// </summary>
+    public static List<string> Waiting(PackageRecord record) => record.Received || record.Manifest.Items.All(item => string.IsNullOrEmpty(item.AddedBy)) ? [] :
+        [.. Contributors(record.Manifest).Where(user => !record.Releases.Any(release => string.Equals(release.User, user, StringComparison.OrdinalIgnoreCase)))];
+
+    /// <summary>
+    /// Refuses sending on a package that still waits for somebody.
+    /// </summary>
+    public static void Require(PackageRecord record)
+    {
+        if (Waiting(record) is { Count: > 0 } waiting)
+            throw new TransportRefused($"O pacote só segue adiante quando todos que incluíram itens nele liberarem. Falta: {string.Join(", ", waiting)}.", StatusCodes.Status409Conflict);
+    }
 }
 
 /// <summary>
@@ -93,6 +140,11 @@ public sealed class PackageItem
     public string? Name { get; set; }
     public string? Title { get; set; }
     public string? Database { get; set; }
+
+    /// <summary>
+    /// Who put it in the package. Empty in a package of before this was kept.
+    /// </summary>
+    public string? AddedBy { get; set; }
 
     /// <summary>
     /// Of the script the item carries.
@@ -350,6 +402,11 @@ public sealed class PackageRecord
     /// part of what happened there and is not deleted here any more.
     /// </summary>
     public List<Delivery> Deliveries { get; set; } = [];
+
+    /// <summary>
+    /// For a package made here: who said their items may go. It goes on only with everybody's word.
+    /// </summary>
+    public List<Release> Releases { get; set; } = [];
 
     /// <summary>
     /// By item: how what this environment does not have yet is to be installed, as said when approving.

@@ -6,7 +6,7 @@ import { Api } from './api';
 import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { DraftPicker } from '../shared/draft-picker';
-import { PackageDraft, PackageStatus, TransportPolicy, TransportSummary } from './models';
+import { PackageDraft, PackageRelease, PackageStatus, TransportPolicy, TransportSummary } from './models';
 
 const STATUS: Record<PackageStatus, { text: string; tone: string }> = {
   Closed: { text: 'fechado', tone: 'info' },
@@ -68,6 +68,41 @@ export function targetIcon(kind: string): string {
   return TARGETS[kind]?.icon ?? 'deployed_code';
 }
 
+/** The items of one person in a package, by kind, and whether that person said they may go. */
+export interface ItemGroup<T> {
+  user: string;
+  release: PackageRelease | null;
+  count: number;
+  kinds: { kind: string; label: string; icon: string; items: T[] }[];
+}
+
+const GROUP_ORDER = ['database', ...TARGET_KINDS];
+
+/**
+ * The items of a package, first by who put them in and then by kind: the database first, then
+ * the applications in the order they are applied.
+ */
+export function groupItems<T extends { kind: string }>(items: T[], addedBy: (item: T) => string, releases: PackageRelease[]): ItemGroup<T>[] {
+  const groups: ItemGroup<T>[] = [];
+  for (const item of items) {
+    const user = addedBy(item) || '?';
+    let group = groups.find((candidate) => candidate.user.toLowerCase() === user.toLowerCase());
+    if (!group) {
+      group = { user, release: releases.find((release) => release.user.toLowerCase() === user.toLowerCase()) ?? null, count: 0, kinds: [] };
+      groups.push(group);
+    }
+    let kind = group.kinds.find((candidate) => candidate.kind === item.kind);
+    if (!kind) {
+      kind = { kind: item.kind, label: item.kind === 'database' ? 'Banco de dados' : targetName(item.kind, true), icon: item.kind === 'database' ? 'database' : targetIcon(item.kind), items: [] };
+      group.kinds.push(kind);
+      group.kinds.sort((one, other) => GROUP_ORDER.indexOf(one.kind) - GROUP_ORDER.indexOf(other.kind));
+    }
+    kind.items.push(item);
+    group.count++;
+  }
+  return groups;
+}
+
 export function itemAction(action: string): string {
   return ACTIONS[action]?.text ?? action;
 }
@@ -81,6 +116,8 @@ export function historyText(what: string): string {
   return (
     {
       closed: 'Fechado',
+      released: 'Liberado para seguir',
+      'release-withdrawn': 'Liberação desfeita',
       downloaded: 'Baixado como arquivo',
       sent: 'Enviado',
       'send-failed': 'Envio não concluído',
@@ -119,7 +156,9 @@ export class Transport {
 
   /** The rules of this environment: until they are read, nothing comes in by hand. */
   readonly policy = signal<TransportPolicy | null>(null);
-  readonly manual = computed(() => this.policy()?.manualVersions === true);
+  /** Packages are made here; until the rules are read, it is taken that they are, and the server says otherwise. */
+  readonly packages = computed(() => this.policy()?.createPackages !== false);
+  readonly manual = computed(() => this.packages() && this.policy()?.manualVersions === true);
 
   /** The open package things go in from the screens, as chosen last in this browser. */
   readonly current = signal<PackageDraft | null>(null);
@@ -170,6 +209,10 @@ export class Transport {
    * one chosen last already marked; or a new one. Null when nobody answered.
    */
   async draftFor(fresh = false, suggested?: { name: string; description: string }): Promise<PackageDraft | null> {
+    if (!this.packages()) {
+      this.snack.open('Neste ambiente não se criam pacotes (Configurações → Regras do ambiente).', 'Fechar', { duration: 8000 });
+      return null;
+    }
     let drafts: PackageDraft[];
     try {
       drafts = (await firstValueFrom(this.api.drafts())).drafts;

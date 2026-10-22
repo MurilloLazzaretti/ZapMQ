@@ -213,6 +213,9 @@ public sealed class TransportStore
             if (item.Action != "Script" && _area.FirstOrDefault(other => other.Draft == item.Draft && Same(other, item)) is { } already)
             {
                 // Asked to be dropped after having been asked to be carried, or the other way round: the last word stands.
+                TakeBack(item.Draft, already.AddedBy);
+                TakeBack(item.Draft, item.AddedBy);
+                SaveDrafts();
                 already.Action = item.Action;
                 already.Fingerprint = item.Fingerprint;
                 already.Version = item.Version;
@@ -230,8 +233,19 @@ public sealed class TransportStore
                 WriteBytes(AreaFile(item.Id), files);
             _area.Add(item);
             SaveArea();
+            TakeBack(item.Draft, item.AddedBy);
+            SaveDrafts();
             return Copy(item);
         }
+    }
+
+    /// <summary>
+    /// What somebody put in an open package changed: their word that it may go no longer holds.
+    /// </summary>
+    private void TakeBack(string? draft, string? user)
+    {
+        if (_drafts.FirstOrDefault(candidate => candidate.Id == draft) is { } found && !string.IsNullOrEmpty(user))
+            found.Releases.RemoveAll(release => string.Equals(release.User, user, StringComparison.OrdinalIgnoreCase));
     }
 
     private static void WriteBytes(string path, byte[] bytes)
@@ -249,13 +263,89 @@ public sealed class TransportStore
     {
         lock (_gate)
         {
-            if (_area.RemoveAll(item => item.Id == id) == 0)
+            if (_area.FirstOrDefault(item => item.Id == id) is not { } gone)
                 return false;
+            _area.Remove(gone);
             if (File.Exists(AreaFile(id)))
                 File.Delete(AreaFile(id));
             SaveArea();
+            TakeBack(gone.Draft, gone.AddedBy);
+            SaveDrafts();
             return true;
         }
+    }
+
+    // ---------------------------------------------------------------- releases
+
+    /// <summary>
+    /// Somebody says what they put in an open package may go, or the master says it for them.
+    /// </summary>
+    public PackageDraft ReleaseDraft(string id, string user, string by, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var draft = _drafts.FirstOrDefault(candidate => candidate.Id == id) ?? throw new TransportRefused("Esse pacote não está mais aberto", StatusCodes.Status404NotFound);
+            if (!_area.Any(item => item.Draft == id && string.Equals(item.AddedBy, user, StringComparison.OrdinalIgnoreCase)))
+                throw new TransportRefused($"{user} não tem itens neste pacote");
+            draft.Releases.RemoveAll(release => string.Equals(release.User, user, StringComparison.OrdinalIgnoreCase));
+            draft.Releases.Add(new Release { User = user, By = by, At = now });
+            SaveDrafts();
+            return Copy(draft);
+        }
+    }
+
+    public PackageDraft WithdrawDraft(string id, string user)
+    {
+        lock (_gate)
+        {
+            var draft = _drafts.FirstOrDefault(candidate => candidate.Id == id) ?? throw new TransportRefused("Esse pacote não está mais aberto", StatusCodes.Status404NotFound);
+            TakeBack(id, user);
+            SaveDrafts();
+            return Copy(draft);
+        }
+    }
+
+    /// <summary>
+    /// The same for a package made here and closed: once everybody did, it may be sent.
+    /// </summary>
+    public PackageRecord Release(string id, string user, string by, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var record = Releasable(id);
+            if (!Releases.Contributors(record.Manifest).Contains(user, StringComparer.OrdinalIgnoreCase))
+                throw new TransportRefused($"{user} não tem itens neste pacote");
+            record.Releases.RemoveAll(release => string.Equals(release.User, user, StringComparison.OrdinalIgnoreCase));
+            record.Releases.Add(new Release { User = user, By = by, At = now });
+            record.History.Add(new HistoryEntry { At = now, By = by, What = "released", Detail = string.Equals(user, by, StringComparison.OrdinalIgnoreCase) ? null : $"em nome de {user}" });
+            Save(record);
+            return Copy(record);
+        }
+    }
+
+    public PackageRecord Withdraw(string id, string user, string by, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var record = Releasable(id);
+            if (record.Deliveries.Count > 0)
+                throw new TransportRefused("O pacote já foi entregue a outro ambiente: a liberação não pode mais ser desfeita");
+            if (record.Releases.RemoveAll(release => string.Equals(release.User, user, StringComparison.OrdinalIgnoreCase)) > 0)
+            {
+                record.History.Add(new HistoryEntry { At = now, By = by, What = "release-withdrawn", Detail = string.Equals(user, by, StringComparison.OrdinalIgnoreCase) ? null : $"de {user}" });
+                Save(record);
+            }
+            return Copy(record);
+        }
+    }
+
+    private PackageRecord Releasable(string id)
+    {
+        if (!_packages.TryGetValue(id, out var record))
+            throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
+        if (record.Received)
+            throw new TransportRefused($"Este pacote foi feito em {record.Manifest.Origin}: a liberação é feita lá");
+        return record;
     }
 
     // ---------------------------------------------------------------- packages
@@ -286,6 +376,10 @@ public sealed class TransportStore
                 Manifest = manifest, Status = "Closed", Sha256 = Hash(bytes), Size = bytes.Length,
                 History = [new HistoryEntry { At = now, By = by, What = "closed", Detail = $"{manifest.Items.Count} item(s)" }]
             };
+            // Who already said, in the open package, that their items may go.
+            var contributors = Releases.Contributors(manifest);
+            if (draft is not null && _drafts.FirstOrDefault(candidate => candidate.Id == draft) is { } open)
+                record.Releases = [.. open.Releases.Where(release => contributors.Contains(release.User, StringComparer.OrdinalIgnoreCase))];
             Directory.CreateDirectory(Folder(manifest.Id));
             File.WriteAllBytes(FilePath(manifest.Id), bytes);
             _packages[manifest.Id] = record;
@@ -456,7 +550,7 @@ public sealed class TransportStore
             var back = new AreaItem
             {
                 Id = Guid.NewGuid().ToString("N")[..12], Draft = draft, Kind = item.Kind, Action = item.Action, ObjectKind = item.ObjectKind, Variety = item.Variety, Schema = item.Schema, Name = item.Name,
-                Title = item.Title, Database = item.Database, Fingerprint = item.Fingerprint, AddedBy = by, AddedAt = now,
+                Title = item.Title, Database = item.Database, Fingerprint = item.Fingerprint, AddedBy = string.IsNullOrEmpty(item.AddedBy) ? record.Manifest.CreatedBy : item.AddedBy, AddedAt = now,
                 Script = item.Action == "Script" ? Script(id, item.Number) : null, Version = item.Version, Files = item.Files, Size = item.Size
             };
             if (back.Action == "Script" ? back.Script is null : _area.Any(other => other.Draft == draft && Same(other, back)))

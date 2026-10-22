@@ -20,7 +20,7 @@
             }
             @if (now.draft; as open) {
               <a mat-button [routerLink]="['/transporte/aberto', open.id]"><mat-icon svgIcon="edit_note" /> v{{ open.version }} aberta</a>
-            } @else if (!now.package.received && !now.package.newer) {
+            } @else if (!now.package.received && !now.package.newer && transport.packages()) {
               <button mat-button (click)="nextVersion()" [disabled]="busy()" matTooltip="Abre a versão seguinte com tudo o que esta leva, para corrigir ou acrescentar"><mat-icon svgIcon="add" /> Nova versão</button>
             }
           </p>
@@ -60,7 +60,7 @@
           @if (!now.package.deliveries.length) {
             <button mat-button (click)="remove()" [disabled]="busy()"><mat-icon svgIcon="delete" /> Excluir</button>
           }
-          <button mat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button>
+          <button mat-button (click)="download()" [disabled]="!!now.package.waiting.length" [matTooltip]="now.package.waiting.length ? 'Disponível quando todos liberarem: falta ' + now.package.waiting.join(', ') : ''"><mat-icon svgIcon="download" /> Baixar pacote</button>
         </section>
         <!-- It can also be applied right here, where it was made: a new version that starts its way in this environment. -->
         <section class="panel decide" [class.warned]="warnings().blocked || warnings().conflicts || warnings().missing">
@@ -144,7 +144,7 @@
         <section class="panel decide"><div><strong>Aplicando…</strong><span class="muted">{{ now.results.length }} de {{ now.items.length }} itens.</span></div></section>
       }
       @case ('Applied') {
-        <section class="panel decide done"><div><strong>Aplicado em {{ now.environment }}.</strong><span class="muted">{{ now.items.length === 1 ? 'O item foi aplicado.' : 'Todos os ' + now.items.length + ' itens foram aplicados.' }} O mesmo arquivo pode seguir para o próximo ambiente.</span></div><span class="spacer"></span><button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter</button><button mat-button (click)="download()"><mat-icon svgIcon="download" /> Baixar pacote</button></section>
+        <section class="panel decide done"><div><strong>Aplicado em {{ now.environment }}.</strong><span class="muted">{{ now.items.length === 1 ? 'O item foi aplicado.' : 'Todos os ' + now.items.length + ' itens foram aplicados.' }} O mesmo arquivo pode seguir para o próximo ambiente.</span></div><span class="spacer"></span><button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter</button><button mat-button (click)="download()" [disabled]="!!now.package.waiting.length" [matTooltip]="now.package.waiting.length ? 'Disponível quando todos liberarem: falta ' + now.package.waiting.join(', ') : ''"><mat-icon svgIcon="download" /> Baixar pacote</button></section>
       }
       @case ('Partial') {
         <section class="panel decide warned"><div><strong class="bad">Aplicado em parte.</strong><span class="muted">A aplicação parou no primeiro item que falhou. O que foi aplicado antes continua aplicado; nada foi desfeito.</span></div><span class="spacer"></span>@if (now.package.acknowledgedBy) { <span class="muted acked">{{ now.package.acknowledgedBy }} deu ciência</span> } @else { <button mat-button (click)="acknowledge()" [disabled]="busy()" matTooltip="O pacote fica como registro e deixa de contar no aviso do menu"><mat-icon svgIcon="done_all" /> Dar ciência</button> }<button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter o que foi aplicado</button></section>
@@ -190,7 +190,11 @@
     }
 
     @if ((now.package.status === 'Closed' && !now.package.received) || now.package.status === 'Applied') {
-      <zap-package-send [packageId]="now.package.id" (delivered)="reload()" />
+      @if (now.package.waiting.length) {
+        <div class="notice" role="status"><mat-icon svgIcon="hourglass_empty" /><div>O envio a outro ambiente fica disponível quando todos que incluíram itens liberarem. Falta: <strong>{{ now.package.waiting.join(', ') }}</strong>.</div></div>
+      } @else {
+        <zap-package-send [packageId]="now.package.id" (delivered)="reload()" />
+      }
     }
 
     @if (forcible()) {
@@ -200,113 +204,167 @@
     }
 
     <section class="panel">
-      <div class="panel-head"><h2>Itens</h2><span class="hint">na ordem em que são aplicados · clique para ver o conteúdo</span></div>
+      <div class="panel-head">
+        <h2>Itens</h2><span class="hint">{{ byPerson() ? 'por quem incluiu e por tipo' : 'na ordem em que são aplicados' }} · clique para ver o conteúdo</span>
+        <span class="spacer"></span>
+        <div class="seeing" role="group" aria-label="Como ver os itens">
+          <button type="button" [class.on]="byPerson()" [attr.aria-pressed]="byPerson()" (click)="seeByPerson(true)">Por pessoa e tipo</button>
+          <button type="button" [class.on]="!byPerson()" [attr.aria-pressed]="!byPerson()" (click)="seeByPerson(false)">Ordem de aplicação</button>
+        </div>
+      </div>
+      @if (!now.package.received && now.package.status !== 'Superseded') {
+        <div class="release-line" [class.done]="!now.package.waiting.length">
+          <mat-icon [svgIcon]="now.package.waiting.length ? 'hourglass_empty' : 'task_alt'" />
+          <span>
+            @if (now.package.waiting.length) {
+              Liberado por {{ now.package.contributors.length - now.package.waiting.length }} de {{ now.package.contributors.length }}. Falta: <strong>{{ now.package.waiting.join(', ') }}</strong>.
+              O pacote só segue a outro ambiente, por rota ou como arquivo, depois que todos liberarem.
+            } @else {
+              Todos que incluíram itens liberaram: o pacote pode seguir a outro ambiente.
+            }
+          </span>
+        </div>
+      }
       <div class="items">
-        @for (item of now.items; track item.number) {
-          <div class="item" [class.open]="open() === item.number">
-            <button type="button" class="row" (click)="toggle(item)" [attr.aria-expanded]="open() === item.number">
-              <span class="number num">{{ item.number }}</span>
-              <span class="what">
-                @if (item.kind !== 'database') {
-                  <mat-icon [svgIcon]="targetIcon(item.kind)" [matTooltip]="targetName(item.kind)" /><span><strong>{{ item.name }}</strong> <span class="muted">· {{ targetName(item.kind) }} · {{ item.version || 'sem versão' }} · {{ item.files }} arquivos</span></span>
-                } @else if (item.action === 'Script') {
-                  <mat-icon svgIcon="code" /><strong>{{ item.title }}</strong>
+        @if (byPerson()) {
+          @for (group of groups(); track group.user) {
+            <div class="group-head">
+              <mat-icon svgIcon="account_circle" />
+              <strong>{{ group.user }}</strong>
+              <span class="muted">{{ group.count }} {{ group.count === 1 ? 'item' : 'itens' }}</span>
+              @if (!now.package.received) {
+                @if (group.release; as release) {
+                  <span class="pill ok" [matTooltip]="'Em ' + (release.at | when) + (release.by.toLowerCase() !== release.user.toLowerCase() ? ', pelo master ' + release.by : '')">liberado {{ release.at | ago }}@if (release.by.toLowerCase() !== release.user.toLowerCase()) { por {{ release.by }} }</span>
                 } @else {
-                  <mat-icon [svgIcon]="kindIcon(item.objectKind)" [matTooltip]="kindName(item.objectKind)" /><span><span class="muted">{{ item.schema }}.</span><strong>{{ item.name }}</strong></span>
+                  <span class="pill warn">não liberado</span>
                 }
-              </span>
-              @if (!installing().includes(item)) { <span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span> }
-              <span class="standing">
-                @if (result(item.number); as done) {
-                  @switch (done.reverted) {
-                    @case ('reverted') { <span class="pill warn" [matTooltip]="'Voltou a ser como era antes do pacote, em ' + (done.revertedAt | when)">revertido</span> }
-                    @case ('reverting') { <span class="pill primary">revertendo</span> }
-                    @case ('failed') { <span class="pill danger">reversão falhou</span> }
-                    @case ('unknown') { <span class="pill warn" matTooltip="O pedido de reversão foi feito e a resposta não chegou: pode ter voltado ou não. Confira.">reversão desconhecida</span> }
+                <span class="spacer"></span>
+                @if ((mine(group.user) || auth.master()) && now.package.status !== 'Superseded') {
+                  @if (!group.release) {
+                    <button mat-flat-button (click)="release(group.user)" [disabled]="busy()"><mat-icon svgIcon="task_alt" /> {{ mine(group.user) ? 'Liberar meus itens' : 'Liberar em nome de ' + group.user }}</button>
+                  } @else if (!now.package.deliveries.length) {
+                    <button mat-button (click)="withdraw(group.user)" [disabled]="busy()">Desfazer liberação</button>
                   }
-                  @switch (done.reverted === 'reverted' ? '' : done.status) {
-                    @case ('') {}
-                    @case ('applied') { <span class="pill ok">{{ done.did === 'skipped' ? 'já tinha rodado' : done.installed ? 'instalado' : done.did === 'replaced' ? 'substituído' : done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
-                    @case ('failed') { <span class="pill danger">falhou</span> }
-                    @default { <span class="pill warn" matTooltip="O pedido foi feito e a resposta não chegou: pode ter sido aplicado ou não. Confira no banco.">resultado desconhecido</span> }
-                  }
-                } @else if (now.package.status === 'Partial' || now.package.status === 'Failed' || now.package.status === 'RevertedPartly' || now.package.status === 'Reverting') {
-                  <span class="pill" matTooltip="A aplicação parou antes de chegar a este item">não aplicado</span>
-                } @else if (item.action !== 'Script' && state(item); as standing) {
-                  <span class="pill" [class]="'pill ' + standing.tone" [matTooltip]="standing.hint">{{ standing.text }}</span>
                 }
-              </span>
-              <mat-icon class="chevron" svgIcon="keyboard_arrow_down" />
-            </button>
-            @if (!now.package.received && item.install?.program) {
-              <p class="needs" role="note">
-                <mat-icon svgIcon="info" />
-                <span>Serviço que roda pelo nssm. Para ser instalado em outro ambiente, lá precisam já estar instalados o programa (<span class="mono">{{ item.install!.program }}</span>) e o nssm (<span class="mono">{{ item.install!.wrapper }}</span>): o pacote leva só os arquivos do serviço.</span>
-              </p>
-            }
-
-            @if (result(item.number); as done) {
-              @if (done.problem) {
-                <p class="trouble"><mat-icon svgIcon="error" /> <span>{{ done.problem }}@if (done.line) { <span class="muted"> (lote {{ done.batch }}, linha {{ done.line }})</span> }</span></p>
               }
-              @if (done.revertProblem && done.reverted !== 'reverted') {
-                <p class="trouble"><mat-icon svgIcon="error" /> <span>Reversão: {{ done.revertProblem }}</span></p>
-              }
-              @if (done.revertBackup) {
-                <p class="kept muted"><mat-icon svgIcon="folder" /> <span>A pasta como o pacote deixou ficou guardada em <span class="mono">{{ done.revertBackup }}</span></span></p>
-              }
-              @if (done.backup) {
-                <p class="kept muted"><mat-icon svgIcon="folder" /> <span>A pasta como estava antes ficou guardada em <span class="mono">{{ done.backup }}</span></span></p>
+            </div>
+            @for (kind of group.kinds; track kind.kind) {
+              <div class="kind-head"><mat-icon [svgIcon]="kind.icon" /> {{ kind.label }} <span class="muted">{{ kind.items.length }}</span></div>
+              @for (item of kind.items; track item.number) {
+                <ng-container *ngTemplateOutlet="row; context: { $implicit: item }" />
               }
             }
-            @if (lacking(item).length) {
-              <p class="trouble mild"><mat-icon svgIcon="warning" /> <span>Usa o que não existe aqui nem vem no pacote: <span class="mono">{{ lacking(item).join(', ') }}</span></span></p>
-            }
-
-            @if (open() === item.number && item.kind !== 'database') {
-              @if (content(); as files) {
-                <div class="content">
-                  <div class="content-head">
-                    <strong>{{ files.target ? 'O que muda na pasta' : 'O que o pacote traz' }}</strong>
-                    @if (files.target; as target) {
-                      <span class="muted">aqui: versão {{ target.Version || 'desconhecida' }} · <span class="mono">{{ target.Paths[0] }}</span>@if (target.Paths.length > 1) { e mais {{ target.Paths.length - 1 }} }</span>
-                    }
-                    @if (files.problem) { <span class="bad">{{ files.problem }}</span> }
-                  </div>
-                  @if (fileChanges().shown.length) {
-                    <ul class="files">
-                      @for (change of fileChanges().shown; track change.path) {
-                        <li><span class="pill" [class.info]="change.state === 'changed'" [class.ok]="change.state === 'added'" [class.danger]="change.state === 'removed'">{{ change.state === 'changed' ? 'alterado' : change.state === 'added' ? 'novo' : 'removido' }}</span><span class="mono">{{ change.path }}</span></li>
-                      }
-                    </ul>
-                  }
-                  <p class="muted same">{{ fileChanges().same === 1 ? '1 arquivo igual ao daqui.' : fileChanges().same ? fileChanges().same + ' arquivos iguais aos daqui.' : '' }} A configuração do ambiente não é tocada.</p>
-                </div>
-              } @else {
-                <p class="muted same">Lendo…</p>
-              }
-            }
-            @if (open() === item.number && item.kind === 'database') {
-              @if (compared(); as side) {
-                <div class="content">
-                  <div class="content-head">
-                    <strong>{{ side.title }}</strong>
-                    @if (side.both) { <span class="muted"><span class="plus">+{{ side.added | num }}</span> <span class="minus">−{{ side.removed | num }}</span> linhas</span> }
-                    @if (content()?.problem) { <span class="bad">{{ content()!.problem }}</span> }
-                  </div>
-                  @if (side.both && !side.added && !side.removed) {
-                    <p class="muted same">O que o pacote traz é igual ao que está aqui.</p>
-                  } @else {
-                    <zap-diff [lines]="side.lines" [compared]="side.both" />
-                  }
-                </div>
-              } @else {
-                <p class="muted same">Lendo…</p>
-              }
-            }
-          </div>
+          }
+        } @else {
+          @for (item of now.items; track item.number) {
+            <ng-container *ngTemplateOutlet="row; context: { $implicit: item }" />
+          }
         }
       </div>
+      <ng-template #row let-item>
+      <div class="item" [class.open]="open() === item.number">
+        <button type="button" class="row" (click)="toggle(item)" [attr.aria-expanded]="open() === item.number">
+          <span class="number num">{{ item.number }}</span>
+          <span class="what">
+            @if (item.kind !== 'database') {
+              <mat-icon [svgIcon]="targetIcon(item.kind)" [matTooltip]="targetName(item.kind)" /><span><strong>{{ item.name }}</strong> <span class="muted">· {{ targetName(item.kind) }} · {{ item.version || 'sem versão' }} · {{ item.files }} arquivos</span></span>
+            } @else if (item.action === 'Script') {
+              <mat-icon svgIcon="code" /><strong>{{ item.title }}</strong>
+            } @else {
+              <mat-icon [svgIcon]="kindIcon(item.objectKind)" [matTooltip]="kindName(item.objectKind)" /><span><span class="muted">{{ item.schema }}.</span><strong>{{ item.name }}</strong></span>
+            }
+          </span>
+          @if (!installing().includes(item)) { <span class="pill" [class]="'pill ' + itemTone(item.action)">{{ itemAction(item.action) }}</span> }
+          <span class="standing">
+            @if (result(item.number); as done) {
+              @switch (done.reverted) {
+                @case ('reverted') { <span class="pill warn" [matTooltip]="'Voltou a ser como era antes do pacote, em ' + (done.revertedAt | when)">revertido</span> }
+                @case ('reverting') { <span class="pill primary">revertendo</span> }
+                @case ('failed') { <span class="pill danger">reversão falhou</span> }
+                @case ('unknown') { <span class="pill warn" matTooltip="O pedido de reversão foi feito e a resposta não chegou: pode ter voltado ou não. Confira.">reversão desconhecida</span> }
+              }
+              @switch (done.reverted === 'reverted' ? '' : done.status) {
+                @case ('') {}
+                @case ('applied') { <span class="pill ok">{{ done.did === 'skipped' ? 'já tinha rodado' : done.installed ? 'instalado' : done.did === 'replaced' ? 'substituído' : done.did === 'created' ? 'criado' : done.did === 'altered' ? 'alterado' : done.did === 'dropped' ? 'apagado' : done.did === 'absent' ? 'já não existia' : 'aplicado' }}</span> }
+                @case ('failed') { <span class="pill danger">falhou</span> }
+                @default { <span class="pill warn" matTooltip="O pedido foi feito e a resposta não chegou: pode ter sido aplicado ou não. Confira no banco.">resultado desconhecido</span> }
+              }
+            } @else if (now.package.status === 'Partial' || now.package.status === 'Failed' || now.package.status === 'RevertedPartly' || now.package.status === 'Reverting') {
+              <span class="pill" matTooltip="A aplicação parou antes de chegar a este item">não aplicado</span>
+            } @else if (item.action !== 'Script' && state(item); as standing) {
+              <span class="pill" [class]="'pill ' + standing.tone" [matTooltip]="standing.hint">{{ standing.text }}</span>
+            }
+          </span>
+          <mat-icon class="chevron" svgIcon="keyboard_arrow_down" />
+        </button>
+        @if (!now.package.received && item.install?.program) {
+          <p class="needs" role="note">
+            <mat-icon svgIcon="info" />
+            <span>Serviço que roda pelo nssm. Para ser instalado em outro ambiente, lá precisam já estar instalados o programa (<span class="mono">{{ item.install!.program }}</span>) e o nssm (<span class="mono">{{ item.install!.wrapper }}</span>): o pacote leva só os arquivos do serviço.</span>
+          </p>
+        }
+
+        @if (result(item.number); as done) {
+          @if (done.problem) {
+            <p class="trouble"><mat-icon svgIcon="error" /> <span>{{ done.problem }}@if (done.line) { <span class="muted"> (lote {{ done.batch }}, linha {{ done.line }})</span> }</span></p>
+          }
+          @if (done.revertProblem && done.reverted !== 'reverted') {
+            <p class="trouble"><mat-icon svgIcon="error" /> <span>Reversão: {{ done.revertProblem }}</span></p>
+          }
+          @if (done.revertBackup) {
+            <p class="kept muted"><mat-icon svgIcon="folder" /> <span>A pasta como o pacote deixou ficou guardada em <span class="mono">{{ done.revertBackup }}</span></span></p>
+          }
+          @if (done.backup) {
+            <p class="kept muted"><mat-icon svgIcon="folder" /> <span>A pasta como estava antes ficou guardada em <span class="mono">{{ done.backup }}</span></span></p>
+          }
+        }
+        @if (lacking(item).length) {
+          <p class="trouble mild"><mat-icon svgIcon="warning" /> <span>Usa o que não existe aqui nem vem no pacote: <span class="mono">{{ lacking(item).join(', ') }}</span></span></p>
+        }
+
+        @if (open() === item.number && item.kind !== 'database') {
+          @if (content(); as files) {
+            <div class="content">
+              <div class="content-head">
+                <strong>{{ files.target ? 'O que muda na pasta' : 'O que o pacote traz' }}</strong>
+                @if (files.target; as target) {
+                  <span class="muted">aqui: versão {{ target.Version || 'desconhecida' }} · <span class="mono">{{ target.Paths[0] }}</span>@if (target.Paths.length > 1) { e mais {{ target.Paths.length - 1 }} }</span>
+                }
+                @if (files.problem) { <span class="bad">{{ files.problem }}</span> }
+              </div>
+              @if (fileChanges().shown.length) {
+                <ul class="files">
+                  @for (change of fileChanges().shown; track change.path) {
+                    <li><span class="pill" [class.info]="change.state === 'changed'" [class.ok]="change.state === 'added'" [class.danger]="change.state === 'removed'">{{ change.state === 'changed' ? 'alterado' : change.state === 'added' ? 'novo' : 'removido' }}</span><span class="mono">{{ change.path }}</span></li>
+                  }
+                </ul>
+              }
+              <p class="muted same">{{ fileChanges().same === 1 ? '1 arquivo igual ao daqui.' : fileChanges().same ? fileChanges().same + ' arquivos iguais aos daqui.' : '' }} A configuração do ambiente não é tocada.</p>
+            </div>
+          } @else {
+            <p class="muted same">Lendo…</p>
+          }
+        }
+        @if (open() === item.number && item.kind === 'database') {
+          @if (compared(); as side) {
+            <div class="content">
+              <div class="content-head">
+                <strong>{{ side.title }}</strong>
+                @if (side.both) { <span class="muted"><span class="plus">+{{ side.added | num }}</span> <span class="minus">−{{ side.removed | num }}</span> linhas</span> }
+                @if (content()?.problem) { <span class="bad">{{ content()!.problem }}</span> }
+              </div>
+              @if (side.both && !side.added && !side.removed) {
+                <p class="muted same">O que o pacote traz é igual ao que está aqui.</p>
+              } @else {
+                <zap-diff [lines]="side.lines" [compared]="side.both" />
+              }
+            </div>
+          } @else {
+            <p class="muted same">Lendo…</p>
+          }
+        }
+      </div>
+      </ng-template>
     </section>
 
     <section class="panel">

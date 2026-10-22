@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -11,9 +12,10 @@ import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { kindIcon, kindName, size } from '../core/database';
 import { diff } from '../core/diff';
-import { NumPipe, WhenPipe } from '../core/format';
+import { Auth } from '../core/auth';
+import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
 import { ApplicationDefaults, InstallChoice, ItemCheck, PackageDetail, PackageItem, PackageItemDetail, PackageResult } from '../core/models';
-import { Transport, historyText, itemAction, itemTone, statusName, statusTone, targetIcon, targetName } from '../core/transport';
+import { Transport, groupItems, historyText, itemAction, itemTone, statusName, statusTone, targetIcon, targetName } from '../core/transport';
 import { confirm } from '../shared/dialogs';
 import { InstallForm } from '../shared/install-form';
 import { PackageSend } from '../shared/package-send';
@@ -45,7 +47,7 @@ const FORCING = 'O que não parar no tempo de espera terá o processo encerrado 
  */
 @Component({
   selector: 'zap-transport-package',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, DiffView, NumPipe, WhenPipe, PackageSend, InstallForm],
+  imports: [FormsModule, RouterLink, NgTemplateOutlet, MatButtonModule, MatIconModule, MatTooltipModule, DiffView, AgoPipe, NumPipe, WhenPipe, PackageSend, InstallForm],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './transport-package.html',
   styleUrl: './transport-package.scss',
@@ -56,11 +58,49 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
-  private readonly transport = inject(Transport);
+  protected readonly transport = inject(Transport);
   private timer: ReturnType<typeof setInterval> | null = null;
   private id = '';
 
   protected readonly detail = signal<PackageDetail | null>(null);
+  protected readonly auth = inject(Auth);
+
+  /** The items by who put them in and by kind, or in the order they are applied; as chosen last in this browser. */
+  protected readonly byPerson = signal(remembered(SEEING) !== 'order');
+  protected readonly groups = computed(() => groupItems(this.detail()?.items ?? [], (item) => item.addedBy, this.detail()?.package.releases ?? []));
+
+  protected seeByPerson(yes: boolean): void {
+    this.byPerson.set(yes);
+    try {
+      localStorage.setItem(SEEING, yes ? 'person' : 'order');
+    } catch {
+      // Only a convenience.
+    }
+  }
+
+  protected mine(user: string): boolean {
+    return user.toLowerCase() === (this.auth.user() ?? '').toLowerCase();
+  }
+
+  /** All the items of a person may go on: theirs, or, for the master, somebody else's. */
+  protected async release(user: string): Promise<void> {
+    await this.releasing(() => this.api.releasePackage(this.id, this.mine(user) ? null : user));
+  }
+
+  protected async withdraw(user: string): Promise<void> {
+    await this.releasing(() => this.api.withdrawPackage(this.id, this.mine(user) ? null : user));
+  }
+
+  private async releasing(ask: () => ReturnType<Api['releasePackage']>): Promise<void> {
+    this.busy.set(true);
+    try {
+      this.detail.set(await firstValueFrom(ask()));
+    } catch (failure) {
+      this.say(failure);
+    } finally {
+      this.busy.set(false);
+    }
+  }
   protected readonly checks = signal<ItemCheck[] | null>(null);
   protected readonly checkProblem = signal('');
   protected readonly problem = signal('');
@@ -387,5 +427,15 @@ export class TransportPackagePage implements OnInit, OnDestroy {
         this.checkProblem.set(failure.error?.error ?? 'Não foi possível comparar com este ambiente.');
       },
     });
+  }
+}
+
+const SEEING = 'zapmq.transport.items';
+
+function remembered(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
   }
 }

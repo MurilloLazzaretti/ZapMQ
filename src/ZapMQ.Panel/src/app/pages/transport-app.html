@@ -85,6 +85,102 @@
       }
     </section>
 
+    <section class="panel copies">
+      <div class="panel-head">
+        <h2>Cópias guardadas</h2>
+        <span class="hint">cada vez que os arquivos são trocados, a versão que estava fica guardada aqui</span>
+      </div>
+      @if (copiesProblem()) {
+        <div class="empty"><span>{{ copiesProblem() }}</span></div>
+      } @else if (copies(); as kept) {
+        <div class="keep">
+          <span>Rodando agora: <strong>{{ now.Version ? 'versão ' + now.Version : 'versão não informada' }}</strong></span>
+          <span class="spacer"></span>
+          <label class="keep-field">
+            <span>Guardar</span>
+            <input type="number" min="1" max="50" [(ngModel)]="keepValue" (ngModelChange)="keepEdited.set(true)" aria-label="Quantas cópias guardar" />
+            <span>{{ keepValue === 1 ? 'cópia' : 'cópias' }}</span>
+          </label>
+          <span class="muted">
+            @if (kept.KeepVersionsOwn === null) { o padrão do ambiente } @else { próprio desta aplicação · padrão do ambiente: {{ kept.KeepVersionsDefault }} }
+          </span>
+          @if (keepEdited()) {
+            <button mat-flat-button (click)="saveKeep()" [disabled]="busy() || !(keepValue >= 1 && keepValue <= 50)"><mat-icon svgIcon="save" /> Gravar</button>
+          }
+          @if (kept.KeepVersionsOwn !== null) {
+            <button mat-button (click)="resetKeep()" [disabled]="busy()" matTooltip="Volta a usar o número de cópias de todas as aplicações, definido em Configurações">Usar o padrão</button>
+          }
+        </div>
+        <p class="muted about">Atingido esse número, a próxima troca apaga a cópia mais antiga. Voltar para uma cópia guarda antes a versão que está rodando, para que se possa voltar a ela depois do mesmo jeito.</p>
+
+        @if (restored(); as done) {
+          <div class="restored" [class.failed]="!done.Applied" role="status">
+            <strong>{{ done.Applied ? name + ' voltou para a cópia escolhida.' : 'A aplicação não voltou para a cópia.' }}</strong>
+            @if (done.Problem) { <span class="bad">{{ done.Problem }}</span> }
+            <details><summary>Passos registrados pelo Worker Control</summary><ol>@for (message of done.Messages; track $index) { <li>{{ message }}</li> }</ol></details>
+          </div>
+        }
+
+        @if (kept.Backups.length) {
+          <ul class="kept-list">
+            @for (copy of kept.Backups; track copy.Id; let first = $first) {
+              <li [class.open]="choosing() === copy.Id">
+                <div class="kept-row">
+                  <mat-icon svgIcon="history" />
+                  <span class="what">
+                    <strong>{{ copy.Version ? 'Versão ' + copy.Version : 'Versão não informada' }}</strong>
+                    <span class="muted">· guardada {{ copy.At ? (copy.At | ago) : '' }} · {{ why(copy) }}@if (copy.By) { · por {{ copy.By }} } · {{ copy.Files }} arquivos, {{ size(copy.Bytes / 1024) }}</span>
+                    @if (copy.Reason) { <span class="reason">“{{ copy.Reason }}”</span> }
+                  </span>
+                  <button mat-button (click)="choose(copy.Id)" [disabled]="busy()">{{ choosing() === copy.Id ? 'Cancelar' : 'Voltar para esta' }}</button>
+                </div>
+                @if (choosing() === copy.Id) {
+                  <form class="restore" (ngSubmit)="restore(copy)">
+                    <label>
+                      <span>Por que a aplicação volta para esta cópia? <em>obrigatório, fica no histórico</em></span>
+                      <textarea name="reason" [(ngModel)]="reason" rows="2" required placeholder="A versão 3.2 parou o faturamento; voltando para a 3.1 até a correção."></textarea>
+                    </label>
+                    @if (restartable) {
+                      <mat-checkbox name="force" [(ngModel)]="forceRestore">Forçar o encerramento do que não parar</mat-checkbox>
+                    }
+                    <div class="bar">
+                      <span class="muted">{{ restartable ? 'A aplicação para, os arquivos voltam a ser os da cópia (os de configuração ficam como estão) e ela inicia de novo.' : 'Os arquivos voltam a ser os da cópia; os de configuração ficam como estão.' }}</span>
+                      <span class="spacer"></span>
+                      <button mat-flat-button type="submit" [disabled]="busy() || !reason.trim()"><mat-icon svgIcon="restart_alt" /> {{ busy() ? 'Voltando…' : 'Voltar para ' + (copy.Version ? 'a versão ' + copy.Version : 'esta cópia') }}</button>
+                    </div>
+                  </form>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="empty"><span>Nenhuma cópia guardada ainda: elas aparecem depois da primeira troca por pacote.</span></div>
+        }
+
+        @if (kept.History.length) {
+          <h3 class="history-title">Histórico de alterações</h3>
+          <div class="table-wrap">
+            <table class="data stack">
+              <thead><tr><th>Quando</th><th>Quem</th><th>O quê</th><th>Versão</th><th>Justificativa</th></tr></thead>
+              <tbody>
+                @for (entry of kept.History; track $index) {
+                  <tr>
+                    <td data-label="Quando" [matTooltip]="entry.At | when">{{ entry.At | ago }}</td>
+                    <td data-label="Quem">{{ entry.By || '—' }}</td>
+                    <td data-label="O quê">{{ changeText(entry) }} @if (!entry.Ok) { <span class="pill danger" [matTooltip]="entry.Problem || ''">não concluído</span> }</td>
+                    <td data-label="Versão" class="nowrap">{{ entry.FromVersion || '?' }} → {{ entry.ToVersion || '?' }}</td>
+                    <td data-label="Justificativa" class="reason-cell">{{ entry.Reason || '' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      } @else {
+        <div class="empty"><span>Lendo…</span></div>
+      }
+    </section>
+
     @if (removable) {
       <section class="panel remove">
         <div class="panel-head"><h2>Excluir a aplicação</h2><span class="hint">tira desta máquina; a pasta fica guardada</span></div>

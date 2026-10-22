@@ -11,9 +11,9 @@ import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { jsonProblem } from '../core/settings';
 import { size } from '../core/database';
-import { AgoPipe } from '../core/format';
-import { RemovedApplication, TargetFile, TransportTarget } from '../core/models';
-import { targetIcon, targetName } from '../core/transport';
+import { AgoPipe, WhenPipe } from '../core/format';
+import { CopyChange, KeptCopies, KeptCopy, RemovedApplication, TargetFile, TransportTarget } from '../core/models';
+import { Transport, targetIcon, targetName } from '../core/transport';
 
 /**
  * One application of this environment: where it is, what serves it, and the files of its
@@ -21,7 +21,7 @@ import { targetIcon, targetName } from '../core/transport';
  */
 @Component({
   selector: 'zap-transport-app',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatCheckboxModule, MatIconModule, MatTooltipModule, AgoPipe],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatCheckboxModule, MatIconModule, MatTooltipModule, AgoPipe, WhenPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './transport-app.html',
   styleUrl: './transport-app.scss',
@@ -63,6 +63,109 @@ export class TransportAppPage implements OnInit {
   protected typedName = '';
   protected forceRemove = false;
 
+  // ── The copies kept of it, going back to one of them, and how many are kept ──
+  private readonly transport = inject(Transport);
+  protected readonly copies = signal<KeptCopies | null>(null);
+  protected readonly copiesProblem = signal('');
+  protected readonly choosing = signal<string | null>(null);
+  protected readonly restored = signal<{ Applied: boolean; Problem: string | null; Messages: string[] } | null>(null);
+  protected reason = '';
+  protected forceRestore = false;
+  protected keepValue = 3;
+  protected readonly keepEdited = signal(false);
+
+  /** Why a copy was made, in words. */
+  protected why(copy: KeptCopy): string {
+    switch (copy.Why) {
+      case 'before-restore':
+        return 'antes de voltar para outra cópia';
+      case 'before-revert':
+        return 'antes de reverter um pacote';
+      default:
+        return copy.Package ? `antes do pacote ${this.packageName(copy.Package)}` : 'antes de um pacote';
+    }
+  }
+
+  protected changeText(entry: CopyChange): string {
+    switch (entry.What) {
+      case 'replaced':
+        return `Pacote ${entry.Package ? this.packageName(entry.Package) : ''} aplicado`;
+      case 'reverted':
+        return `Pacote ${entry.Package ? this.packageName(entry.Package) : ''} revertido`;
+      case 'restored':
+        return 'Voltou para uma cópia guardada';
+      default:
+        return entry.What;
+    }
+  }
+
+  private packageName(id: string): string {
+    const names = this.transport.names();
+    return names[id] ?? Object.entries(names).find(([known]) => known.startsWith(id))?.[1] ?? id.slice(0, 8);
+  }
+
+  protected choose(id: string): void {
+    this.choosing.set(this.choosing() === id ? null : id);
+    this.reason = '';
+    this.forceRestore = false;
+  }
+
+  protected async restore(copy: KeptCopy): Promise<void> {
+    if (!this.reason.trim()) {
+      return;
+    }
+    this.busy.set(true);
+    this.restored.set(null);
+    try {
+      this.restored.set(await firstValueFrom(this.api.restoreCopy(this.kind, this.name, copy.Id, this.reason.trim(), this.forceRestore)));
+      this.choosing.set(null);
+      this.reason = '';
+      this.load();
+    } catch (failure) {
+      this.say(failure);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected async saveKeep(): Promise<void> {
+    await this.keeping(this.keepValue, `${this.name} passa a guardar ${this.keepValue} ${this.keepValue === 1 ? 'cópia' : 'cópias'}`);
+  }
+
+  protected async resetKeep(): Promise<void> {
+    await this.keeping(null, `${this.name} volta a guardar o número de cópias do ambiente`);
+  }
+
+  private async keeping(value: number | null, said: string): Promise<void> {
+    this.busy.set(true);
+    try {
+      await firstValueFrom(this.api.setKeptCopies(this.kind, this.name, value));
+      this.snack.open(said, undefined, { duration: 4000 });
+      // The Worker Control reads its configuration again; a moment later it says the new number.
+      setTimeout(() => this.loadCopies(), 1500);
+    } catch (failure) {
+      this.say(failure);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  private loadCopies(): void {
+    this.api.keptCopies(this.kind, this.name).subscribe({
+      next: (answer) => {
+        this.copies.set(answer);
+        this.keepValue = answer.KeepVersions;
+        this.keepEdited.set(false);
+        this.copiesProblem.set('');
+      },
+      error: (failure: HttpErrorResponse) => {
+        if (failure.status !== 401 && failure.status !== 404) {
+          this.copiesProblem.set(failure.status === 501 ? 'O Worker Control instalado é anterior a este recurso (existe a partir da versão 2.30).' : (failure.error?.error ?? 'Não foi possível ler as cópias guardadas.'));
+        }
+      },
+    });
+  }
+
   protected async remove(): Promise<void> {
     if (this.typedName.trim() !== this.name) {
       return;
@@ -79,6 +182,7 @@ export class TransportAppPage implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.transport.loadNames();
   }
 
   protected select(file: TargetFile): void {
@@ -150,6 +254,7 @@ export class TransportAppPage implements OnInit {
   }
 
   private load(): void {
+    this.loadCopies();
     this.api.targetFiles(this.kind, this.name).subscribe({
       next: (answer) => {
         this.target.set(answer.Target);

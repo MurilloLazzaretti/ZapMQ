@@ -269,6 +269,32 @@ Um pacote fechado pode ser **baixado** como arquivo e **importado** no painel de
 É o caminho que existe antes do envio direto, e o que continua valendo entre ambientes que não
 se alcançam pela rede.
 
+**Quem incluiu cada item.** O item guarda quem o incluiu no pacote, e isso vai com ele no
+manifesto (`addedBy`), para todos os ambientes. Na tela do pacote, aberto ou fechado, os itens
+aparecem agrupados por pessoa e, dentro de cada uma, por tipo (banco de dados, micro serviços,
+serviços do Windows, APIs, aplicação web, distribuição de arquivos). O pacote fechado também
+mostra os itens na ordem de aplicação, em *Ordem de aplicação*. Uma nova versão mantém o autor de
+cada item que veio da anterior.
+
+**Liberação.** Um pacote montado no ambiente só segue a outro ambiente (por rota ou baixado como
+arquivo) quando **todos que incluíram itens nele liberarem**. Cada pessoa libera todos os seus
+itens de uma vez, em *Liberar meus itens*, com o pacote ainda aberto ou já fechado. Quem mexe nos
+próprios itens de um pacote aberto (inclui, troca ou tira) desfaz a própria liberação. O usuário
+master pode liberar em nome de outra pessoa (por exemplo, de férias), e o histórico registra
+"liberado por X em nome de Y". Dá para desfazer a liberação enquanto o pacote não foi entregue a
+nenhum ambiente. A versão pode ser fechada antes de todos liberarem; o que espera é o envio. Os
+pacotes que chegam de outro ambiente não pedem liberação. Também não pedem os pacotes fechados antes
+desta regra, que não guardam quem incluiu cada item. O *Upload e aplicar* libera em nome de quem
+enviou o arquivo.
+
+**Encontrar um pacote.** Na aba *Pacotes*, a busca procura cada palavra em qualquer parte do
+pacote: nome, descrição, origem, quem montou, aprovou ou incluiu itens, o nome de cada item
+(`dbo.spFechamento`, `brief`), a versão (`v3`) e o início do identificador, sem diferenciar
+maiúsculas nem acentos. Quando acha pelo nome de um item, a linha diz qual. Há filtros por
+situação, tipo de item e período, e atalhos com a contagem de cada um: *Pedem atenção*, *Esperam
+minha liberação*, *Com meus itens*, *Aguardando liberação*, *Montados aqui* e *Recebidos*. Os
+filtros ficam no endereço da página, que pode ser compartilhado.
+
 ### 5.3 Envio
 
 O painel de origem entrega o arquivo ao painel de destino por HTTP, por uma **rota de
@@ -293,7 +319,8 @@ transporte**, em *Transporte → Configuração*:
 - **Testar** pergunta ao destino quem ele é, com a assinatura: confere o endereço, a chave e os
   relógios.
 
-Um pacote fechado, ou aplicado (para seguir ao próximo ambiente), tem **Enviar** na tela dele.
+Um pacote fechado, ou aplicado (para seguir ao próximo ambiente), tem **Enviar** na tela dele,
+depois que todos liberarem (seção 5.2).
 Baixar e importar o arquivo continua valendo entre ambientes que não se alcançam pela rede.
 
 Se o destino não aceitar conexões vindas de fora, a ligação teria de ser invertida (o destino
@@ -369,6 +396,26 @@ O que impede ou merece aviso:
   impede, mas é avisada: ela se perde no banco; nos arquivos, fica na cópia guardada.
 - **Cópia que já não existe**: só as últimas versões de cada alvo são guardadas (padrão: 3).
 
+**Voltar para uma cópia guardada, sem pacote.** Cada vez que os arquivos de uma aplicação são
+trocados, a versão que estava fica guardada no servidor. Em *Processos e serviços → Aplicações*,
+na tela da aplicação, a seção *Cópias guardadas* lista as cópias que existem, com a versão, quando
+foi guardada, por quê (antes de qual pacote, ou antes de voltar para outra cópia) e por quem.
+**Voltar para esta** pede uma justificativa, obrigatória, e então para a aplicação, troca os
+arquivos pelos da cópia (os de configuração do ambiente ficam como estão) e a inicia de novo.
+Antes disso, a versão que estava rodando é guardada como mais uma cópia. Assim dá para voltar a
+ela depois, do mesmo jeito, sem pacote. A mesma seção mostra o histórico do que mudou os arquivos
+da aplicação: pacote aplicado, pacote revertido, volta para uma cópia, com quem, quando, de qual
+versão para qual e a justificativa. O histórico fica em `history.json`, na pasta das cópias da
+aplicação, e cada cópia leva um `about.json`. As cópias feitas antes disso aparecem só com a data
+e o pacote do nome da pasta.
+
+**Quantas cópias.** O padrão de todas as aplicações fica em *Configurações → Transporte → Cópias
+guardadas de cada aplicação* (`Transport.KeepVersions`, só o master altera). Cada aplicação pode
+guardar outro número, na própria seção *Cópias guardadas* (`Transport.KeepVersionsBy`, por
+`tipo:nome`). Qualquer usuário altera o número de uma aplicação, ou a faz voltar ao padrão.
+Atingido o número, a próxima troca (por pacote, reversão ou volta para uma cópia) apaga a cópia
+mais antiga.
+
 O pacote termina **revertido** (tudo voltou; pode ser aplicado de novo), **revertido em parte**
 (algo ficou como o pacote deixou) ou, se nada chegou a voltar, continua como estava, com o motivo
 no histórico.
@@ -430,6 +477,10 @@ transporte escreve no banco de propósito. As duas coisas ficam separadas:
 **Regras do ambiente** (*Configurações → Regras do ambiente*; só o master altera, valem assim que
 gravadas, em `transport/policy.json` ao lado do painel):
 
+- **Permitir criar pacotes** (o padrão) ou não. Desligado, nada cria pacote ali: pacote novo, nova
+  versão, incluir num pacote aberto, fechar, a sugestão de equalização da comparação e o *Upload e
+  aplicar*. As versões manuais ficam desligadas junto, porque toda versão manual vira um pacote. Os
+  pacotes que chegam de outros ambientes continuam sendo aprovados, aplicados e enviados adiante.
 - **Versões novas: apenas via transporte** (o padrão) ou **permitir versões manuais**. Manual é o
   *Upload e aplicar* de uma aplicação, a pasta de entrada, um script escrito ou importado no painel e
   a *Nova aplicação* a partir de um zip. Apenas via transporte, o que é novo chega só em pacotes de
@@ -440,7 +491,7 @@ gravadas, em `transport/policy.json` ao lado do painel):
 - **Janela de aplicação**: das HH:MM às HH:MM, na hora da máquina (pode passar da meia-noite).
   Fora dela, a aprovação para aplicar agora é recusada e pede um horário dentro da janela.
 
-Sugestão: DEV com versões manuais; QAS apenas via transporte; PRD apenas via transporte, com
+Sugestão: DEV com versões manuais; QAS apenas via transporte; PRD sem criar pacotes, com
 aprovação por outra pessoa e janela.
 
 No agente:
@@ -450,6 +501,7 @@ No agente:
   "Environment": "DEV",
   "Inbox": "transporte\\entrada",
   "KeepVersions": 3,
+  "KeepVersionsBy": { "api:api/cadastro": 5 },
   "Targets": [ { "Kind": "api", "Name": "api/cadastro", "Keep": ["appsettings*.json", "web.config"] } ]
 }
 ```
