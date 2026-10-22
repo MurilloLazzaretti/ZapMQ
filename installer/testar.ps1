@@ -53,7 +53,8 @@ function Stop-Servico([string]$Nome) { $Script:Maquina.Servicos[$Nome].Estado = 
 function Start-Servico([string]$Nome) { $Script:Maquina.Servicos[$Nome].Estado = 'Running' }
 function Set-Inicio([string]$Nome, [string]$Modo) { $Script:Maquina.Servicos[$Nome].Inicio = $Modo }
 function Test-ZapMQ([int]$Porta) { $Script:Maquina.PortaTestada = $Porta; $Script:Maquina.Responde }
-function Test-Agente([string]$PastaAgente, [datetime]$Desde) { $Script:Maquina.Inicia }
+function Test-Agente([string]$PastaAgente, [datetime]$Desde, [string]$Versao) { $Script:Maquina.VersaoConferida = $Versao; $Script:Maquina.Inicia }
+function Wait-Liberado([string]$Arquivo) { }
 
 function Servico([string]$Nome, [string]$Exe, [string]$Estado = 'Running') {
     $Script:Maquina.Servicos[$Nome] = [pscustomobject]@{ Nome = $Nome; Exe = $Exe; Estado = $Estado; Inicio = 'Auto' }
@@ -160,6 +161,23 @@ $Script:Simulando = $true
 Instalar-ZapMQ
 Instalar-Agente
 Confere ($Script:Maquina.Sc.Count -eq 0 -and -not (Test-Path $Pasta)) 'não muda nada'
+
+Write-Host 'Agente que iniciou, pelo log'
+$desde = [datetime]::ParseExact('2026-10-22 11:52:59.100', 'yyyy-MM-dd HH:mm:ss.fff', [Globalization.CultureInfo]::InvariantCulture)
+$log = @(
+    '2026-10-22 11:52:26.446 [WRN] WorkerControl.ZapMQ: ZapMQ is not answering',
+    '2026-10-10 08:00:00.000 [INF] WorkerControl.Events: ServiceStarted: version 2.29.1',
+    '2026-10-22 11:52:57.660 [INF] WorkerControl.Events: ServiceStopped: the workers were stopped')
+Confere (-not (Test-Iniciado $log $desde '2.29.3')) 'o início de antes, de outra versão, não conta'
+Confere (-not (Test-Iniciado ($log + '2026-10-22 11:40:00.000 [INF] WorkerControl.Events: ServiceStarted: version 2.29.3') $desde '2.29.3')) 'nem o da mesma versão antes do início'
+Confere (Test-Iniciado ($log + '2026-10-22 11:53:00.224 [INF] WorkerControl.Events: ServiceStarted: version 2.29.3') $desde '2.29.3') 'o desta versão depois do início, num log que já existia, conta'
+$raiz = Nova-Maquina
+$agente = Join-Path $raiz 'WorkerControl'
+New-Item -ItemType Directory -Path $agente | Out-Null
+Set-Content (Join-Path $agente 'WorkerControl.exe') 'agente 2.24.1'
+Servico 'WorkerControlService' (Join-Path $agente 'WorkerControl.exe')
+Instalar-Agente
+Confere ($Script:Maquina.VersaoConferida -eq '2.25.0') 'a atualização confere a versão nova'
 
 Write-Host ''
 if ($Script:Falhas -gt 0) { Write-Host "$($Script:Falhas) falha(s)" -ForegroundColor Red; exit 1 }

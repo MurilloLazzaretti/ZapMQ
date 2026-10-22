@@ -121,15 +121,45 @@ function Test-ZapMQ([int]$Porta) {
     return $false
 }
 
-function Test-Agente([string]$PastaAgente, [datetime]$Desde) {
+function Test-Agente([string]$PastaAgente, [datetime]$Desde, [string]$Versao) {
     $logs = Join-Path $PastaAgente 'logs'
+    # Os logs a partir do dia do início, pelo nome. A data do arquivo não serve: a de um log que o
+    # serviço mantém aberto continua, na listagem da pasta, a de quando o anterior o fechou.
+    $primeiro = 'workercontrol-' + $Desde.ToString('yyyyMMdd')
     for ($tentativa = 0; $tentativa -lt 45; $tentativa++) {
         $servico = Get-Service -Name $AgenteServico -ErrorAction SilentlyContinue
         if ($servico -and $servico.Status -eq 'Running' -and (Test-Path $logs)) {
-            $ultimo = Get-ChildItem $logs -Filter 'workercontrol-*.log' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-            if ($ultimo -and $ultimo.LastWriteTime -ge $Desde -and (Select-String -Path $ultimo.FullName -Pattern 'ServiceStarted' -Quiet)) { return $true }
+            foreach ($log in Get-ChildItem $logs -Filter 'workercontrol-*.log' | Where-Object { $_.Name -ge $primeiro }) {
+                if (Test-Iniciado (Read-Compartilhado $log.FullName) $Desde $Versao) { return $true }
+            }
         }
         Start-Sleep -Seconds 2
+    }
+    return $false
+}
+
+function Read-Compartilhado([string]$Arquivo) {
+    # O serviço escreve no log enquanto ele é lido.
+    $leitor = New-Object IO.StreamReader([IO.File]::Open($Arquivo, 'Open', 'Read', 'ReadWrite'))
+    try { return $leitor.ReadToEnd() -split "`r?`n" } finally { $leitor.Dispose() }
+}
+
+function Wait-Liberado([string]$Arquivo) {
+    # Parado o serviço, o processo ainda pode estar saindo e segurando o executável.
+    for ($tentativa = 0; $tentativa -lt 60; $tentativa++) {
+        try { [IO.File]::Open($Arquivo, 'Open', 'ReadWrite', 'None').Dispose(); return }
+        catch { Start-Sleep -Seconds 1 }
+    }
+    throw "$Arquivo continua em uso um minuto depois de o serviço parar."
+}
+
+# ---------------------------------------------------------------- decisões sem tocar o sistema
+
+function Test-Iniciado([string[]]$Linhas, [datetime]$Desde, [string]$Versao) {
+    # O agente escreve "ServiceStarted: version 2.29.3" ao iniciar: vale o desta versão, depois do início.
+    foreach ($linha in $Linhas) {
+        if ($linha -match '^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}) .*ServiceStarted: version (\d+\.\d+\.\d+)' -and $Matches[2] -eq $Versao -and
+            [datetime]::ParseExact($Matches[1], 'yyyy-MM-dd HH:mm:ss.fff', [Globalization.CultureInfo]::InvariantCulture) -ge $Desde.AddSeconds(-1)) { return $true }
     }
     return $false
 }
@@ -198,6 +228,7 @@ function Instalar-ZapMQ {
         if (-not $Script:Simulando -and -not (Test-ZapMQ $porta)) {
             Write-Warning "O ZapMQ $versaoNova não respondeu: voltando à $versaoAtual."
             Stop-Servico $ZapMQServico
+            Wait-Liberado $atual.Exe
             Remove-Item -LiteralPath $atual.Exe -Force
             Rename-Item -LiteralPath $guardado -NewName (Split-Path $atual.Exe -Leaf)
             Start-Servico $ZapMQServico
@@ -285,9 +316,10 @@ function Instalar-Agente {
         foreach ($arquivo in $AgenteArquivos) { Copiar (Join-Path $origem $arquivo) (Join-Path $pastaAgente $arquivo) }
         $inicio = Get-Date
         Passo "iniciar $AgenteServico" { Start-Servico $AgenteServico }
-        if (-not $Script:Simulando -and -not (Test-Agente $pastaAgente $inicio)) {
+        if (-not $Script:Simulando -and -not (Test-Agente $pastaAgente $inicio $versaoNova)) {
             Write-Warning "O Worker Control $versaoNova não iniciou: voltando à $versaoAtual."
             Stop-Servico $AgenteServico
+            Wait-Liberado $atual.Exe
             Remove-Item -LiteralPath $atual.Exe -Force
             Rename-Item -LiteralPath $guardado -NewName (Split-Path $atual.Exe -Leaf)
             Start-Servico $AgenteServico
@@ -319,7 +351,7 @@ function Instalar-Agente {
         }
         $inicio = Get-Date
         Passo "iniciar $AgenteServico" { Start-Servico $AgenteServico }
-        if (-not $Script:Simulando -and -not (Test-Agente $pastaAgente $inicio)) {
+        if (-not $Script:Simulando -and -not (Test-Agente $pastaAgente $inicio $versaoNova)) {
             Write-Warning 'O Worker Control 2 não iniciou: voltando ao 1.x.'
             Stop-Servico $AgenteServico
             Invoke-Sc @('config', $AgenteServico, 'binPath=', "`"$exeAntigo`"")
@@ -349,7 +381,7 @@ function Instalar-Agente {
     }
     $inicio = Get-Date
     Passo "iniciar $AgenteServico" { Start-Servico $AgenteServico }
-    if (-not $Script:Simulando -and -not (Test-Agente $pastaAgente $inicio)) {
+    if (-not $Script:Simulando -and -not (Test-Agente $pastaAgente $inicio $versaoNova)) {
         throw "O Worker Control não iniciou. Veja o log em $(Join-Path $pastaAgente 'logs')."
     }
 }
