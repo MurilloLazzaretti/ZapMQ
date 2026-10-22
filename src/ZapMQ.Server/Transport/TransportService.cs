@@ -175,9 +175,10 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
 
     /// <summary>
     /// A zip of a published folder, packed again the way a package carries it: the files at
-    /// the root, without what belongs to an environment. Gives what it carries.
+    /// the root, without what belongs to an environment. Gives what it carries. For a module of a
+    /// web application, the folder of the module is looked for inside it (see <see cref="ModuleFolder"/>).
     /// </summary>
-    private static (byte[] Zip, List<FileReference> Files) Normalize(byte[] brought, bool everything = false)
+    private static (byte[] Zip, List<FileReference> Files) Normalize(byte[] brought, bool everything = false, string? module = null)
     {
         var files = new List<FileReference>();
         using var memory = new MemoryStream();
@@ -190,11 +191,19 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 throw new TransportRefused("O zip tem um arquivo que cairia fora da pasta de destino");
             // Zipped with the folder itself on the outside: the folder is taken off.
             var outer = paths.Count > 0 && paths.All(path => path.Contains('/')) && paths.Select(path => path[..path.IndexOf('/')]).Distinct().Count() == 1 ? paths[0][..(paths[0].IndexOf('/') + 1)] : "";
+            var inner = module is null ? "" : ModuleFolder([.. paths.Select(path => path[outer.Length..]).Where(path => path.Length > 0 && !Kept(path))], module);
 
             using (var target = new System.IO.Compression.ZipArchive(memory, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
                 foreach (var (entry, full) in entries.Zip(paths).OrderBy(pair => pair.Second, StringComparer.OrdinalIgnoreCase))
                 {
                     var path = full[outer.Length..];
+                    if (inner.Length > 0)
+                    {
+                        // Only what belongs to the environment is beside the folder of the module, and it is not carried.
+                        if (!path.StartsWith(inner, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        path = path[inner.Length..];
+                    }
                     if (path.Length == 0 || (!everything && Kept(path)))
                         continue;
                     using var content = new MemoryStream();
@@ -216,6 +225,40 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
             throw new TransportRefused("O zip não tem nenhum arquivo para levar");
         return (memory.ToArray(), files);
     }
+
+    /// <summary>
+    /// The folder of a module inside the zip brought for it, when the module is one or more
+    /// levels down (<c>mfe/brief/</c>, as the site is published): what is in it goes to the root,
+    /// which is the folder of the module. With other files beside that folder it is the zip of the
+    /// whole application, and it is refused: put in the folder of the module as it is, it would
+    /// leave the files of the module where nothing reads them, and take the module off the air.
+    /// Empty when the files of the module are at the root already.
+    /// </summary>
+    private static string ModuleFolder(List<string> paths, string module)
+    {
+        var name = module[(module.LastIndexOf('/') + 1)..];
+        // A module with its files at the root may well have a folder of its own name inside.
+        if (name.Length == 0 || name == ShellTarget || paths.Any(path => !path.Contains('/')))
+            return "";
+        foreach (var path in paths)
+        {
+            var parts = path.Split('/');
+            var at = Array.FindIndex(parts, 0, parts.Length - 1, part => string.Equals(part, name, StringComparison.OrdinalIgnoreCase));
+            if (at < 0)
+                continue;
+            var folder = string.Join('/', parts[..(at + 1)]) + "/";
+            if (paths.FirstOrDefault(other => !other.StartsWith(folder, StringComparison.OrdinalIgnoreCase)) is { } beside)
+                throw new TransportRefused($"O zip traz a pasta {folder} e, ao lado dela, outros arquivos (como {beside}): é o zip da aplicação inteira, não do módulo {name}. " +
+                    $"Envie um zip só com o que está em {folder}.");
+            return folder;
+        }
+        return "";
+    }
+
+    /// <summary>
+    /// How the shell of an application of modules is called as a target, by the Worker Control.
+    /// </summary>
+    private const string ShellTarget = "shell";
 
     // ---------------------------------------------------------------- new applications
 
@@ -388,7 +431,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
             return Place(draft!, kind!, name!.Trim(), string.IsNullOrWhiteSpace(version) ? null : version.Trim(), memory.ToArray(),
                 [new FileReference { Path = file, Size = brought.Length, Sha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(brought)) }], by);
         }
-        var (zip, files) = Normalize(brought);
+        var (zip, files) = Normalize(brought, module: kind == "frontend" ? name!.Trim() : null);
         return Place(draft!, kind!, name!.Trim(), string.IsNullOrWhiteSpace(version) ? null : version.Trim(), zip, files, by);
     }
 

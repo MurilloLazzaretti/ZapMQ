@@ -122,6 +122,17 @@ trocada, porque não se saberia o que preservar. Num **monolito** (`"Mode": "mon
 aplicação), a pasta inteira é um alvo só. Em todos os casos o upload de uma versão nova é o mesmo
 das outras aplicações, em Transporte → Aplicações.
 
+O upload de um **módulo** leva só a pasta dele: os arquivos na raiz do zip, ou dentro de uma pasta
+só. Um zip montado como o site é publicado, com o módulo em `mfe/<módulo>/`, também serve, e o que
+está nessa pasta vai para a raiz. Já um zip com a pasta do módulo e outros arquivos ao lado dela
+(o manifesto, a casca) é o da aplicação inteira e é recusado: posto na pasta do módulo, deixaria os
+arquivos dele onde nada os lê, e o módulo fora do ar.
+
+Quando o endereço do módulo no manifesto leva o código do arquivo de entrada (`?v=...`, o que faz o
+navegador buscar o arquivo novo em vez de usar o que guardou), trocar ou reverter o módulo grava ali
+o código do arquivo de entrada novo: os 10 primeiros caracteres do SHA-1 dele. O resto do manifesto
+fica como está, e um endereço sem o código não é mexido.
+
 **Distribuição de arquivos.** Uma pasta de arquivos que só são baixados (os aplicativos Android,
 por exemplo), declarada em Configurações → Distribuição de arquivos, faz de cada arquivo um alvo.
 O upload é do próprio arquivo, com a versão informada; ele é trocado sozinho, pelo mesmo nome, sem

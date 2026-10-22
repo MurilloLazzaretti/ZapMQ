@@ -884,6 +884,20 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
             await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spNew" }), HttpStatusCode.Created);
             await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=database&name=x", new ByteArrayContent(zip)), HttpStatusCode.BadRequest);
             await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders", new ByteArrayContent(Encoding.UTF8.GetBytes("not a zip"))), HttpStatusCode.BadRequest);
+            // A module of a web application, brought as the site is published: its folder is found inside, ...
+            var module = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=frontend&name=brief",
+                new ByteArrayContent(PretendDatabase.Zipped(new() { ["mfe/brief/remoteEntry.json"] = "{}", ["mfe/brief/Module-X.js"] = "x", ["mfe/brief/web.config"] = "<x/>" }))), HttpStatusCode.Created);
+            Assert.Equal(["Module-X.js", "remoteEntry.json"], module["files"]!.Select(file => (string?)file["path"]));
+            // ... but the whole site, with the manifest beside the module, would leave the module out of the air in its folder.
+            var site = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=frontend&name=brief",
+                new ByteArrayContent(PretendDatabase.Zipped(new() { ["mfe/brief/remoteEntry.json"] = "{}", ["assets/mf.manifest.json"] = "{}" }))), HttpStatusCode.BadRequest);
+            Assert.Contains("mfe/brief/", (string?)site["error"]);
+            // A module with its files at the root keeps a folder of its own name.
+            var rooted = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=frontend&name=brief",
+                new ByteArrayContent(PretendDatabase.Zipped(new() { ["remoteEntry.json"] = "{}", ["brief/logo.png"] = "png", ["assets/a.css"] = "a" }))), HttpStatusCode.Created);
+            Assert.Equal(["assets/a.css", "brief/logo.png", "remoteEntry.json"], rooted["files"]!.Select(file => (string?)file["path"]));
+            await Api.DeleteAsync($"api/transport/area/{(string?)module["id"]}");
+            await Api.DeleteAsync($"api/transport/area/{(string?)rooted["id"]}");
 
             var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Orders 2.3" }), HttpStatusCode.Created);
             // The database first, then what runs.

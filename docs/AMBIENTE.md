@@ -136,7 +136,7 @@ Tráfego de arquivos estáticos (o frontend) é mostrado separado do das APIs, p
 
 De arquivos, na pasta em que o proxy serve o frontend (`Frontends[].Root`):
 
-- o **manifesto** dos módulos (`Manifest`, por exemplo `assets/mf.manifest.json`): um objeto `nome → caminho do ponto de entrada`;
+- o **manifesto** dos módulos (`Manifest`, por exemplo `assets/mf.manifest.json`): um objeto `nome → caminho do ponto de entrada`. O que vem depois do arquivo no caminho (`?v=...`) é só para o navegador: no disco vale o arquivo;
 - em cada módulo, o **arquivo de versão** (`VersionFile`, por exemplo `version.json`). Dele o agente lê, quando existirem, `nome`, `build` e a lista `versions` com `version`, `date` e `descriptions`; a versão atual é a primeira da lista. Outros formatos podem ser mapeados depois; sem arquivo de versão, o módulo aparece com a data de publicação apenas.
 
 No painel a tela se chama **Aplicação web**, e os cartões dela são os módulos.
