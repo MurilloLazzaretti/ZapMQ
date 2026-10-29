@@ -152,3 +152,6 @@
 .group-head .spacer { flex: 1; }
 .kind-head { display: flex; align-items: center; gap: 6px; padding: 8px 4px 4px; font: var(--mat-sys-label-large); color: var(--mat-sys-on-surface-variant); }
 .kind-head mat-icon { width: 18px; height: 18px; }
+
+.affects { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 8px 44px; font-size: 12.5px; overflow-wrap: anywhere; }
+.affects mat-icon { flex: none; width: 16px; height: 16px; color: var(--mat-sys-primary); }

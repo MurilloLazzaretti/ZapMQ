@@ -98,3 +98,6 @@ td strong + .pill { margin-left: 8px; }
 
 .script mark { border-radius: 3px; background: color-mix(in srgb, var(--zap-warn) 35%, transparent); color: inherit; }
 .script mark.here { background: var(--zap-warn); color: var(--mat-sys-surface); }
+
+.verb { flex: none; min-width: 52px; padding: 1px 6px; border-radius: 8px; font: 600 11.5px/1.6 var(--zap-mono, monospace); text-align: center; background: var(--mat-sys-surface-container-highest); }
+.none { margin: 0; padding: 0 20px 16px; }

@@ -1293,3 +1293,50 @@ export interface TransportSending {
   startedAt: string;
   endedAt: string | null;
 }
+
+/** One command an endpoint runs, as the map of the API says (docs/ENDPOINTS.md). */
+export interface EndpointCommand {
+  sql: string;
+  source?: string | null;
+  dynamic?: boolean;
+  notes?: string[];
+}
+
+/** One endpoint of the map of an API, with the objects of the database it uses found in the catalog. */
+export interface MappedEndpoint {
+  method: string;
+  route: string;
+  handler?: string | null;
+  commands?: EndpointCommand[];
+  objects?: string[];
+  found?: { name: string; kind: string | null }[];
+}
+
+/** What an API says about its endpoints: the OpenAPI document it serves and the map in its folder, each with why it is not there. */
+export interface ApiDocs {
+  Kind: string;
+  Name: string;
+  Version: string | null;
+  Database: string | null;
+  At: string;
+  Map: { format: number; application?: string; version?: string; builtAt?: string; generator?: string; endpoints: MappedEndpoint[] } | null;
+  MapProblem?: string | null;
+  MapFile?: string | null;
+  MapStale?: boolean;
+  MapBuiltAt?: string | null;
+  NewestBinaryAt?: string | null;
+  /** The document as the API serves it: OpenAPI 3 or Swagger 2. */
+  OpenApi: Record<string, any> | null;
+  OpenApiUrl?: string | null;
+  OpenApiProblem?: string | null;
+  OpenApiSaid?: string | null;
+  OpenApiTried?: { Url: string; Status: number | null; Error: string | null }[];
+}
+
+/** An endpoint of an API of this environment that uses an object of the database. */
+export interface EndpointUse {
+  api: string;
+  method: string;
+  route: string;
+}
+

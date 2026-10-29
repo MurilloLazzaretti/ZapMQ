@@ -10,7 +10,7 @@ import { Subscription } from 'rxjs';
 import { Api } from '../core/api';
 import { actionName, actionTone, kindIcon, kindName, size, variety } from '../core/database';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
-import { CatalogColumn, CatalogDetail, CatalogReference, ObjectChange } from '../core/models';
+import { CatalogColumn, CatalogDetail, CatalogReference, ObjectChange, EndpointUse } from '../core/models';
 import { colour } from '../core/sql';
 import { ObjectListMemory } from '../core/object-memory';
 import { Transport } from '../core/transport';
@@ -201,8 +201,13 @@ export class DatabaseObjectPage implements OnInit, OnDestroy {
     URL.revokeObjectURL(link.href);
   }
 
+  /** The endpoints of the APIs of this environment that use it; null while unknown, or when they cannot be told. */
+  protected readonly endpoints = signal<EndpointUse[] | null>(null);
+
   private load(): void {
     const { database, kind, schema, name } = this.wanted();
+    this.endpoints.set(null);
+    this.api.endpointsUsing(schema, name).subscribe({ next: (answer) => this.endpoints.set(answer.uses), error: () => undefined });
     this.detail.set(null);
     this.problem.set('');
     this.missing.set(false);

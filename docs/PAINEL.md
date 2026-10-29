@@ -192,6 +192,12 @@ A área **Processos e serviços** tem cinco abas: **Micro serviços**, **Serviç
 grupos: **Acompanhar** (o que está rodando) e **Configurar** (como cada grupo roda); o cartão de
 cada grupo leva direto à configuração dele.
 
+Na tela de cada aplicação, em **Aplicações**, ficam onde ela está, os arquivos de configuração, as
+cópias guardadas (para voltar a uma delas sem pacote) e, numa API, a aba **Endpoints**: o que ela
+expõe, pelo OpenAPI que publica, e o que cada endpoint executa no banco, pelo mapa que traz na
+pasta. Os dois são opcionais e de qualquer sistema; o formato e os estados estão em
+[`ENDPOINTS.md`](ENDPOINTS.md).
+
 - **Grupos e workers ao vivo:** estado, quantidade desejada e por quê (base, boost, escala pela fila), reciclagem em andamento, grupo instável.
 - **Por worker:** tempo no ar, processador, memória e tempo de resposta do keep-alive, com gráfico das últimas horas.
 - **Ações:** habilitar e desabilitar grupo, mudar a quantidade, reiniciar um worker ou um grupo.

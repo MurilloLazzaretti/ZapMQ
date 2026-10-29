@@ -208,6 +208,25 @@
       </section>
     }
 
+    @if (endpoints(); as uses) {
+      <section class="panel">
+        <div class="panel-head"><h2>Endpoints que usam</h2><span class="hint">nas APIs deste ambiente que trazem o mapa de endpoints · {{ uses.length | num }}</span></div>
+        @if (uses.length) {
+          <ul class="references">
+            @for (use of uses; track use.api + use.method + use.route) {
+              <li>
+                <span class="verb">{{ use.method }}</span>
+                <a [routerLink]="['/workers/aplicacoes', 'api', use.api]" class="mono">{{ use.route }}</a>
+                <span class="muted">{{ use.api }}</span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="muted none">Nenhum endpoint usa este objeto, entre as APIs que trazem o mapa. As que não trazem (como as ainda em Delphi) não entram nesta conta.</p>
+        }
+      </section>
+    }
+
     @if (changes().length) {
       <section class="panel">
         <div class="panel-head"><h2>Alterações</h2><span class="hint">desde que o banco é acompanhado</span></div>

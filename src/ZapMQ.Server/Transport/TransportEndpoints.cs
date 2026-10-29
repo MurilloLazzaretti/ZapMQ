@@ -25,6 +25,8 @@ public static class TransportEndpoints
 
     public sealed record KeepRequest(string? Kind, string? Name, int? Value);
 
+    public sealed record OpenApiRequest(string? Kind, string? Name, string? Value);
+
     public sealed record WriteFileRequest(string? Kind, string? Name, int Instance, string? Path, string? Content, string? Sha256, bool Restart);
 
     /// <summary>
@@ -295,6 +297,29 @@ public static class TransportEndpoints
             }, loggers, every ? $"Transport: copies kept of every application: {body.Value}" : $"Transport: copies kept of {body.Kind} {body.Name}: {(body.Value is null ? "as every application" : body.Value)}");
         });
 
+        // What an API says about its endpoints: its OpenAPI document and the map of what each one runs in the database.
+        api.MapGet("/endpoints", (string? kind, string? name, bool? fresh, ApiEndpoints endpoints, HttpContext context) => Guarded(async () =>
+        {
+            if (string.IsNullOrWhiteSpace(kind) || string.IsNullOrWhiteSpace(name))
+                throw new TransportRefused("Informe o tipo e o nome da aplicação");
+            return Results.Json(await endpoints.Describe(kind, name, fresh == true, User(context), context.RequestAborted));
+        }));
+
+        api.MapPut("/endpoints/openapi", (OpenApiRequest body, WorkerControlClient worker, ApiEndpoints endpoints, HttpContext context, ILoggerFactory loggers) =>
+        {
+            endpoints.Forget(body.Kind ?? "", body.Name ?? "");
+            return Relay(worker, context, "SetApiOpenApi", request =>
+            {
+                request["Kind"] = body.Kind;
+                request["Name"] = body.Name;
+                request["Value"] = string.IsNullOrWhiteSpace(body.Value) ? null : body.Value.Trim();
+            }, loggers, $"Transport: where the OpenAPI of {body.Kind} {body.Name} is: {(string.IsNullOrWhiteSpace(body.Value) ? "looked for" : body.Value.Trim())}");
+        });
+
+        // The endpoints of the APIs of this environment that use an object of the database.
+        api.MapGet("/endpoints/used", (string? schema, string? name, ApiEndpoints endpoints, HttpContext context) => Guarded(async () =>
+            Results.Json(new { uses = await endpoints.UsedBy(schema ?? "dbo", name ?? "", User(context), context.RequestAborted) })));
+
         // The files of an application that belong to the environment: its configuration.
         api.MapGet("/files", (string? kind, string? name, WorkerControlClient worker, HttpContext context) =>
             Relay(worker, context, "TransportFiles", request => { request["Kind"] = kind; request["Name"] = name; }));
@@ -388,6 +413,24 @@ public static class TransportEndpoints
             var name = string.Concat(record.Manifest.Name.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-')).Trim('-');
             return Results.File(store.FilePath(id), "application/zip", $"{(name.Length == 0 ? "pacote" : name)}-{id[..8]}.zpkg");
         });
+
+        // By item of the database: the endpoints of the APIs of this environment that use what it changes.
+        api.MapGet("/packages/{id}/endpoints", (string id, TransportStore store, ApiEndpoints endpoints, HttpContext context) => Guarded(async () =>
+        {
+            var record = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
+            var index = await endpoints.Uses(User(context), context.RequestAborted);
+            var byItem = new Dictionary<int, List<EndpointUse>>();
+            foreach (var item in record.Manifest.Items.Where(item => item.Kind == "database"))
+            {
+                IEnumerable<string> names = item.Action == "Script"
+                    ? store.Script(id, item.Number) is { } text ? ScriptNames.Read(text) is var read ? read.Needed.Concat(read.Made) : [] : []
+                    : [$"{item.Schema ?? "dbo"}.{item.Name}"];
+                var uses = names.SelectMany(name => index.GetValueOrDefault(name) ?? []).Distinct().OrderBy(use => use.Api).ThenBy(use => use.Route).ToList();
+                if (uses.Count > 0)
+                    byItem[item.Number] = uses;
+            }
+            return Results.Json(new { items = byItem });
+        }));
 
         // How every item stands against what this environment has.
         api.MapGet("/packages/{id}/check", (string id, TransportStore store, TransportService transport, HttpContext context) => Guarded(async () =>

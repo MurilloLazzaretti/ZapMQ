@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import {
   MessageModel, PublishResult,
   PanelUser,
-  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, KeptCopies, TransportTarget, PackageDetail, PackageDraft, Comparison, ComparedFile, TransportPolicy, PackageItemDetail, PackageSummary, TransportSummary,
+  AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, KeptCopies, ApiDocs, EndpointUse, TransportTarget, PackageDetail, PackageDraft, Comparison, ComparedFile, TransportPolicy, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
   HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WebSite, WebSwitched, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending, InstallChoice } from './models';
@@ -443,6 +443,26 @@ export class Api {
   }
 
   /** The files of an application that belong to the environment. */
+  /** What an API says about its endpoints: its OpenAPI document and the map of what each one runs in the database. */
+  apiDocs(kind: string, name: string, fresh = false): Observable<ApiDocs> {
+    return this.http.get<ApiDocs>('api/transport/endpoints', { params: fresh ? { kind, name, fresh } : { kind, name } });
+  }
+
+  /** Where the OpenAPI document of an API is, when it is not where it usually is; empty goes back to looking for it. */
+  setOpenApi(kind: string, name: string, value: string | null): Observable<unknown> {
+    return this.http.put('api/transport/endpoints/openapi', { kind, name, value });
+  }
+
+  /** The endpoints of the APIs of this environment that use an object of the database. */
+  endpointsUsing(schema: string, name: string): Observable<{ uses: EndpointUse[] }> {
+    return this.http.get<{ uses: EndpointUse[] }>('api/transport/endpoints/used', { params: { schema, name } });
+  }
+
+  /** By item of the database of a package: the endpoints of this environment that use what it changes. */
+  packageEndpoints(id: string): Observable<{ items: Record<string, EndpointUse[]> }> {
+    return this.http.get<{ items: Record<string, EndpointUse[]> }>(`api/transport/packages/${id}/endpoints`);
+  }
+
   /** The copies kept of an application, what was done to it and how many it keeps. */
   keptCopies(kind: string, name: string): Observable<KeptCopies> {
     return this.http.get<KeptCopies>('api/transport/backups', { params: { kind, name } });

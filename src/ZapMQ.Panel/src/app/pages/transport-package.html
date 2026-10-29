@@ -321,6 +321,16 @@
         @if (lacking(item).length) {
           <p class="trouble mild"><mat-icon svgIcon="warning" /> <span>Usa o que não existe aqui nem vem no pacote: <span class="mono">{{ lacking(item).join(', ') }}</span></span></p>
         }
+        @if (affected()[item.number]; as uses) {
+          <p class="affects"><mat-icon svgIcon="hub" />
+            <span>Usado por {{ uses.length }} {{ uses.length === 1 ? 'endpoint' : 'endpoints' }} de {{ now.environment }}:
+              @for (use of uses.slice(0, 5); track use.api + use.method + use.route; let last = $last) {
+                <a [routerLink]="['/workers/aplicacoes', 'api', use.api]"><span class="mono">{{ use.method }} {{ use.route }}</span></a> <span class="muted">({{ use.api }})</span>@if (!last) {, }
+              }
+              @if (uses.length > 5) { <span class="muted"> e mais {{ uses.length - 5 }}</span> }
+            </span>
+          </p>
+        }
 
         @if (open() === item.number && item.kind !== 'database') {
           @if (content(); as files) {

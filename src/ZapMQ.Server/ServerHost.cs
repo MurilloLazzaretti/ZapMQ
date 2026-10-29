@@ -107,6 +107,7 @@ public static class ServerHost
         builder.Services.AddSingleton<Transport.TransportInbound>();
         builder.Services.AddSingleton<Transport.TransportSender>();
         builder.Services.AddSingleton<Transport.Comparison>();
+        builder.Services.AddSingleton<Transport.ApiEndpoints>();
         if (options.Panel.Enabled)
             builder.Services.AddHostedService<Transport.TransportRunner>();
         builder.Services.AddSingleton<MetricsSampler>();

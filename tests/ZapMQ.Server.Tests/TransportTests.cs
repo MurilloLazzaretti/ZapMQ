@@ -32,6 +32,12 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         /// What can be replaced on the machine, as "kind:name", each with its files.
         /// </summary>
         public Dictionary<string, Dictionary<string, string>> Targets { get; } = [];
+
+        /// <summary>
+        /// The map of the endpoints of the API Cadastro, and the OpenAPI document it serves.
+        /// </summary>
+        public JObject? ApiMap { get; set; }
+        public JObject? OpenApi { get; set; }
         public string? TargetProblem { get; set; }
 
         /// <summary>
@@ -95,6 +101,16 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                 }
                 case "Database":
                     return new JObject { ["Ok"] = true, ["Databases"] = new JArray(Databases) };
+                case "DatabaseInventory":
+                    return new JObject { ["Ok"] = true, ["Database"] = Databases[0], ["Objects"] = new JArray(Objects.Select(pair => new JObject { ["Kind"] = pair.Value.Kind, ["Schema"] = "dbo", ["Name"] = pair.Key })) };
+                case "ApiDocs":
+                    return new JObject
+                    {
+                        ["Ok"] = true, ["Kind"] = request["Kind"], ["Name"] = request["Name"], ["Map"] = ApiMap, ["MapProblem"] = ApiMap is null ? "absent" : null,
+                        ["OpenApi"] = OpenApi, ["OpenApiProblem"] = OpenApi is null ? "absent" : null
+                    };
+                case "ApiMaps":
+                    return new JObject { ["Ok"] = true, ["Applications"] = ApiMap is null ? new JArray() : new JArray(new JObject { ["Kind"] = "api", ["Name"] = "Cadastro", ["Map"] = ApiMap }) };
                 case "DatabaseObjects":
                     return new JObject { ["Ok"] = true, ["Objects"] = new JArray(Objects.Select(pair => new JObject { ["Kind"] = pair.Value.Kind, ["Schema"] = "dbo", ["Name"] = pair.Key })) };
                 case "DatabaseChanges":
@@ -617,6 +633,42 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         using var other = new HttpClient(new HttpClientHandler { CookieContainer = new CookieContainer() }) { BaseAddress = Api.BaseAddress };
         Assert.Equal(HttpStatusCode.OK, (await other.PostAsJsonAsync("api/login", new { user = "copias.user", password = "senha-das-copias" })).StatusCode);
         await Json(await other.PutAsJsonAsync("api/transport/backups/keep", new { value = 5 }), HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task The_endpoints_of_an_api_say_what_they_run_and_an_object_says_which_endpoints_use_it()
+    {
+        var origin = new PretendDatabase();
+        origin.Objects["spCadAntena"] = ("Procedure", "CREATE PROCEDURE dbo.spCadAntena AS RETURN", []);
+        origin.Objects["fncLista"] = ("Function", "CREATE FUNCTION dbo.fncLista() RETURNS TABLE AS RETURN SELECT 1 AS x", []);
+        origin.ApiMap = JObject.Parse("""
+            { "format": 1, "application": "Cadastro", "endpoints": [
+              { "method": "post", "route": "/api/cadastro/antena", "commands": [ { "sql": "EXEC spCadAntena @i_codigo = @i_codigo" } ] },
+              { "method": "GET", "route": "/api/cadastro/lista", "commands": [ { "sql": "SELECT * FROM fncLista() WHERE 1 = 1 /*filtro opcional*/ AND x = @x", "dynamic": true } ] },
+              { "method": "PUT", "route": "/api/cadastro/padrao", "commands": [ { "sql": "DECLARE @t typePadrao INSERT INTO @t VALUES /*valores*/ EXEC spCadPadrao @t = @t", "dynamic": true } ], "objects": [ "dbo.typePadrao" ] }
+            ] }
+            """);
+        origin.OpenApi = JObject.Parse("""{ "openapi": "3.0.1", "paths": {} }""");
+        await using var _ = await Serve(origin);
+        await ClearArea();
+
+        var described = await Json(await Api.GetAsync("api/transport/endpoints?kind=api&name=Cadastro&fresh=true"));
+        Assert.Equal(("Sales", "3.0.1"), ((string?)described["Database"], (string?)described["OpenApi"]!["openapi"]));
+        var endpoints = described["Map"]!["endpoints"]!;
+        // Read from the SQL, and found in the catalog to be opened on their own screens.
+        Assert.Equal(["dbo.spCadAntena:Procedure"], endpoints[0]!["found"]!.Select(found => $"{found["name"]}:{found["kind"]}"));
+        Assert.Equal(["dbo.fncLista:Function"], endpoints[1]!["found"]!.Select(found => $"{found["name"]}:{found["kind"]}"));
+        // A text made of parts is not whole T-SQL: what it runs by name is still found, and what the map names too.
+        Assert.Equal(["dbo.spCadPadrao", "dbo.typePadrao"], endpoints[2]!["found"]!.Select(found => (string?)found["name"]));
+
+        var used = await Json(await Api.GetAsync("api/transport/endpoints/used?schema=dbo&name=spCadAntena"));
+        Assert.Equal(["Cadastro POST /api/cadastro/antena"], used["uses"]!.Select(use => $"{use["api"]} {use["method"]} {use["route"]}"));
+
+        // A package that changes it says, by item, the endpoints of this environment that use it.
+        await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spCadAntena" }), HttpStatusCode.Created);
+        var id = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Antena" }), HttpStatusCode.Created))["package"]!["id"]!;
+        var affected = await Json(await Api.GetAsync($"api/transport/packages/{id}/endpoints"));
+        Assert.Equal(["/api/cadastro/antena"], affected["items"]!["1"]!.Select(use => (string?)use["route"]));
     }
 
     [Fact]

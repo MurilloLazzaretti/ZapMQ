@@ -14,7 +14,7 @@ import { kindIcon, kindName, size } from '../core/database';
 import { diff } from '../core/diff';
 import { Auth } from '../core/auth';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
-import { ApplicationDefaults, InstallChoice, ItemCheck, PackageDetail, PackageItem, PackageItemDetail, PackageResult } from '../core/models';
+import { ApplicationDefaults, EndpointUse, InstallChoice, ItemCheck, PackageDetail, PackageItem, PackageItemDetail, PackageResult } from '../core/models';
 import { Transport, groupItems, historyText, itemAction, itemTone, statusName, statusTone, targetIcon, targetName } from '../core/transport';
 import { confirm } from '../shared/dialogs';
 import { InstallForm } from '../shared/install-form';
@@ -390,7 +390,14 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     this.load(false);
   }
 
+  /** By item of the database: the endpoints of this environment that use what it changes. */
+  protected readonly affected = signal<Record<string, EndpointUse[]>>({});
+
   private load(first: boolean): void {
+    if (first) {
+      // Only where the APIs bring the map of their endpoints; without it the package is as it was.
+      this.api.packageEndpoints(this.id).subscribe({ next: (answer) => this.affected.set(answer.items), error: () => undefined });
+    }
     this.api.package(this.id).subscribe({
       next: (detail) => {
         const before = this.status();

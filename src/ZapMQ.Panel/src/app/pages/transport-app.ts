@@ -14,6 +14,7 @@ import { size } from '../core/database';
 import { AgoPipe, WhenPipe } from '../core/format';
 import { CopyChange, KeptCopies, KeptCopy, RemovedApplication, TargetFile, TransportTarget } from '../core/models';
 import { Transport, targetIcon, targetName } from '../core/transport';
+import { ApiEndpoints } from '../shared/api-endpoints';
 
 /**
  * One application of this environment: where it is, what serves it, and the files of its
@@ -21,7 +22,7 @@ import { Transport, targetIcon, targetName } from '../core/transport';
  */
 @Component({
   selector: 'zap-transport-app',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatCheckboxModule, MatIconModule, MatTooltipModule, AgoPipe, WhenPipe],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatCheckboxModule, MatIconModule, MatTooltipModule, AgoPipe, WhenPipe, ApiEndpoints],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './transport-app.html',
   styleUrl: './transport-app.scss',
