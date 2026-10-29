@@ -193,9 +193,9 @@ grupos: **Acompanhar** (o que está rodando) e **Configurar** (como cada grupo r
 cada grupo leva direto à configuração dele.
 
 Na tela de cada aplicação, em **Aplicações**, ficam onde ela está, os arquivos de configuração, as
-cópias guardadas (para voltar a uma delas sem pacote) e, numa API, a aba **Endpoints**: o que ela
-expõe, pelo OpenAPI que publica, e o que cada endpoint executa no banco, pelo mapa que traz na
-pasta. Os dois são opcionais e de qualquer sistema; o formato e os estados estão em
+cópias guardadas (para voltar a uma delas sem pacote) e, numa API, o quadro **Endpoints**, que leva
+à tela dos endpoints dela: o que ela expõe, pelo OpenAPI que publica, e o que cada endpoint executa
+no banco, pelo mapa que traz na pasta. Os dois são opcionais e de qualquer sistema; o formato e os estados estão em
 [`ENDPOINTS.md`](ENDPOINTS.md).
 
 - **Grupos e workers ao vivo:** estado, quantidade desejada e por quê (base, boost, escala pela fila), reciclagem em andamento, grupo instável.

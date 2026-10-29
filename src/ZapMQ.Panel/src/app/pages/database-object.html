@@ -208,7 +208,12 @@
       </section>
     }
 
-    @if (endpoints(); as uses) {
+    @if (endpointsProblem()) {
+      <section class="panel">
+        <div class="panel-head"><h2>Endpoints que usam</h2></div>
+        <p class="muted none">Não foi possível saber quais endpoints usam este objeto: {{ endpointsProblem() }}</p>
+      </section>
+    } @else if (endpoints(); as uses) {
       <section class="panel">
         <div class="panel-head"><h2>Endpoints que usam</h2><span class="hint">nas APIs deste ambiente que trazem o mapa de endpoints · {{ uses.length | num }}</span></div>
         @if (uses.length) {
@@ -216,7 +221,7 @@
             @for (use of uses; track use.api + use.method + use.route) {
               <li>
                 <span class="verb">{{ use.method }}</span>
-                <a [routerLink]="['/workers/aplicacoes', 'api', use.api]" class="mono">{{ use.route }}</a>
+                <a [routerLink]="['/workers/aplicacoes', 'api', use.api, 'endpoints']" [queryParams]="{ endpoint: endpointKey(use.method, use.route) }" class="mono">{{ use.route }}</a>
                 <span class="muted">{{ use.api }}</span>
               </li>
             }

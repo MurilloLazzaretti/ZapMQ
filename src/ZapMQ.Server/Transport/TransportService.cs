@@ -32,7 +32,7 @@ public sealed record FileChange(string Path, string State, long Size);
 /// and changes the machine: taking the script of an object when a package is closed, comparing
 /// a package that arrived with what is here, and applying what was approved.
 /// </summary>
-public sealed partial class TransportService(TransportStore store, WorkerControlClient worker, TimeProvider time, ILogger<TransportService> logger, TransportPolicyStore policy)
+public sealed partial class TransportService(TransportStore store, WorkerControlClient worker, TimeProvider time, ILogger<TransportService> logger, TransportPolicyStore policy, ApiEndpoints endpoints)
 {
     /// <summary>
     /// For how long an answer to "apply this" is waited for. A script may take minutes.
@@ -1086,6 +1086,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
             try
             {
                 if (step.How == "files")
+                    endpoints.Forget(item.Kind, item.Name ?? "");
+                if (step.How == "files")
                     Outcome(outcome, await worker.AskAsync("TransportRevert", by, ReplacePatience, request =>
                     {
                         request["Package"] = id;
@@ -1176,6 +1178,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// </summary>
     private async Task Replace(string id, PackageItem item, ItemResult result, bool force, string by, CancellationToken cancellation)
     {
+        // What the application says about its endpoints may change with its files.
+        endpoints.Forget(item.Kind, item.Name ?? "");
         var files = store.Content(id, item.Number) ?? throw new TransportRefused("O conteúdo do item não está mais no arquivo do pacote");
         var work = store.WorkFile($"{id}-{item.Number:00}.zip");
         Directory.CreateDirectory(Path.GetDirectoryName(work)!);

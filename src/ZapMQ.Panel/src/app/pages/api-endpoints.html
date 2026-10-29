@@ -1,0 +1,170 @@
+<div class="page">
+  <header class="head">
+    <a mat-icon-button [routerLink]="['/workers/aplicacoes', kind, name]" matTooltip="Voltar à aplicação" aria-label="Voltar à aplicação"><mat-icon svgIcon="arrow_back" /></a>
+    <div class="title">
+      <h1>Endpoints <span class="muted">· {{ name }}</span></h1>
+      @if (docs(); as now) {
+        <p class="sources">
+          @if (now.OpenApi) {
+            <span class="source ok" [matTooltip]="now.OpenApiUrl || ''"><mat-icon svgIcon="check_circle" /> OpenAPI {{ now.OpenApi['info']?.version ? 'v' + now.OpenApi['info']?.version : '' }}</span>
+          } @else {
+            <span class="source" [matTooltip]="openApiProblem(now)"><mat-icon svgIcon="info" /> sem OpenAPI</span>
+          }
+          @if (now.Map) {
+            <span class="source" [class.ok]="!now.MapStale" [class.warn]="now.MapStale" [matTooltip]="now.MapStale ? 'Há binários na pasta mais novos que o mapa (' + (now.NewestBinaryAt | when) + '): ele pode não corresponder ao que está instalado.' : 'Gerado em ' + (now.MapBuiltAt | when)">
+              <mat-icon [svgIcon]="now.MapStale ? 'warning' : 'check_circle'" /> mapa do banco {{ now.MapStale ? 'possivelmente desatualizado' : '' }}
+            </span>
+          } @else {
+            <span class="source" matTooltip="A pasta da API não tem o zapmq.endpoints.json"><mat-icon svgIcon="info" /> sem mapa do banco</span>
+          }
+          <span class="muted">{{ endpoints().length }} endpoints · {{ mappedCount() }} usam o banco · lido {{ now.At | ago }}</span>
+        </p>
+      }
+    </div>
+    <span class="spacer"></span>
+    <button mat-button (click)="load(true)" [disabled]="loading()"><mat-icon svgIcon="refresh" /> Atualizar</button>
+  </header>
+
+  @if (problem()) {
+    <section class="panel empty"><mat-icon svgIcon="cloud_off" /><span>{{ problem() }}</span></section>
+  } @else if (docs(); as now) {
+    @if (!now.OpenApi && !now.Map) {
+      <section class="panel unavailable">
+        <mat-icon svgIcon="info" />
+        <div>
+          <strong>Recurso não disponível para esta API</strong>
+          <span>Ela não publica um documento OpenAPI e não traz o mapa de endpoints (<span class="mono">zapmq.endpoints.json</span>) na pasta.</span>
+          <span class="muted">Para habilitar: a API publica o OpenAPI (em .NET, com Swashbuckle ou MapOpenApi), e o build dela gera o mapa. O formato está em <span class="mono">docs/ENDPOINTS.md</span>, no ZapMQ.</span>
+        </div>
+      </section>
+    } @else {
+      <div class="split">
+        <section class="panel list">
+          <div class="tools">
+            <label class="search">
+              <mat-icon svgIcon="search" />
+              <input type="search" placeholder="Rota, procedure, tabela, SQL…" [ngModel]="search()" (ngModelChange)="typed($event)" aria-label="Buscar endpoint" />
+            </label>
+            <div class="filters">
+              <select class="pick" [ngModel]="method()" (ngModelChange)="method.set($event)" aria-label="Verbo">
+                <option value="">Todos os verbos</option>
+                @for (item of methods(); track item) { <option [value]="item">{{ item }}</option> }
+              </select>
+              @if (now.Map) {
+                <label class="only"><input type="checkbox" [ngModel]="withSql()" (ngModelChange)="withSql.set($event)" /> só os que usam o banco</label>
+              }
+            </div>
+            <span class="muted count">{{ kept().length === endpoints().length ? endpoints().length + ' endpoints' : kept().length + ' de ' + endpoints().length }}</span>
+          </div>
+          <nav class="groups" aria-label="Endpoints">
+            @for (group of groups(); track group.name) {
+              <div class="group-name">{{ group.name }} <span class="muted">{{ group.items.length }}</span></div>
+              @for (item of group.items; track item.key) {
+                <button type="button" class="item" [class.on]="chosen() === item.key" (click)="choose(item)" [attr.aria-current]="chosen() === item.key">
+                  <span class="verb" [class]="'verb ' + item.method.toLowerCase()">{{ item.method }}</span>
+                  <span class="route mono" [class.deprecated]="item.deprecated">{{ item.route }}</span>
+                  @if (uses(item)) { <mat-icon class="db" svgIcon="database" matTooltip="Usa o banco" /> }
+                </button>
+              }
+            } @empty {
+              <p class="muted none">Nenhum endpoint com esses filtros.</p>
+            }
+          </nav>
+        </section>
+
+        <section class="panel detail">
+          @if (selected(); as item) {
+            <div class="detail-head">
+              <div class="route-line"><span class="verb" [class]="'verb ' + item.method.toLowerCase()">{{ item.method }}</span><strong class="mono">{{ item.route }}</strong></div>
+              @if (item.summary) { <p class="summary">{{ item.summary }}</p> }
+              @if (item.handler) { <p class="muted handler">Atendido por <span class="mono">{{ item.handler }}</span></p> }
+              <div class="tabs" role="tablist">
+                <button type="button" role="tab" [class.on]="showing() === 'banco'" [attr.aria-selected]="showing() === 'banco'" (click)="showing.set('banco')"><mat-icon svgIcon="database" /> Banco de dados @if (item.found.length) { <span class="count">{{ item.found.length }}</span> }</button>
+                <button type="button" role="tab" [class.on]="showing() === 'doc'" [attr.aria-selected]="showing() === 'doc'" (click)="showing.set('doc')" [disabled]="!item.documented"><mat-icon svgIcon="data_object" /> Documentação</button>
+              </div>
+            </div>
+
+            @if (showing() === 'banco') {
+              @if (!now.Map) {
+                <p class="muted pad">A API não traz o mapa de endpoints: não se sabe o que este endpoint executa no banco.</p>
+              } @else if (!item.mapped) {
+                <p class="muted pad">Este endpoint está no OpenAPI e não no mapa: não se sabe o que ele executa no banco.</p>
+              } @else if (!uses(item)) {
+                <p class="muted pad">Pelo mapa, este endpoint não executa nada no banco.</p>
+              } @else {
+                @if (item.found.length) {
+                  <h3>Objetos</h3>
+                  <div class="objects">
+                    @for (found of item.found; track found.name) {
+                      @if (found.kind && now.Database) {
+                        <a class="object" [routerLink]="['/banco/objetos', now.Database, found.kind, schemaOf(found.name), nameOf(found.name)]" [matTooltip]="kindName($any(found.kind)) + ': abre o objeto, com o que ele usa e os outros endpoints que o usam'"><mat-icon [svgIcon]="kindIcon($any(found.kind))" /> {{ found.name }}</a>
+                      } @else {
+                        <span class="object unknown" matTooltip="Não encontrado no banco acompanhado por este ambiente"><mat-icon svgIcon="info" /> {{ found.name }}</span>
+                      }
+                    }
+                  </div>
+                }
+                <h3>{{ item.commands.length === 1 ? 'Comando' : 'Comandos' }}</h3>
+                @for (command of item.commands; track $index) {
+                  <div class="command">
+                    <div class="command-head">
+                      @if (command.source) { <span class="mono muted">{{ command.source }}</span> }
+                      @if (command.dynamic) { <span class="pill warn" matTooltip="O texto é montado em execução: o que varia está marcado com /*…*/">montado em execução</span> }
+                    </div>
+                    <pre class="sql mono">{{ command.sql }}</pre>
+                    @for (note of command.notes ?? []; track $index) { <p class="note"><mat-icon svgIcon="warning" /> {{ note }}</p> }
+                  </div>
+                }
+              }
+            } @else {
+              @if (item.description) { <p class="description">{{ item.description }}</p> }
+              @if (item.parameters.length) {
+                <h3>Parâmetros</h3>
+                <div class="table-wrap">
+                  <table class="data params">
+                    <thead><tr><th>Nome</th><th>Onde</th><th>Tipo</th><th>Descrição</th></tr></thead>
+                    <tbody>
+                      @for (parameter of item.parameters; track parameter.in + parameter.name) {
+                        <tr><td class="mono">{{ parameter.name }}@if (parameter.required) { <span class="required" matTooltip="obrigatório">*</span> }</td><td>{{ where(parameter.in) }}</td><td class="mono">{{ parameter.type }}</td><td>{{ parameter.description }}</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+              @if (item.body) {
+                <h3>Corpo</h3>
+                <pre class="schema mono">{{ item.body }}</pre>
+              }
+              @if (item.responses.length) {
+                <h3>Respostas</h3>
+                @for (response of item.responses; track response.status) {
+                  <div class="response"><span class="pill" [class.ok]="response.status.startsWith('2')" [class.danger]="response.status.startsWith('4') || response.status.startsWith('5')">{{ response.status }}</span> <span>{{ response.description }}</span></div>
+                  @if (response.schema) { <pre class="schema mono">{{ response.schema }}</pre> }
+                }
+              }
+              @if (!item.parameters.length && !item.body && !item.responses.length && !item.description) {
+                <p class="muted pad">O OpenAPI não diz nada além da rota deste endpoint.</p>
+              }
+            }
+          } @else {
+            <div class="empty"><mat-icon svgIcon="search" /><span>Escolha um endpoint na lista.</span></div>
+          }
+        </section>
+      </div>
+    }
+
+    <details class="where-openapi">
+      <summary>Onde está o OpenAPI</summary>
+      <p class="muted">
+        @if (now.OpenApiTried?.length) { Procurado em: <span class="mono">{{ tried(now) }}</span>. }
+        Informe um caminho (<span class="mono">/docs/openapi.json</span>), pedido a cada site da API, ou um endereço completo. Vazio volta a procurar nos caminhos de costume.
+      </p>
+      <form (ngSubmit)="saveOpenApi()">
+        <input type="text" name="openapi" [(ngModel)]="openApiPath" placeholder="/swagger/v1/swagger.json" spellcheck="false" aria-label="Caminho do OpenAPI" />
+        <button mat-button type="submit" [disabled]="loading()">Gravar</button>
+      </form>
+    </details>
+  } @else {
+    <section class="panel empty"><span>Lendo o que a API diz de si…</span></section>
+  }
+</div>

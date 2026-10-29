@@ -10,6 +10,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
+import { endpointKey } from '../core/openapi';
 import { kindIcon, kindName, size } from '../core/database';
 import { diff } from '../core/diff';
 import { Auth } from '../core/auth';
@@ -53,6 +54,7 @@ const FORCING = 'O que não parar no tempo de espera terá o processo encerrado 
   styleUrl: './transport-package.scss',
 })
 export class TransportPackagePage implements OnInit, OnDestroy {
+  protected readonly endpointKey = endpointKey;
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);

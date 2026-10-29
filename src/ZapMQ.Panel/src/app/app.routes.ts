@@ -18,6 +18,7 @@ export const routes: Routes = [
       { path: 'configuracoes', title: 'Configurações · ZapMQ', loadComponent: () => import('./pages/settings').then((m) => m.SettingsPage) },
       { path: 'workers/aplicacoes', title: 'Aplicações · ZapMQ', loadComponent: () => import('./pages/apps').then((m) => m.AppsPage) },
       { path: 'workers/aplicacoes/nova', title: 'Nova aplicação · ZapMQ', loadComponent: () => import('./pages/app-new').then((m) => m.AppNewPage) },
+      { path: 'workers/aplicacoes/:kind/:name/endpoints', title: 'Endpoints · ZapMQ', loadComponent: () => import('./pages/api-endpoints').then((m) => m.ApiEndpointsPage) },
       { path: 'workers/aplicacoes/:kind/:name', title: 'Aplicação · ZapMQ', loadComponent: () => import('./pages/transport-app').then((m) => m.TransportAppPage) },
       { path: 'workers/proxy', title: 'Proxy · ZapMQ', loadComponent: () => import('./pages/proxy').then((m) => m.ProxyPage) },
       { path: 'workers/eventos', title: 'Histórico · Worker Control', loadComponent: () => import('./pages/worker-events').then((m) => m.WorkerEventsPage) },

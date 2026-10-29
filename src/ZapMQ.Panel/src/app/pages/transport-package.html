@@ -325,7 +325,7 @@
           <p class="affects"><mat-icon svgIcon="hub" />
             <span>Usado por {{ uses.length }} {{ uses.length === 1 ? 'endpoint' : 'endpoints' }} de {{ now.environment }}:
               @for (use of uses.slice(0, 5); track use.api + use.method + use.route; let last = $last) {
-                <a [routerLink]="['/workers/aplicacoes', 'api', use.api]"><span class="mono">{{ use.method }} {{ use.route }}</span></a> <span class="muted">({{ use.api }})</span>@if (!last) {, }
+                <a [routerLink]="['/workers/aplicacoes', 'api', use.api, 'endpoints']" [queryParams]="{ endpoint: endpointKey(use.method, use.route) }"><span class="mono">{{ use.method }} {{ use.route }}</span></a> <span class="muted">({{ use.api }})</span>@if (!last) {, }
               }
               @if (uses.length > 5) { <span class="muted"> e mais {{ uses.length - 5 }}</span> }
             </span>

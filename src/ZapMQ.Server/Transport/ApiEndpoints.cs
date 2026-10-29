@@ -24,7 +24,7 @@ public sealed partial class ApiEndpoints(WorkerControlClient worker, TimeProvide
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     private readonly ConcurrentDictionary<string, (DateTimeOffset At, JsonObject Answer)> _described = new(StringComparer.OrdinalIgnoreCase);
-    private (DateTimeOffset At, Dictionary<string, List<EndpointUse>> Index)? _uses;
+    private (string Stamp, Dictionary<string, List<EndpointUse>> Index)? _uses;
     private (DateTimeOffset At, string? Database, Dictionary<string, string> Kinds)? _catalog;
 
     private async Task<JsonNode> Ask(string command, string by, Action<JsonObject> more, CancellationToken cancellation)
@@ -131,13 +131,19 @@ public sealed partial class ApiEndpoints(WorkerControlClient worker, TimeProvide
     public async Task<List<EndpointUse>> UsedBy(string schema, string name, string by, CancellationToken cancellation) =>
         (await Uses(by, cancellation)).GetValueOrDefault($"{schema}.{name}") ?? [];
 
+    /// <summary>
+    /// The index of every map, made again whenever a map changes: the maps are asked for each
+    /// time (they are small files), and what is read from their SQL is kept while they stay the same.
+    /// </summary>
     public async Task<Dictionary<string, List<EndpointUse>>> Uses(string by, CancellationToken cancellation)
     {
-        if (_uses is { } kept && time.GetUtcNow() - kept.At < Kept)
+        var body = await Ask("ApiMaps", by, _ => { }, cancellation);
+        var applications = (body["Applications"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        var stamp = string.Join("|", applications.Select(application => $"{application["Name"]}@{application["MapFile"]}@{application["MapBuiltAt"]}@{application["Map"]?["endpoints"]?.AsArray().Count}"));
+        if (_uses is { } kept && kept.Stamp == stamp)
             return kept.Index;
         var index = new Dictionary<string, List<EndpointUse>>(StringComparer.OrdinalIgnoreCase);
-        var body = await Ask("ApiMaps", by, _ => { }, cancellation);
-        foreach (var application in (body["Applications"] as JsonArray ?? []).OfType<JsonObject>())
+        foreach (var application in applications)
         {
             var api = application["Name"]?.GetValue<string>() ?? "";
             foreach (var endpoint in (application["Map"]?["endpoints"] as JsonArray ?? []).OfType<JsonObject>())
@@ -152,7 +158,7 @@ public sealed partial class ApiEndpoints(WorkerControlClient worker, TimeProvide
                 }
             }
         }
-        _uses = (time.GetUtcNow(), index);
+        _uses = (stamp, index);
         return index;
     }
 

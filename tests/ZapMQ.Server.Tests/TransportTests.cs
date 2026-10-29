@@ -664,11 +664,16 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         var used = await Json(await Api.GetAsync("api/transport/endpoints/used?schema=dbo&name=spCadAntena"));
         Assert.Equal(["Cadastro POST /api/cadastro/antena"], used["uses"]!.Select(use => $"{use["api"]} {use["method"]} {use["route"]}"));
 
+        // A map that changes after the index was made is seen at once, without waiting for anything to expire.
+        ((JArray)origin.ApiMap["endpoints"]!).Add(JObject.Parse("""{ "method": "DELETE", "route": "/api/cadastro/antena/{codigo}", "commands": [ { "sql": "EXEC spCadAntena @i_codigo = @i_codigo" } ] }"""));
+        used = await Json(await Api.GetAsync("api/transport/endpoints/used?schema=dbo&name=spCadAntena"));
+        Assert.Equal(["POST /api/cadastro/antena", "DELETE /api/cadastro/antena/{codigo}"], used["uses"]!.Select(use => $"{use["method"]} {use["route"]}"));
+
         // A package that changes it says, by item, the endpoints of this environment that use it.
         await Json(await Api.PostAsJsonAsync("api/transport/area/objects", new { draft = _draft, kind = "Procedure", schema = "dbo", name = "spCadAntena" }), HttpStatusCode.Created);
         var id = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Antena" }), HttpStatusCode.Created))["package"]!["id"]!;
         var affected = await Json(await Api.GetAsync($"api/transport/packages/{id}/endpoints"));
-        Assert.Equal(["/api/cadastro/antena"], affected["items"]!["1"]!.Select(use => (string?)use["route"]));
+        Assert.Equal(["/api/cadastro/antena", "/api/cadastro/antena/{codigo}"], affected["items"]!["1"]!.Select(use => (string?)use["route"]));
     }
 
     [Fact]

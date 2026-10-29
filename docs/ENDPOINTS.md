@@ -1,7 +1,10 @@
 # Endpoints das APIs
 
-Na tela de uma API (*Processos e serviços → Aplicações → a API*), a aba **Endpoints** mostra o que
-ela expõe e, quando a API diz, o que cada endpoint executa no banco. Nada disso é próprio de um
+Na tela de uma API (*Processos e serviços → Aplicações → a API*), o quadro **Endpoints** resume o
+que ela diz de si e leva à tela **Endpoints** da API: a lista à esquerda (com busca por rota,
+procedure, tabela ou trecho do SQL) e, à direita, o endpoint escolhido, em duas abas: *Banco de
+dados* (os objetos, com link para a tela de cada um, e o SQL) e *Documentação* (parâmetros, corpo e
+respostas do OpenAPI). O endpoint escolhido e a busca ficam no endereço da página. Nada disso é próprio de um
 sistema: o ZapMQ lê dois arquivos abertos, cada um opcional.
 
 | Fonte | O que dá | De onde vem |
@@ -26,7 +29,8 @@ API, até um responder. Os caminhos tentados, nesta ordem:
 
 O documento pode ser OpenAPI 3 ou Swagger 2. Uma resposta que exige login (401/403), que não é
 JSON, ou que demora mais de 8 segundos, é dita como tal na tela. O resultado fica guardado por
-5 minutos no painel; *Atualizar* pede de novo.
+5 minutos no painel; *Atualizar* pede de novo, e a troca da API (por pacote, reversão ou volta para
+uma cópia guardada) o descarta.
 
 ## 2. Mapa de endpoints
 
@@ -87,7 +91,9 @@ Os objetos de cada endpoint (os do campo `objects` e os lidos do SQL) são ligad
 banco que o ZapMQ acompanha: cada um abre a tela do objeto, com o que ele por sua vez usa. No
 caminho inverso, a tela de um objeto do banco mostra **os endpoints que o usam**, em todas as APIs
 deste ambiente que trazem o mapa, e um pacote que leva uma procedure, function, view ou tabela
-mostra, no item, os endpoints deste ambiente que a usam.
+mostra, no item, os endpoints deste ambiente que a usam. Os mapas são lidos a cada consulta (são arquivos
+pequenos), e o índice feito do SQL deles é refeito sempre que um mapa muda: uma API republicada
+aparece na hora.
 
 ## 4. Configuração
 

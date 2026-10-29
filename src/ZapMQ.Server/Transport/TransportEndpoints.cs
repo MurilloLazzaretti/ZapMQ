@@ -266,8 +266,9 @@ public static class TransportEndpoints
             Relay(worker, context, "TransportBackups", request => { request["Kind"] = kind; request["Name"] = name; }));
 
         // Back to one of them without a package; what it had is kept as a copy too, to come forward again.
-        api.MapPost("/backups/restore", (RestoreRequest body, WorkerControlClient worker, HttpContext context, ILoggerFactory loggers) =>
+        api.MapPost("/backups/restore", (RestoreRequest body, WorkerControlClient worker, ApiEndpoints endpoints, HttpContext context, ILoggerFactory loggers) =>
         {
+            endpoints.Forget(body.Kind ?? "", body.Name ?? "");
             if (string.IsNullOrWhiteSpace(body.Reason))
                 return Task.FromResult(Results.Json(new { error = "Diga por que a aplicação volta para essa cópia" }, statusCode: StatusCodes.Status400BadRequest));
             return Relay(worker, context, "TransportRestore", request =>

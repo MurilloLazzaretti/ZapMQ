@@ -8,6 +8,7 @@ import { Location } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { Api } from '../core/api';
+import { endpointKey } from '../core/openapi';
 import { actionName, actionTone, kindIcon, kindName, size, variety } from '../core/database';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
 import { CatalogColumn, CatalogDetail, CatalogReference, ObjectChange, EndpointUse } from '../core/models';
@@ -43,6 +44,7 @@ const PARTS: Record<string, string> = {
   styleUrl: './database-object.scss',
 })
 export class DatabaseObjectPage implements OnInit, OnDestroy {
+  protected readonly endpointKey = endpointKey;
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   protected readonly transport = inject(Transport);
@@ -203,11 +205,18 @@ export class DatabaseObjectPage implements OnInit, OnDestroy {
 
   /** The endpoints of the APIs of this environment that use it; null while unknown, or when they cannot be told. */
   protected readonly endpoints = signal<EndpointUse[] | null>(null);
+  protected readonly endpointsProblem = signal('');
 
   private load(): void {
     const { database, kind, schema, name } = this.wanted();
     this.endpoints.set(null);
-    this.api.endpointsUsing(schema, name).subscribe({ next: (answer) => this.endpoints.set(answer.uses), error: () => undefined });
+    this.endpointsProblem.set('');
+    this.api.endpointsUsing(schema, name).subscribe({
+      next: (answer) => this.endpoints.set(answer.uses),
+      error: (failure: HttpErrorResponse) =>
+        failure.status !== 401 &&
+        this.endpointsProblem.set(failure.status === 501 ? 'O Worker Control instalado é anterior a este recurso (existe a partir da versão 2.31).' : (failure.error?.error ?? 'Não foi possível perguntar às APIs deste ambiente.')),
+    });
     this.detail.set(null);
     this.problem.set('');
     this.missing.set(false);
