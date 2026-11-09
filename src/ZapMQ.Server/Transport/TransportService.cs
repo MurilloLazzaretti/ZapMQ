@@ -168,6 +168,27 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     }
 
     /// <summary>
+    /// What the machine that made a zip leaves in it, and no application owns: the
+    /// <c>__MACOSX</c> folder and the <c>._name</c> files a Mac adds beside each file, and the
+    /// listings Finder and Explorer keep. Never carried, for any zip that is brought: put in
+    /// place, they only fill the folder of the application with files nobody reads, and make it
+    /// differ from the same application in another environment.
+    /// </summary>
+    private static bool Junk(string path)
+    {
+        var parts = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+            return false;
+        if (parts.Any(part => part.Equals("__MACOSX", StringComparison.OrdinalIgnoreCase)))
+            return true;
+        var name = parts[^1];
+        return name.StartsWith("._", StringComparison.Ordinal)
+            || name.Equals(".DS_Store", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("Thumbs.db", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("desktop.ini", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// What tells one set of files from another, whatever way they were packed.
     /// </summary>
     private static string Fingerprint(IEnumerable<FileReference> files) =>
@@ -186,7 +207,9 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         try
         {
             using var source = new System.IO.Compression.ZipArchive(new MemoryStream(brought), System.IO.Compression.ZipArchiveMode.Read);
-            var entries = source.Entries.Where(entry => !entry.FullName.EndsWith('/') && !entry.FullName.EndsWith('\\')).ToList();
+            // What the machine that made the zip left in it is dropped first: a Mac zip has a __MACOSX
+            // folder beside the real one, and that would hide the folder on the outside.
+            var entries = source.Entries.Where(entry => !entry.FullName.EndsWith('/') && !entry.FullName.EndsWith('\\') && !Junk(entry.FullName)).ToList();
             var paths = entries.Select(entry => entry.FullName.Replace('\\', '/')).ToList();
             if (paths.Any(path => path.StartsWith('/') || path.Contains(':') || path.Split('/').Any(part => part is ".." or ".")))
                 throw new TransportRefused("O zip tem um arquivo que cairia fora da pasta de destino");

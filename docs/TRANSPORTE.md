@@ -622,6 +622,13 @@ Transporte → *Configuração* guarda as pastas de entrada.
 Nos dois casos o que é do ambiente fica de fora: `appsettings*.json`, `web.config`,
 `ConfigWorkers.json`, `*.ini`, `environment.js`, `env.json`, bancos locais (`*.db`) e `logs/`.
 
+Também fica de fora, em qualquer zip que se traga, o que a máquina que o fez deixou nele e nenhuma
+aplicação lê: a pasta `__MACOSX`, os arquivos `._nome` que o Mac põe ao lado de cada arquivo,
+`.DS_Store`, `Thumbs.db` e `desktop.ini`. Um zip feito num Mac e extraído como está enche a pasta
+da aplicação de arquivos inúteis e a faz diferir da mesma aplicação em outro ambiente na
+comparação. Com isso fora, a pasta que envolve o zip (`publish/`, `site/`) continua sendo achada
+mesmo havendo uma `__MACOSX` ao lado dela.
+
 **Aplicar onde o pacote foi montado.** Um pacote fechado pode ser aplicado no próprio ambiente,
 com a mesma comparação e a mesma aprovação (agora ou agendada). É assim que a versão deixada na
 pasta de entrada passa a rodar no primeiro ambiente; o mesmo pacote segue depois para o próximo.

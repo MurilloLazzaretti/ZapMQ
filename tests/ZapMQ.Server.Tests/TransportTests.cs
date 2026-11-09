@@ -1324,6 +1324,37 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
     }
 
     [Fact]
+    public async Task What_the_machine_that_made_a_zip_left_in_it_is_not_carried()
+    {
+        await using var _ = await Serve(new PretendDatabase());
+        await ClearArea();
+
+        // Zipped on a Mac: __MACOSX beside the folder, a ._ file beside each file, and the listings of Finder and Explorer.
+        var zip = PretendDatabase.Zipped(new()
+        {
+            ["site/Orders.Api.dll"] = "v2", ["site/wwwroot/index.html"] = "<html>", ["site/wwwroot/._index.html"] = "r", ["site/.DS_Store"] = "d",
+            ["site/Thumbs.db"] = "t", ["site/desktop.ini"] = "i", ["__MACOSX/site/._Orders.Api.dll"] = "r", ["__MACOSX/site/wwwroot/._index.html"] = "r"
+        });
+
+        // The folder on the outside is still found once __MACOSX is out of the way, and only the files of the application are carried.
+        var placed = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders", new ByteArrayContent(zip)), HttpStatusCode.Created);
+        Assert.Equal(["Orders.Api.dll", "wwwroot/index.html"], placed["files"]!.Select(file => (string?)file["path"]));
+
+        // The same for a new application, which carries everything else it has.
+        var seen = await Json(await Api.PostAsync("api/transport/applications/files", new ByteArrayContent(zip)));
+        Assert.Equal(["Orders.Api.dll", "wwwroot/index.html"], seen["files"]!.Select(file => (string?)file["path"]));
+
+        // A file that only looks like it keeps its place.
+        var kept = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders2",
+            new ByteArrayContent(PretendDatabase.Zipped(new() { ["Orders.dll"] = "v2", ["MACOSX/readme.txt"] = "x", ["data._bak"] = "b", [".DS_Store.txt"] = "n" }))), HttpStatusCode.Created);
+        Assert.Equal([".DS_Store.txt", "data._bak", "MACOSX/readme.txt", "Orders.dll"], kept["files"]!.Select(file => (string?)file["path"]));
+
+        // A zip with nothing but that is refused, as an empty one is.
+        await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders3",
+            new ByteArrayContent(PretendDatabase.Zipped(new() { ["__MACOSX/._a"] = "r", [".DS_Store"] = "d" }))), HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task A_file_to_download_is_brought_as_it_is_and_goes_with_the_version_it_was_given()
     {
         var dev = new PretendDatabase();
