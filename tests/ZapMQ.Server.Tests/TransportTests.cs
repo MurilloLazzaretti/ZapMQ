@@ -34,6 +34,16 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         public Dictionary<string, Dictionary<string, string>> Targets { get; } = [];
 
         /// <summary>
+        /// The configuration files of the environment each target has now, as "kind:name", each with its text.
+        /// </summary>
+        public Dictionary<string, Dictionary<string, string>> EnvironmentHere { get; } = [];
+
+        /// <summary>
+        /// A Worker Control from before the configuration of the environment travelled: it does not list it.
+        /// </summary>
+        public bool OldWorker { get; set; }
+
+        /// <summary>
         /// The map of the endpoints of the API Cadastro, and the OpenAPI document it serves.
         /// </summary>
         public JObject? ApiMap { get; set; }
@@ -122,7 +132,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                         ? new JObject
                         {
                             ["Ok"] = true, ["Target"] = new JObject { ["Kind"] = request["Kind"], ["Name"] = request["Name"], ["Version"] = "1.0", ["Problem"] = TargetProblem, ["Paths"] = new JArray("D:\\Apps\\" + request["Name"]), ["Sites"] = Sites.GetValueOrDefault((string)request["Name"]!) ?? [], ["Mode"] = Modes.GetValueOrDefault($"{request["Kind"]}:{request["Name"]}") },
-                            ["Files"] = new JArray(files.Select(file => new JObject { ["Path"] = file.Key, ["Size"] = file.Value.Length, ["Sha256"] = Sha(file.Value) }))
+                            ["Files"] = new JArray(files.Select(file => new JObject { ["Path"] = file.Key, ["Size"] = file.Value.Length, ["Sha256"] = Sha(file.Value) })),
+                            ["Environment"] = OldWorker ? null : new JArray((EnvironmentHere.GetValueOrDefault($"{request["Kind"]}:{request["Name"]}") ?? []).Select(file => new JObject { ["Path"] = file.Key, ["Size"] = file.Value.Length, ["Sha256"] = Sha(file.Value) }))
                         }
                         : new JObject { ["Ok"] = false, ["Error"] = new JObject { ["Code"] = "not-found", ["Message"] = "no such target" } };
                 case "TransportCapture":
@@ -138,14 +149,15 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
                     // The files are there to be read while the answer is being made, and not after.
                     Deployed = Unzipped(File.ReadAllBytes((string)request["File"]!));
                     if (OnApply is null)
-                        Targets[$"{request["Kind"]}:{request["Name"]}"] = Deployed;
+                        // The Worker Control lists as the files of a target the ones that are not of the environment; the others it keeps apart.
+                        Targets[$"{request["Kind"]}:{request["Name"]}"] = Deployed.Where(file => !global::ZapMQ.Server.Transport.TransportService.IsEnvironmentFile(file.Key)).ToDictionary(file => file.Key, file => file.Value);
                     return OnApply?.Invoke(request) ?? new JObject { ["Ok"] = true, ["Applied"] = true, ["Did"] = "replaced", ["Backup"] = "/backup/there", ["Messages"] = new JArray("stopped", "replaced", "started") };
                 case "ApplicationDefaults":
                     return Defaults;
                 case "TransportFiles":
                     return new JObject { ["Ok"] = true, ["Files"] = new JArray((Settings.GetValueOrDefault($"{request["Kind"]}:{request["Name"]}") ?? []).Keys.Select(path => new JObject { ["Instance"] = 0, ["Path"] = path })) };
                 case "TransportFile":
-                    return new JObject { ["Ok"] = true, ["Content"] = Settings[$"{request["Kind"]}:{request["Name"]}"][(string)request["Path"]!] };
+                    return new JObject { ["Ok"] = true, ["Content"] = (EnvironmentHere.GetValueOrDefault($"{request["Kind"]}:{request["Name"]}") ?? Settings[$"{request["Kind"]}:{request["Name"]}"])[(string)request["Path"]!] };
                 case "Proxy":
                     return new JObject { ["Ok"] = true, ["Configured"] = ProxyFiles.Count > 0, ["Files"] = new JArray(ProxyFiles.Keys.Select(path => new JObject { ["Path"] = path })) };
                 case "ProxyFile":
@@ -825,7 +837,10 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
 
         await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
-        var ended = await WaitFor(id, "Applied", "Partial", "Failed");
+        var paused = await WaitFor(id, "Paused", "Applied", "Partial", "Failed");
+        Assert.Equal("Paused", (string?)paused["package"]!["status"]);
+        Assert.True((int)JObject.Parse(await Api.GetStringAsync("api/transport/summary"))["troubled"]! > 0);
+        var ended = await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/decide", new { proceed = false }));
 
         Assert.Equal("Partial", (string?)ended["package"]!["status"]);
         Assert.Equal(["applied", "failed"], ended["results"]!.Select(result => (string?)result["status"]));
@@ -835,10 +850,46 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
             Assert.Equal(2, here.Applied.Count);
         var troubled = (int)JObject.Parse(await Api.GetStringAsync("api/transport/summary"))["troubled"]!;
         Assert.True(troubled > 0);
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/decide", new { proceed = false }), HttpStatusCode.Conflict);
         // Somebody knows about it: it stays as it is, and stops asking for attention.
         var known = await Json(await Api.PostAsync($"api/transport/packages/{id}/acknowledge", null));
         Assert.Equal(("Partial", "admin", "acknowledged"), ((string?)known["package"]!["status"], (string?)known["package"]!["acknowledgedBy"], (string?)known["history"]!.Last()["what"]));
         Assert.Equal(troubled - 1, (int)JObject.Parse(await Api.GetStringAsync("api/transport/summary"))["troubled"]!);
+    }
+
+    [Fact]
+    public async Task A_package_that_stopped_at_an_item_that_failed_goes_on_with_the_others_only_when_somebody_says_so()
+    {
+        var (_, made) = await Made();
+        var here = new PretendDatabase
+        {
+            OnApply = request => (string?)request["Name"] == "spClose"
+                ? new JObject { ["Ok"] = true, ["Applied"] = false, ["Problem"] = "Invalid object name 'dbo.Rates'.", ["Batch"] = 1, ["Line"] = 3, ["Messages"] = new JArray() }
+                : null
+        };
+        here.Objects["Rates"] = ("Table", "CREATE TABLE dbo.Rates (Id int)", []);
+        await using var _ = await Serve(here);
+        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
+        var paused = await WaitFor(id, "Paused", "Applied", "Partial", "Failed");
+        Assert.Equal("Paused", (string?)paused["package"]!["status"]);
+        Assert.Equal(["applied", "failed"], paused["results"]!.Select(result => (string?)result["status"]));
+        // Nothing moves on its own while the question is open.
+        await Task.Delay(400);
+        lock (here.Applied)
+            Assert.Equal(2, here.Applied.Count);
+
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/decide", new { proceed = true }));
+        var ended = await WaitFor(id, "Applied", "Partial", "Failed");
+
+        // The items that were done are not done again and the one that failed is not tried again.
+        Assert.Equal("Partial", (string?)ended["package"]!["status"]);
+        Assert.Equal(["applied", "failed", "applied", "applied"], ended["results"]!.Select(result => (string?)result["status"]));
+        Assert.Equal([1, 2, 3, 4], ended["results"]!.Select(result => (int)result["number"]!));
+        lock (here.Applied)
+            Assert.Equal(4, here.Applied.Count);
+        Assert.Contains(ended["history"]!, entry => (string?)entry["what"] == "continued");
     }
 
     [Fact]
@@ -1017,7 +1068,9 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
             // Brought as a zip made by a careless hand: the folder on the outside, and the configuration in it.
             var zip = PretendDatabase.Zipped(new() { ["Orders.Api.dll"] = "v2", ["wwwroot/index.html"] = "<html>", ["appsettings.json"] = "{dev}", ["web.config"] = "<x/>", ["logs/today.log"] = "noise" }, outer: "publish/");
             var uploaded = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders&version=2.3.0", new ByteArrayContent(zip)), HttpStatusCode.Created);
-            Assert.Equal(["Orders.Api.dll", "wwwroot/index.html"], uploaded["files"]!.Select(file => (string?)file["path"]));
+            // The configuration of the zip goes with it, marked; the logs do not.
+            Assert.Equal(["appsettings.json", "Orders.Api.dll", "web.config", "wwwroot/index.html"], uploaded["files"]!.Select(file => (string?)file["path"]));
+            Assert.Equal(["appsettings.json", "web.config"], uploaded["files"]!.Where(file => (bool)file["environment"]!).Select(file => (string?)file["path"]));
             Assert.Equal(("api", "Orders", "2.3.0", "Replace"), ((string?)uploaded["kind"], (string?)uploaded["name"], (string?)uploaded["version"], (string?)uploaded["action"]));
             // And what is running, packed by the Worker Control.
             var running = await Json(await Api.PostAsJsonAsync("api/transport/area/running", new { draft = _draft, kind = "service", name = "Sockets" }), HttpStatusCode.Created);
@@ -1028,7 +1081,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
             // A module of a web application, brought as the site is published: its folder is found inside, ...
             var module = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=frontend&name=brief",
                 new ByteArrayContent(PretendDatabase.Zipped(new() { ["mfe/brief/remoteEntry.json"] = "{}", ["mfe/brief/Module-X.js"] = "x", ["mfe/brief/web.config"] = "<x/>" }))), HttpStatusCode.Created);
-            Assert.Equal(["Module-X.js", "remoteEntry.json"], module["files"]!.Select(file => (string?)file["path"]));
+            // The web.config of the folder of the module is configuration of the environment: it goes, marked.
+            Assert.Equal(["Module-X.js", "remoteEntry.json", "web.config"], module["files"]!.Select(file => (string?)file["path"]));
             // ... but the whole site, with the manifest beside the module, would leave the module out of the air in its folder.
             var site = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=frontend&name=brief",
                 new ByteArrayContent(PretendDatabase.Zipped(new() { ["mfe/brief/remoteEntry.json"] = "{}", ["assets/mf.manifest.json"] = "{}" }))), HttpStatusCode.BadRequest);
@@ -1043,7 +1097,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
             var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Orders 2.3" }), HttpStatusCode.Created);
             // The database first, then what runs.
             Assert.Equal(["database", "api", "service"], closed["items"]!.Select(item => (string?)item["kind"]));
-            Assert.Equal((2, "2.3.0"), ((int)closed["items"]![1]!["files"]!, (string?)closed["items"]![1]!["version"]));
+            // The two files of the code, the two of the environment the zip brought.
+            Assert.Equal((4, "2.3.0"), ((int)closed["items"]![1]!["files"]!, (string?)closed["items"]![1]!["version"]));
             made = await Released((string?)closed["package"]!["id"]);
         }
 
@@ -1115,6 +1170,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await using var _ = await Serve(here);
         var failing = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
         await Json(await Api.PostAsJsonAsync($"api/transport/packages/{failing}/approve", new { }));
+        await WaitFor(failing, "Paused", "Applied", "Partial", "Failed");
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{failing}/decide", new { proceed = false }));
         var ended = await WaitFor(failing, "Applied", "Partial", "Failed");
 
         Assert.Equal("Failed", (string?)ended["package"]!["status"]);
@@ -1299,7 +1356,9 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await ClearArea();
 
         var placed = await Json(await Api.PostAsJsonAsync("api/transport/area/incoming", new { draft = _draft, kind = "api", name = "Orders" }), HttpStatusCode.Created);
-        Assert.Equal(["new.js", "Orders.Api.dll"], placed["files"]!.Select(file => (string?)file["path"]));
+        // What the developer left beside the code goes too, marked as configuration of the environment.
+        Assert.Equal(["appsettings.json", "new.js", "Orders.Api.dll"], placed["files"]!.Select(file => (string?)file["path"]));
+        Assert.Equal(["appsettings.json"], placed["files"]!.Where(file => (bool)file["environment"]!).Select(file => (string?)file["path"]));
         var id = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Orders 2" }), HttpStatusCode.Created))["package"]!["id"]!;
 
         // Made here, it is compared with what runs here and applied here like anywhere else.
@@ -1314,7 +1373,8 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         var applied = await WaitFor(id, "Applied", "Partial", "Failed");
 
         Assert.Equal("Applied", (string?)applied["package"]!["status"]);
-        Assert.Equal(new Dictionary<string, string> { ["Orders.Api.dll"] = "v2", ["new.js"] = "n" }, dev.Deployed);
+        // What the developer left beside the code was handed over too: the Worker Control puts it only where there is none, or where it was chosen.
+        Assert.Equal(new Dictionary<string, string> { ["Orders.Api.dll"] = "v2", ["new.js"] = "n", ["appsettings.json"] = "{of the developer}" }, dev.Deployed);
         Assert.Equal(["closed", "approved", "cancelled", "approved", "applying", "applied"], applied["history"]!.Select(entry => (string?)entry["what"]));
         // Applied, it stays as the record of what was done, and is still the file that goes on.
         Assert.Equal(HttpStatusCode.Conflict, (await Api.DeleteAsync($"api/transport/packages/{id}")).StatusCode);
@@ -1353,6 +1413,100 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
         await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders3",
             new ByteArrayContent(PretendDatabase.Zipped(new() { ["__MACOSX/._a"] = "r", [".DS_Store"] = "d" }))), HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task The_configuration_of_the_environment_travels_without_secrets_and_is_replaced_only_where_it_was_chosen()
+    {
+        byte[] made;
+        await using (await Serve(new PretendDatabase()))
+        {
+            await ClearArea();
+            // What an application publishes beside its code: configuration with a secret, configuration without one, and what never travels.
+            var zip = PretendDatabase.Zipped(new()
+            {
+                ["Orders.Api.dll"] = "v2", ["env.json"] = "{\"apiBaseUrl\": \"http://dev\"}", ["appsettings.json"] = "{\"Port\": 1, \"Db\": {\"Password\": \"s3cret\", \"Server\": \"dev\"}}",
+                ["web.config"] = "<configuration/>", ["ConfigWorkers.json"] = "{}", ["data.db"] = "db", ["logs/today.log"] = "noise", ["logs/appsettings.json"] = "{}"
+            });
+            var uploaded = await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders&version=2.0.0", new ByteArrayContent(zip)), HttpStatusCode.Created);
+            var files = uploaded["files"]!.ToDictionary(file => (string)file["path"]!);
+            Assert.Equal(new[] { "Orders.Api.dll", "appsettings.json", "env.json", "web.config" }.Order(), files.Keys.Order());
+            Assert.Equal([false, true, true, true], new[] { "Orders.Api.dll", "appsettings.json", "env.json", "web.config" }.Select(path => (bool)files[path]["environment"]!));
+            Assert.Equal(["Db:Password"], files["appsettings.json"]["blanked"]!.Select(name => (string?)name));
+            Assert.Empty(files["env.json"]["blanked"]!);
+
+            var closed = await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Orders 2.0" }), HttpStatusCode.Created);
+            made = await Released((string?)closed["package"]!["id"]);
+            // The secret is not in the package, and what has none is exactly as it was.
+            using var package = new ZipArchive(new MemoryStream(made));
+            var carried = PretendDatabase.Unzipped(ZipOf(package));
+            Assert.DoesNotContain("s3cret", carried["appsettings.json"]);
+            Assert.Contains("\"Server\": \"dev\"", carried["appsettings.json"]);
+            Assert.Equal("{\"apiBaseUrl\": \"http://dev\"}", carried["env.json"]);
+        }
+
+        var here = new PretendDatabase();
+        here.Targets["api:Orders"] = new() { ["Orders.Api.dll"] = "v1" };
+        // Here: env.json differs; appsettings.json is the same but for the secret (which this environment keeps); web.config is missing.
+        here.EnvironmentHere["api:Orders"] = new() { ["env.json"] = "{\"apiBaseUrl\": \"http://qas\"}", ["appsettings.json"] = "{\"Port\": 1, \"Db\": {\"Password\": \"mine\", \"Server\": \"dev\"}}" };
+        await using var _ = await Serve(here);
+        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+
+        var check = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!;
+        Assert.Equal(("changes", 0, 1, 0), ((string?)check["state"], (int)check["added"]!, (int)check["changed"]!, (int)check["removed"]!));
+        Assert.Equal(["appsettings.json:same", "env.json:different", "web.config:new"], check["environment"]!.Select(file => $"{file["path"]}:{file["state"]}"));
+
+        // The one that is the same, or that does not exist here, is not for choosing; and nothing is applied on a wrong word.
+        var wrong = await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { environment = new Dictionary<int, string[]> { [1] = ["appsettings.json"] } }), HttpStatusCode.Conflict);
+        Assert.Contains("appsettings.json", (string?)wrong["error"]);
+        Assert.Equal("Pending", (string?)JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}"))["package"]!["status"]);
+
+        here.OnApply = _ => new JObject { ["Ok"] = true, ["Applied"] = true, ["Did"] = "replaced", ["Backup"] = "/backup/there", ["EnvironmentCreated"] = new JArray("web.config"), ["EnvironmentReplaced"] = new JArray("env.json"), ["Messages"] = new JArray("replaced") };
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { environment = new Dictionary<int, string[]> { [1] = ["env.json"] } }));
+        var ended = await WaitFor(id, "Applied", "Partial", "Failed");
+
+        Assert.Equal("Applied", (string?)ended["package"]!["status"]);
+        lock (here.Applied)
+            Assert.Equal(["env.json"], here.Applied.Single()["ReplaceEnvironment"]!.Select(path => (string?)path));
+        var messages = ended["results"]![0]!["messages"]!.Select(message => (string?)message).ToList();
+        Assert.Contains(messages, message => message!.StartsWith("web.config não existia aqui e foi criado") && message.Contains("pode variar de um ambiente para o outro"));
+        Assert.Contains(messages, message => message!.StartsWith("env.json foi substituído pelo do pacote"));
+    }
+
+    [Fact]
+    public async Task A_worker_control_that_does_not_tell_what_configuration_it_has_is_not_promised_to_put_it()
+    {
+        byte[] made;
+        await using (await Serve(new PretendDatabase()))
+        {
+            await ClearArea();
+            var zip = PretendDatabase.Zipped(new() { ["Orders.Api.dll"] = "v2", ["env.json"] = "{}" });
+            await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders", new ByteArrayContent(zip)), HttpStatusCode.Created);
+            made = await Released((string?)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft = _draft, name = "Orders" }), HttpStatusCode.Created))["package"]!["id"]);
+        }
+
+        var here = new PretendDatabase { OldWorker = true };
+        here.Targets["api:Orders"] = new() { ["Orders.Api.dll"] = "v1" };
+        await using var _ = await Serve(here);
+        var id = (string)(await Import(FromElsewhere(made)))["package"]!["id"]!;
+
+        var check = JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{id}/check"))["checks"]![0]!;
+        Assert.Equal(["env.json:unknown"], check["environment"]!.Select(file => $"{file["path"]}:{file["state"]}"));
+        // And nothing can be chosen about it.
+        await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { environment = new Dictionary<int, string[]> { [1] = ["env.json"] } }), HttpStatusCode.Conflict);
+    }
+
+    private static byte[] ReadEntry(ZipArchiveEntry entry)
+    {
+        using var memory = new MemoryStream();
+        using (var stream = entry.Open())
+            stream.CopyTo(memory);
+        return memory.ToArray();
+    }
+
+    /// <summary>
+    /// The files of the first item of a package, as the package carries them.
+    /// </summary>
+    private static byte[] ZipOf(ZipArchive package) => ReadEntry(package.Entries.First(entry => entry.FullName.EndsWith("files.zip")));
 
     [Fact]
     public async Task A_file_to_download_is_brought_as_it_is_and_goes_with_the_version_it_was_given()

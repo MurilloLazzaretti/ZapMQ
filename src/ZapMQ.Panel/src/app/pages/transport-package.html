@@ -143,11 +143,22 @@
       @case ('Applying') {
         <section class="panel decide"><div><strong>Aplicando…</strong><span class="muted">{{ now.results.length }} de {{ now.items.length }} itens.</span></div></section>
       }
+      @case ('Paused') {
+        <section class="panel decide warned">
+          <div>
+            <strong class="bad">A aplicação parou no item {{ now.results[now.results.length - 1]?.number }}.</strong>
+            <span class="muted">{{ now.results[now.results.length - 1]?.problem || 'O resultado não chegou.' }} Faltam {{ now.items.length - now.results.length }} item(s) depois dele. O que já foi aplicado continua aplicado, e o item que falhou não é tentado de novo. Seguir pode dar erro nos que dependem dele.</span>
+          </div>
+          <span class="spacer"></span>
+          <button mat-button (click)="decide(false)" [disabled]="busy()" matTooltip="Encerra a aplicação aqui: o pacote fica como aplicado em parte"><mat-icon svgIcon="close" /> Parar aqui</button>
+          <button mat-flat-button (click)="decide(true)" [disabled]="busy()" matTooltip="Aplica os itens que faltam"><mat-icon svgIcon="task_alt" /> Continuar com os demais</button>
+        </section>
+      }
       @case ('Applied') {
         <section class="panel decide done"><div><strong>Aplicado em {{ now.environment }}.</strong><span class="muted">{{ now.items.length === 1 ? 'O item foi aplicado.' : 'Todos os ' + now.items.length + ' itens foram aplicados.' }} O mesmo arquivo pode seguir para o próximo ambiente.</span></div><span class="spacer"></span><button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter</button><button mat-button (click)="download()" [disabled]="!!now.package.waiting.length" [matTooltip]="now.package.waiting.length ? 'Disponível quando todos liberarem: falta ' + now.package.waiting.join(', ') : ''"><mat-icon svgIcon="download" /> Baixar pacote</button></section>
       }
       @case ('Partial') {
-        <section class="panel decide warned"><div><strong class="bad">Aplicado em parte.</strong><span class="muted">A aplicação parou no primeiro item que falhou. O que foi aplicado antes continua aplicado; nada foi desfeito.</span></div><span class="spacer"></span>@if (now.package.acknowledgedBy) { <span class="muted acked">{{ now.package.acknowledgedBy }} deu ciência</span> } @else { <button mat-button (click)="acknowledge()" [disabled]="busy()" matTooltip="O pacote fica como registro e deixa de contar no aviso do menu"><mat-icon svgIcon="done_all" /> Dar ciência</button> }<button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter o que foi aplicado</button></section>
+        <section class="panel decide warned"><div><strong class="bad">Aplicado em parte.</strong><span class="muted">A aplicação parou num item que falhou e foi decidido não seguir. O que foi aplicado antes continua aplicado; nada foi desfeito.</span></div><span class="spacer"></span>@if (now.package.acknowledgedBy) { <span class="muted acked">{{ now.package.acknowledgedBy }} deu ciência</span> } @else { <button mat-button (click)="acknowledge()" [disabled]="busy()" matTooltip="O pacote fica como registro e deixa de contar no aviso do menu"><mat-icon svgIcon="done_all" /> Dar ciência</button> }<button mat-button (click)="revert()" [disabled]="busy()" matTooltip="Volta ao que havia aqui antes deste pacote"><mat-icon svgIcon="history" /> Reverter o que foi aplicado</button></section>
       }
       @case ('Reverting') {
         <section class="panel decide"><div><strong>Revertendo…</strong><span class="muted">Pedido por {{ now.package.revertBy }}. Do último item aplicado para o primeiro.</span></div></section>
@@ -183,6 +194,7 @@
     @if (installing().length) {
       <section class="panel">
         <div class="panel-head"><h2>Instalar aqui</h2><span class="hint">o que {{ now.environment }} ainda não tem: informe o que é deste ambiente e preencha a configuração</span></div>
+        <p class="muted note pad"><mat-icon svgIcon="info" /> Os arquivos de configuração (env.json, appsettings.json, web.config…) podem variar de um ambiente para o outro: confira cada um abaixo antes de aplicar. O que parece senha veio em branco do ambiente de origem.</p>
         @for (item of installing(); track item.number) {
           <zap-install-form [item]="item" [defaults]="defaults()" [environment]="now.environment" [origin]="now.package.origin" (changed)="chosen(item.number, $event)" />
         }
@@ -289,7 +301,7 @@
                 @case ('failed') { <span class="pill danger">falhou</span> }
                 @default { <span class="pill warn" matTooltip="O pedido foi feito e a resposta não chegou: pode ter sido aplicado ou não. Confira no banco.">resultado desconhecido</span> }
               }
-            } @else if (now.package.status === 'Partial' || now.package.status === 'Failed' || now.package.status === 'RevertedPartly' || now.package.status === 'Reverting') {
+            } @else if (now.package.status === 'Partial' || now.package.status === 'Paused' || now.package.status === 'Failed' || now.package.status === 'RevertedPartly' || now.package.status === 'Reverting') {
               <span class="pill" matTooltip="A aplicação parou antes de chegar a este item">não aplicado</span>
             } @else if (item.action !== 'Script' && state(item); as standing) {
               <span class="pill" [class]="'pill ' + standing.tone" [matTooltip]="standing.hint">{{ standing.text }}</span>
@@ -320,6 +332,33 @@
         }
         @if (lacking(item).length) {
           <p class="trouble mild"><mat-icon svgIcon="warning" /> <span>Usa o que não existe aqui nem vem no pacote: <span class="mono">{{ lacking(item).join(', ') }}</span></span></p>
+        }
+        @if (environmentOf(item); as files) {
+          @if (files.length) {
+            <div class="env" role="group" aria-label="Arquivos de ambiente">
+              <p class="env-head"><mat-icon svgIcon="info" /> <span><strong>Arquivos de ambiente</strong> <span class="muted">· podem variar de um ambiente para o outro. O que já existe aqui só é substituído se você marcar; o que não existe é criado.</span></span></p>
+              @for (file of files; track file.path) {
+                <div class="env-row">
+                  <span class="mono env-path">{{ file.path }}</span>
+                  @switch (file.state) {
+                    @case ('new') { <span class="pill info" matTooltip="Este ambiente não tem o arquivo: ele é criado a partir do pacote. É um arquivo que pode variar de um ambiente para o outro; confira o conteúdo depois.">não existe aqui · será criado</span> }
+                    @case ('same') { <span class="pill ok" matTooltip="Igual ao que está aqui (as senhas não vão no pacote, então não contam)">igual ao daqui</span> }
+                    @case ('unknown') { <span class="pill warn" matTooltip="O Worker Control deste ambiente é de antes de tratar estes arquivos: ele não diz o que tem aqui e não os grava. Atualize-o para que sejam tratados.">não tratado por este Worker Control</span> }
+                    @case ('different') {
+                      @if (deciding()) {
+                        <label class="env-choice"><input type="checkbox" [checked]="isReplacing(item, file.path)" (change)="replace(item, file.path, $any($event.target).checked)" /> substituir pelo do pacote</label>
+                      } @else {
+                        <span class="pill warn">diferente do daqui</span>
+                      }
+                    }
+                  }
+                  @if (file.blanked.length) {
+                    <span class="muted env-blank" [matTooltip]="file.blanked.join(', ')">{{ file.blanked.length }} {{ file.blanked.length === 1 ? 'valor secreto' : 'valores secretos' }} em branco no pacote</span>
+                  }
+                </div>
+              }
+            </div>
+          }
         }
         @if (affected()[item.number]; as uses) {
           <p class="affects"><mat-icon svgIcon="hub" />

@@ -140,6 +140,14 @@
 .needs mat-icon { flex: none; width: 18px; height: 18px; }
 .needs .mono { overflow-wrap: anywhere; }
 
+.env { margin: 0 16px 10px 52px; padding: 8px 12px; border-radius: 12px; background: var(--zap-surface-container, rgba(127, 127, 127, 0.08)); font-size: 12.5px; }
+.env-head { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 6px; }
+.env-head mat-icon { flex: none; width: 18px; height: 18px; }
+.env-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 3px 0; }
+.env-path { overflow-wrap: anywhere; }
+.env-choice { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.env-blank { font-size: 12px; }
+
 .seeing { display: inline-flex; border: 1px solid var(--zap-border); border-radius: 999px; overflow: hidden; }
 .seeing button { height: 32px; padding: 0 12px; border: none; background: transparent; color: var(--mat-sys-on-surface); font: var(--mat-sys-label-large); cursor: pointer; }
 .seeing button.on { background: var(--mat-sys-primary-container); color: var(--mat-sys-on-primary-container); }

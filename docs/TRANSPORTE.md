@@ -19,8 +19,12 @@ que existe funciona.
   segunda; aplicar de novo um pacote já aplicado é uma decisão de alguém, registrada como tal.
 - **O ciclo de um envio termina na entrega.** Quem envia fica sabendo que o destino recebeu. O
   resultado da aprovação e da aplicação pertence ao destino e fica lá; não volta à origem.
-- **Configuração não viaja.** Os arquivos próprios de cada ambiente nunca entram em um pacote nem
-  são sobrescritos por um.
+- **Configuração viaja, mas não manda.** Os arquivos de configuração que variam de um ambiente para o
+  outro (`env.json`, `environment.js`, `appsettings*.json`, `web.config`, `*.ini`) vão no pacote,
+  marcados, com o que parece senha em branco; mas o ambiente de destino não troca o que já tem
+  sem que quem aprova escolha, arquivo por arquivo. O que o destino não tem é criado, com aviso.
+  Os demais arquivos próprios do ambiente (`ConfigWorkers.json`, bancos locais `*.db`, `logs/`)
+  nunca entram em um pacote nem são sobrescritos por um (seção 5.4.1).
 - **Quem faz o quê.** O painel (ZapMQ) guarda os pacotes, as aprovações e o histórico, e leva o
   pacote de um ambiente ao outro. O agente (Worker Control) é quem toca na máquina: lê o que vai
   para o pacote e aplica o que foi aprovado, inclusive parando e iniciando o que for preciso.
@@ -344,6 +348,37 @@ conferência é de objetos, não de colunas. Para cada item aparece:
 Quem aprova escolhe **aplicar agora** ou **agendar** para um dia e hora. Pode também recusar, com
 o motivo. Um conflito não impede a aprovação, mas exige que ela seja dada sabendo dele.
 
+#### 5.4.1 Arquivos de ambiente
+
+Os arquivos de configuração do OJITECH (`appsettings*.json`, `web.config`, `*.ini`,
+`environment.js`, `env.json`, até 1 MB, de texto UTF-8) vão no pacote junto dos arquivos da
+aplicação, **marcados** como de ambiente. Na origem, o que parece segredo (chaves como
+`Password`, `Pwd`, `Senha`, `Secret`, `Token`, `ApiKey` e a senha dentro de uma cadeia de conexão)
+é deixado **em branco**, pela mesma regra que vale na instalação de uma aplicação (seção 4.1); um
+arquivo sem segredo vai exatamente como está. Um arquivo que não é UTF-8 não pode ser conferido e
+não vai. `ConfigWorkers.json`, `*.db` e o que está em `logs/` não vão nunca.
+
+No destino, cada item mostra seus arquivos de ambiente contra os que a aplicação tem ali:
+
+| Estado | O que significa | O que acontece |
+|---|---|---|
+| **não existe aqui** | a aplicação não tem esse arquivo | é **criado** a partir do pacote, com aviso: é um arquivo que pode variar de um ambiente para o outro; conferir o conteúdo e preencher o que veio em branco |
+| **igual** | é igual ao daqui, ou só difere nos segredos (que o pacote não leva) | nada é feito |
+| **diferente** | existe aqui e difere do que o pacote traz | **fica como está**, a menos que quem aprova marque *substituir pelo do pacote* |
+
+Substituir põe no lugar o arquivo do pacote, com as senhas em branco: o painel avisa antes de
+aplicar, e o arquivo de antes fica na cópia guardada da aplicação. A escolha é de quem aprova, no
+momento em que aprova; só se escolhe o que está diferente, e uma escolha de uma aprovação
+anterior não volta. Em uma instalação inicial os arquivos de ambiente aparecem junto da configuração
+a preencher (seção 4.1), com o mesmo aviso. Para uma aplicação com mais de uma instância (API
+com pastas separadas), a comparação é feita com a primeira e a escolha vale para todas.
+
+**Reverter** devolve também os arquivos de ambiente que o pacote trocou (como estavam, da cópia
+guardada) e tira os que ele criou. Os que o pacote não mexeu ficam como estão agora.
+
+Precisa do ZapMQ 2.20 e do Worker Control 2.32 no destino. Com um Worker Control mais antigo o
+arquivo aparece como *não tratado por este Worker Control*: nada é prometido, nada é gravado.
+
 ### 5.5 Aplicação
 
 O agente aplica os itens na ordem do pacote:
@@ -357,8 +392,19 @@ O agente aplica os itens na ordem do pacote:
   pasta atual para a guarda, troca os arquivos preservando a configuração, inicia de novo e espera
   o alvo responder (o processo no ar, o serviço rodando, a URL de verificação respondendo).
 
-No primeiro item que falhar a aplicação para. O pacote fica **aplicado em parte**, com o que deu
-certo, o que falhou e a mensagem. Nada é desfeito sozinho.
+No primeiro item que falhar a aplicação **para e pergunta**: o pacote fica *parado, aguardando
+decisão* (conta no aviso do menu), com o que deu certo, o que falhou e a mensagem. Quem tem
+permissão escolhe:
+
+- **Continuar com os demais:** os itens que faltam são aplicados. O que já tem resultado não é feito
+  de novo e o item que falhou **não é tentado outra vez**. Os que dependem dele podem falhar, e então
+  a pergunta se repete.
+- **Parar aqui:** a aplicação termina; o pacote fica **aplicado em parte** (ou *falhou*, se nada foi
+  aplicado).
+
+Se o item que falhou é o último, não há o que perguntar e o pacote termina direto. Nada é desfeito
+sozinho. Vale para qualquer tipo de item (banco, API, Worker, frontend). Endpoint:
+`POST /api/transport/packages/{id}/decide` com `{ "proceed": true|false }`.
 
 **O que não para.** Antes de trocar arquivos, o que roda da pasta é parado e esperado por
 `Transport.StopSeconds` (padrão: 90 s): os processos do grupo, o serviço, ou os processos do
@@ -381,7 +427,7 @@ falhar; nada é tentado de novo sozinho.
 
 | Item | Como volta |
 |---|---|
-| Aplicação (micro serviço, API, serviço, módulo web) | O alvo é parado, a pasta como o pacote deixou é guardada em outra cópia, os arquivos voltam da cópia feita na aplicação e o alvo é iniciado. Os arquivos de configuração do ambiente ficam como estão **agora** |
+| Aplicação (micro serviço, API, serviço, módulo web) | O alvo é parado, a pasta como o pacote deixou é guardada em outra cópia, os arquivos voltam da cópia feita na aplicação e o alvo é iniciado. Os arquivos de configuração do ambiente ficam como estão **agora**, exceto os que o pacote trocou ou criou, que voltam como estavam (ou saem) |
 | Objeto alterado pelo pacote | O script que havia antes é reaplicado |
 | Objeto criado pelo pacote | É apagado |
 | Objeto apagado pelo pacote | É recriado com o script que havia antes |
@@ -436,7 +482,8 @@ Cada lado diz o que tem, sem nada do que está nas tabelas nem o conteúdo dos a
 - **objetos do banco**, com a impressão digital do script e a data da última alteração;
 - **aplicações** (micro serviços, serviços, APIs, aplicação web e seus módulos, downloads), com a
   versão que dizem ser, a impressão digital dos arquivos e a data do arquivo mais recente. Os
-  arquivos do ambiente (configuração, logs) não entram.
+  arquivos do ambiente (configuração, logs) não entram: os que variam de um ambiente para o outro
+  são tratados à parte, na aprovação (seção 5.4.1).
 
 Cada coisa aparece como **igual**, **diferente**, **só aqui** ou **só lá**, e o **lado mais novo**
 é marcado: para objetos, o que foi alterado depois; para aplicações, a versão mais alta e, sem
@@ -619,8 +666,10 @@ Transporte → *Configuração* guarda as pastas de entrada.
   que foi deixado com um nome que não é de nenhum alvo é apontado; o que ainda está sendo
   copiado (mexido há menos de 5 segundos) não é pego.
 
-Nos dois casos o que é do ambiente fica de fora: `appsettings*.json`, `web.config`,
-`ConfigWorkers.json`, `*.ini`, `environment.js`, `env.json`, bancos locais (`*.db`) e `logs/`.
+Nos dois casos o que é do ambiente viaja de outro modo: `appsettings*.json`, `web.config`, `*.ini`,
+`environment.js` e `env.json` vão marcados e com as senhas em branco, e só substituem o que o destino
+já tem se quem aprova escolher (seção 5.4.1). `ConfigWorkers.json`, bancos locais (`*.db`) e `logs/`
+ficam de fora.
 
 Também fica de fora, em qualquer zip que se traga, o que a máquina que o fez deixou nele e nenhuma
 aplicação lê: a pasta `__MACOSX`, os arquivos `._nome` que o Mac põe ao lado de cada arquivo,
@@ -644,7 +693,7 @@ que ainda não existe (seção 4.1) não está feito.
    foi desligado volta a ligar;
 2. guarda uma cópia da pasta inteira, com a configuração, em
    `transport/backup/{tipo}/{nome}/{data}-{pacote}`;
-3. faz a pasta ter exatamente os arquivos do pacote, sem tocar no que é do ambiente; se não
+3. faz a pasta ter exatamente os arquivos do pacote, sem tocar no que é do ambiente (exceto os arquivos de configuração que faltam, que são criados, e os que quem aprovou escolheu substituir); se não
    conseguir trocar todos, devolve a cópia antes de iniciar qualquer coisa;
 4. inicia e espera estar no ar (até 3 minutos). Trocado e sem subir, o item **falha** com os
    arquivos novos no lugar, e diz isso;

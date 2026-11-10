@@ -14,7 +14,19 @@ public sealed record ItemCheck(int Number, string State, string? CurrentFingerpr
     public int Added { get; init; }
     public int Changed { get; init; }
     public int Removed { get; init; }
+
+    /// <summary>
+    /// The configuration files of the environment the item brings, against the ones here.
+    /// </summary>
+    public IReadOnlyList<EnvironmentCheck> Environment { get; init; } = [];
 }
+
+/// <summary>
+/// One configuration file of the environment an item brings, against this environment: new (not
+/// here, so it is put here), same (here, and the same except for the secrets), or different
+/// (here, and not the same: replaced only if whoever approves says so).
+/// </summary>
+public sealed record EnvironmentCheck(string Path, string State, long Size, IReadOnlyList<string> Blanked);
 
 /// <summary>
 /// What putting back one applied item would take. State: can, changed (it can, but what is
@@ -149,6 +161,36 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// </summary>
     private static readonly string[] NeverCarried = ["appsettings*.json", "web.config", "ConfigWorkers.json", "*.ini", "environment.js", "env.json", "*.db", "*.db-wal", "*.db-shm", "logs/"];
 
+    /// <summary>
+    /// The configuration files of an application of the OJITECH that vary from one environment to
+    /// the other. They are of the environment, so nothing replaces the one that is there without
+    /// being told to, but they travel in the package, with what looks like a secret left blank, so
+    /// that the environment that receives it can see them, get the ones it does not have and
+    /// choose to replace the ones that differ. The Worker Control keeps the same list.
+    /// </summary>
+    public static readonly string[] EnvironmentNames = ["appsettings*.json", "web.config", "*.ini", "environment.js", "env.json"];
+
+    /// <summary>
+    /// The biggest configuration file that is carried.
+    /// </summary>
+    public const long MaxEnvironmentBytes = 1024 * 1024;
+
+    private static bool Like(string text, string pattern) =>
+        System.Text.RegularExpressions.Regex.IsMatch(text, "^" + System.Text.RegularExpressions.Regex.Escape(pattern).Replace("\\*", ".*") + "$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// True for a configuration file of the environment that a package carries: one of
+    /// <see cref="EnvironmentNames"/>, and not inside a folder that is never carried (<c>logs/</c>).
+    /// </summary>
+    public static bool IsEnvironmentFile(string path)
+    {
+        path = path.Replace('\\', '/').TrimStart('/');
+        if (NeverCarried.Where(pattern => pattern.EndsWith('/')).Any(folder => path.StartsWith(folder, StringComparison.OrdinalIgnoreCase) || path.Contains("/" + folder, StringComparison.OrdinalIgnoreCase)))
+            return false;
+        var name = path[(path.LastIndexOf('/') + 1)..];
+        return EnvironmentNames.Any(pattern => Like(name, pattern));
+    }
+
     public static readonly string[] FileKinds = ["worker", "service", "api", "frontend", "download"];
 
     private static bool Kept(string path)
@@ -189,11 +231,28 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     }
 
     /// <summary>
+    /// The text of a file that is UTF-8, with or without the mark at the start; false for any other.
+    /// </summary>
+    private static bool TryText(byte[] bytes, out string text)
+    {
+        try
+        {
+            text = new System.Text.UTF8Encoding(false, true).GetString(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? bytes[3..] : bytes);
+            return true;
+        }
+        catch (System.Text.DecoderFallbackException)
+        {
+            text = "";
+            return false;
+        }
+    }
+
+    /// <summary>
     /// What tells one set of files from another, whatever way they were packed.
     /// </summary>
     private static string Fingerprint(IEnumerable<FileReference> files) =>
         Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
-            string.Join("\n", files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).Select(file => $"{file.Path.ToLowerInvariant()}:{file.Sha256}")))));
+            string.Join("\n", files.Where(file => !file.Environment).OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).Select(file => $"{file.Path.ToLowerInvariant()}:{file.Sha256}")))));
 
     /// <summary>
     /// A zip of a published folder, packed again the way a package carries it: the files at
@@ -228,17 +287,34 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                             continue;
                         path = path[inner.Length..];
                     }
-                    if (path.Length == 0 || (!everything && Kept(path)))
+                    if (path.Length == 0)
+                        continue;
+                    // A configuration file of the environment travels, marked, and without its secrets.
+                    var environment = !everything && Kept(path) && IsEnvironmentFile(path) && entry.Length <= MaxEnvironmentBytes;
+                    if (!everything && Kept(path) && !environment)
                         continue;
                     using var content = new MemoryStream();
                     using (var stream = entry.Open())
                         stream.CopyTo(content);
                     var bytes = content.ToArray();
+                    var blanked = new List<string>();
+                    if (environment)
+                    {
+                        // One that is not text cannot be checked for secrets, so it does not go.
+                        if (!TryText(bytes, out var text))
+                            continue;
+                        var (clean, found) = InstallText.Blank(path, text);
+                        if (found.Count > 0)
+                        {
+                            bytes = new System.Text.UTF8Encoding(false).GetBytes(clean);
+                            blanked = found;
+                        }
+                    }
                     var copy = target.CreateEntry(path, System.IO.Compression.CompressionLevel.Optimal);
                     copy.LastWriteTime = entry.LastWriteTime;
                     using (var stream = copy.Open())
                         stream.Write(bytes);
-                    files.Add(new FileReference { Path = path, Size = bytes.Length, Sha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)) });
+                    files.Add(new FileReference { Path = path, Size = bytes.Length, Sha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)), Environment = environment, Blanked = blanked });
                 }
         }
         catch (InvalidDataException)
@@ -469,7 +545,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// The files a target has here beside the ones an item brings: what is new, what changes
     /// and what goes away. Null when the target is not on this machine.
     /// </summary>
-    private async Task<(JsonNode Target, List<FileChange> Changes)?> AgainstTarget(PackageItem item, string by, CancellationToken cancellation)
+    private async Task<(JsonNode Target, List<FileChange> Changes, List<EnvironmentCheck> Environment)?> AgainstTarget(PackageItem item, string by, CancellationToken cancellation, string? package = null)
     {
         JsonNode body;
         try
@@ -486,12 +562,78 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         }
         var here = (body["Files"] as JsonArray ?? []).ToDictionary(file => file!["Path"]!.GetValue<string>(), file => file!["Sha256"]!.GetValue<string>(), StringComparer.OrdinalIgnoreCase);
         var changes = new List<FileChange>();
-        foreach (var file in item.Files)
+        // The configuration of the environment is not a change of the application: it is looked at apart.
+        var files = item.Files.Where(file => !file.Environment).ToList();
+        foreach (var file in files)
             changes.Add(new FileChange(file.Path, !here.TryGetValue(file.Path, out var has) ? "added" : has == file.Sha256 ? "same" : "changed", file.Size));
-        var brought = item.Files.Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var brought = files.Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
         changes.AddRange(here.Keys.Where(path => !brought.Contains(path)).Select(path => new FileChange(path, "removed", 0)));
-        return (body["Target"]!, [.. changes.OrderBy(change => change.Path, StringComparer.OrdinalIgnoreCase)]);
+        var environment = package is null ? [] : await EnvironmentAgainst(item, package, body, by, cancellation);
+        return (body["Target"]!, [.. changes.OrderBy(change => change.Path, StringComparer.OrdinalIgnoreCase)], environment);
     }
+
+    /// <summary>
+    /// The configuration files of the environment an item brings, against the ones its target has
+    /// here: new when it has none, the same when it has the same (or the same but for the secrets,
+    /// which the package leaves blank), different otherwise.
+    /// </summary>
+    private async Task<List<EnvironmentCheck>> EnvironmentAgainst(PackageItem item, string package, JsonNode body, string by, CancellationToken cancellation)
+    {
+        var checks = new List<EnvironmentCheck>();
+        var wanted = item.Files.Where(file => file.Environment).OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ToList();
+        if (wanted.Count == 0)
+            return checks;
+        // A Worker Control from before this existed does not say what it has, and does not put these files: nothing is promised for them.
+        if (body["Environment"] is not JsonArray listed)
+            return [.. wanted.Select(file => new EnvironmentCheck(file.Path, "unknown", file.Size, file.Blanked))];
+        var here = listed.ToDictionary(file => file!["Path"]!.GetValue<string>(), file => file!["Sha256"]!.GetValue<string>(), StringComparer.OrdinalIgnoreCase);
+        foreach (var file in wanted)
+        {
+            if (!here.TryGetValue(file.Path, out var hash))
+            {
+                checks.Add(new EnvironmentCheck(file.Path, "new", file.Size, file.Blanked));
+                continue;
+            }
+            var state = hash == file.Sha256 ? "same" : "different";
+            if (state == "different")
+            {
+                // It may differ only in the secrets, which the package does not carry: that is not a difference worth asking about.
+                try
+                {
+                    var current = await Ask("TransportFile", by, request => { request["Kind"] = item.Kind; request["Name"] = item.Name; request["Instance"] = 0; request["Path"] = file.Path; }, cancellation);
+                    if (BroughtText(package, item.Number, file.Path) is { } text && Canonical(file.Path, current["Content"]?.GetValue<string>() ?? "") == Canonical(file.Path, text))
+                        state = "same";
+                }
+                catch (TransportRefused)
+                {
+                    // It cannot be read to be compared: it is told to be different, and left as it is unless chosen.
+                }
+            }
+            checks.Add(new EnvironmentCheck(file.Path, state, file.Size, file.Blanked));
+        }
+        return checks;
+    }
+
+    /// <summary>
+    /// A configuration file as the package carries it, from the zip of the item.
+    /// </summary>
+    private string? BroughtText(string package, int number, string path)
+    {
+        if (store.Content(package, number) is not { } zip)
+            return null;
+        using var archive = new System.IO.Compression.ZipArchive(new MemoryStream(zip), System.IO.Compression.ZipArchiveMode.Read);
+        if (archive.GetEntry(path) is not { } entry)
+            return null;
+        using var stream = entry.Open();
+        using var memory = new MemoryStream();
+        stream.CopyTo(memory);
+        return TryText(memory.ToArray(), out var text) ? text : null;
+    }
+
+    /// <summary>
+    /// A configuration file with its secrets blank and written one way only, to tell whether two of them are the same.
+    /// </summary>
+    private static string Canonical(string path, string text) => InstallText.Blank(path, text).Content.Replace("\r\n", "\n").Trim();
 
     /// <summary>
     /// What an item of files does to its target here, file by file.
@@ -714,7 +856,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
             {
                 try
                 {
-                    if (await AgainstTarget(item, by, cancellation) is not { } found)
+                    if (await AgainstTarget(item, by, cancellation, record.Manifest.Id) is not { } found)
                         // What is not here can be installed when the package says what it is.
                         checks.Add(new ItemCheck(item.Number, item.Install is not null && Installable.Contains(item.Kind) ? "install" : "missing", null, [], null));
                     else if (found.Target["Problem"]?.GetValue<string>() is { } problem)
@@ -728,7 +870,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                         checks.Add(new ItemCheck(item.Number,
                             found.Changes.All(change => change.State == "same") ? "same" : "changes", found.Target["Version"]?.GetValue<string>(), [], null)
                         {
-                            Added = found.Changes.Count(change => change.State == "added"), Changed = found.Changes.Count(change => change.State == "changed"), Removed = found.Changes.Count(change => change.State == "removed")
+                            Added = found.Changes.Count(change => change.State == "added"), Changed = found.Changes.Count(change => change.State == "changed"), Removed = found.Changes.Count(change => change.State == "removed"),
+                            Environment = found.Environment
                         });
                 }
                 catch (TransportRefused refused)
@@ -810,7 +953,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// Approves a package to be applied now or at a given time. One that brings a table or a
     /// type this environment already has is not approved: applying it is sure to fail there.
     /// </summary>
-    public async Task<PackageRecord> Approve(string id, DateTimeOffset? at, bool force, string by, CancellationToken cancellation, IReadOnlyDictionary<int, InstallChoice>? installs = null)
+    public async Task<PackageRecord> Approve(string id, DateTimeOffset? at, bool force, string by, CancellationToken cancellation, IReadOnlyDictionary<int, InstallChoice>? installs = null, IReadOnlyDictionary<int, List<string>>? environment = null)
     {
         var waiting = store.Find(id) ?? throw new TransportRefused("Não existe esse pacote neste ambiente", StatusCodes.Status404NotFound);
         var rules = policy.Current();
@@ -839,8 +982,35 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
             throw new TransportRefused($"O item {item.Number} ({item.Schema}.{item.Name}) é uma tabela ou um type que já existe neste ambiente e não pode ser recriado. A mudança precisa vir como um script de alteração, em outro pacote.", StatusCodes.Status409Conflict);
         }
         var chosen = CheckInstalls(waiting, checks, installs);
-        var approved = Approve(id, at, force, by);
-        return chosen.Count == 0 ? approved : Change(id, record => record.Installs = chosen);
+        var replace = CheckEnvironment(waiting, checks, environment);
+        Approve(id, at, force, by);
+        return Change(id, record =>
+        {
+            if (chosen.Count > 0)
+                record.Installs = chosen;
+            // What was said now is all that is said: a choice of an earlier approval does not come back.
+            record.EnvironmentReplace = replace;
+        });
+    }
+
+    /// <summary>
+    /// Checks which configuration files of the environment whoever approves said to replace: only
+    /// one that is here and is not the same as the one the package brings can be.
+    /// </summary>
+    private static Dictionary<int, List<string>> CheckEnvironment(PackageRecord record, IReadOnlyList<ItemCheck> checks, IReadOnlyDictionary<int, List<string>>? given)
+    {
+        var chosen = new Dictionary<int, List<string>>();
+        foreach (var (number, paths) in given ?? new Dictionary<int, List<string>>())
+        {
+            if (paths is not { Count: > 0 })
+                continue;
+            var item = record.Manifest.Items.FirstOrDefault(candidate => candidate.Number == number) ?? throw new TransportRefused($"O pacote não tem o item {number}");
+            var different = checks.FirstOrDefault(check => check.Number == number)?.Environment.Where(file => file.State == "different").Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+            if (paths.Where(path => !different.Contains(path)).ToList() is { Count: > 0 } wrong)
+                throw new TransportRefused($"O item {number} ({item.Kind} {item.Name}) não tem diferença em {string.Join(", ", wrong)}: só se substitui um arquivo de ambiente que existe aqui e não é igual ao do pacote. Confira de novo e aprove.", StatusCodes.Status409Conflict);
+            chosen[number] = [.. paths.Distinct(StringComparer.OrdinalIgnoreCase)];
+        }
+        return chosen;
     }
 
     /// <summary>
@@ -870,9 +1040,34 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         });
     }
 
+    /// <summary>
+    /// A package stopped at an item that went wrong asks whether the items behind it go on or
+    /// the application ends there. What was applied stays applied either way.
+    /// </summary>
+    public PackageRecord Decide(string id, bool proceed, string by) => Change(id, record =>
+    {
+        if (record.Status != "Paused")
+            throw new TransportRefused("Este pacote não está esperando uma decisão", StatusCodes.Status409Conflict);
+        var now = time.GetUtcNow();
+        if (proceed)
+        {
+            record.Status = "Approved";
+            record.Resuming = true;
+            record.ApplyAt = now;
+            record.History.Add(new HistoryEntry { At = now, By = by, What = "continued", Detail = "seguir com os itens que faltam" });
+            return;
+        }
+        var done = record.Results.Count(result => result.Status == "applied");
+        record.Status = done == 0 ? "Failed" : "Partial";
+        record.AcknowledgedBy = null;
+        record.History.Add(new HistoryEntry { At = now, By = by, What = "stopped", Detail = $"{done} de {record.Manifest.Items.Count} item(s); a aplicação parou no item {record.Results.LastOrDefault()?.Number}" });
+    });
+
     public PackageRecord Reject(string id, string? reason, string by) => Change(id, record =>
     {
         // What was made here is not refused, only deleted; but an approval of it can be taken back like any other.
+        if (record.Resuming)
+            throw new TransportRefused("A aplicação deste pacote já foi retomada", StatusCodes.Status409Conflict);
         if (!record.Received && record.Status != "Approved")
             throw new TransportRefused("Um pacote montado aqui não é recusado: ele pode ser excluído", StatusCodes.Status409Conflict);
         if (record.Status is not ("Pending" or "Approved"))
@@ -1199,7 +1394,7 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     /// Hands the files of an item to the Worker Control, which stops the target, keeps a copy,
     /// replaces the files and starts it again.
     /// </summary>
-    private async Task Replace(string id, PackageItem item, ItemResult result, bool force, string by, CancellationToken cancellation)
+    private async Task Replace(string id, PackageItem item, ItemResult result, bool force, string by, CancellationToken cancellation, IReadOnlyList<string>? replaceEnvironment = null)
     {
         // What the application says about its endpoints may change with its files.
         endpoints.Forget(item.Kind, item.Name ?? "");
@@ -1219,6 +1414,8 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 request["Force"] = force;
                 if (!string.IsNullOrEmpty(item.Version))
                     request["Version"] = item.Version;
+                // The configuration files of the environment that were chosen to be replaced; the ones not here are put anyway.
+                request["ReplaceEnvironment"] = new JsonArray([.. (replaceEnvironment ?? []).Select(path => (JsonNode?)JsonValue.Create(path))]);
             }, cancellation);
 
             if (!answer.Reached)
@@ -1239,6 +1436,10 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                 result.Problem = body["Problem"]?.GetValue<string>();
                 result.Backup = body["Backup"]?.GetValue<string>();
                 result.Messages = [.. (body["Messages"] as JsonArray ?? []).Select(message => message?.GetValue<string>() ?? "")];
+                foreach (var created in body["EnvironmentCreated"] as JsonArray ?? [])
+                    result.Messages.Add($"{created?.GetValue<string>()} não existia aqui e foi criado a partir do pacote. É um arquivo que pode variar de um ambiente para o outro: confira o conteúdo, e preencha o que veio em branco (senhas).");
+                foreach (var replaced in body["EnvironmentReplaced"] as JsonArray ?? [])
+                    result.Messages.Add($"{replaced?.GetValue<string>()} foi substituído pelo do pacote, como escolhido na aprovação. O que veio em branco (senhas) precisa ser preenchido; o anterior está na cópia guardada.");
             }
         }
         finally
@@ -1254,16 +1455,22 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
             if (starting.Status != "Approved")
                 return;
             starting.Status = "Applying";
-            starting.Results.Clear();
-            starting.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = starting.ApprovedBy ?? "", What = "applying" });
+            // After a pause the items that already have a result are not done again.
+            if (!starting.Resuming)
+                starting.Results.Clear();
+            starting.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = starting.ApprovedBy ?? "", What = starting.Resuming ? "resumed" : "applying" });
+            starting.Resuming = false;
         });
         if (record is not { Status: "Applying" })
             return;
         var by = record.ApprovedBy ?? "";
         logger.LogInformation("Transport: applying package {Name} ({Id}), approved by {User}", record.Manifest.Name, id, by);
 
+        var paused = false;
         foreach (var item in record.Manifest.Items)
         {
+            if (record.Results.Any(done => done.Number == item.Number))
+                continue;
             var result = new ItemResult { Number = item.Number };
             try
             {
@@ -1272,11 +1479,14 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
                     if (record.Installs.GetValueOrDefault(item.Number) is { } install && await AgainstTarget(item, by, cancellation) is null)
                         await Install(id, item, install, result, by, cancellation);
                     else
-                        await Replace(id, item, result, record.Force, by, cancellation);
+                        await Replace(id, item, result, record.Force, by, cancellation, record.EnvironmentReplace.GetValueOrDefault(item.Number));
                     result.At = time.GetUtcNow();
                     store.Update(id, applying => applying.Results.Add(result));
                     if (result.Status != "applied")
+                    {
+                        paused = item != record.Manifest.Items[^1];
                         break;
+                    }
                     continue;
                 }
 
@@ -1346,7 +1556,23 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
             result.At = time.GetUtcNow();
             store.Update(id, applying => applying.Results.Add(result));
             if (result.Status != "applied")
+            {
+                paused = item != record.Manifest.Items[^1];
                 break;
+            }
+        }
+
+        if (paused)
+        {
+            // An item failed and others wait behind it: somebody says whether they go on.
+            var waiting = store.Update(id, held =>
+            {
+                held.Status = "Paused";
+                var last = held.Results.LastOrDefault();
+                held.History.Add(new HistoryEntry { At = time.GetUtcNow(), By = by, What = "paused", Detail = $"o item {last?.Number} não foi aplicado: {last?.Problem}" });
+            });
+            logger.LogWarning("Transport: package {Name} ({Id}) paused, waiting to know whether the other items go on", record.Manifest.Name, id);
+            return;
         }
 
         var finished = store.Update(id, applied =>

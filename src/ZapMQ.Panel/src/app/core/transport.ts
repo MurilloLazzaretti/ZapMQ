@@ -14,6 +14,7 @@ const STATUS: Record<PackageStatus, { text: string; tone: string }> = {
   Rejected: { text: 'recusado', tone: '' },
   Approved: { text: 'aprovado', tone: 'primary' },
   Applying: { text: 'aplicando', tone: 'primary' },
+  Paused: { text: 'parado, aguardando decisão', tone: 'danger' },
   Applied: { text: 'aplicado', tone: 'ok' },
   Partial: { text: 'aplicado em parte', tone: 'danger' },
   Failed: { text: 'falhou', tone: 'danger' },

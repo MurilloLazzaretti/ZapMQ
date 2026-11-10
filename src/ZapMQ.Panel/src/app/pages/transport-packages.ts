@@ -204,7 +204,7 @@ export class TransportPackagesPage implements OnInit, OnDestroy {
     { value: 'pending', label: 'Aguardando aprovação', statuses: ['Pending'] },
     { value: 'scheduled', label: 'Aprovado ou aplicando', statuses: ['Approved', 'Applying'] },
     { value: 'applied', label: 'Aplicado', statuses: ['Applied'] },
-    { value: 'problem', label: 'Com problema', statuses: ['Partial', 'Failed', 'RevertedPartly'] },
+    { value: 'problem', label: 'Com problema', statuses: ['Paused', 'Partial', 'Failed', 'RevertedPartly'] },
     { value: 'reverted', label: 'Revertido', statuses: ['Reverting', 'Reverted', 'RevertedPartly'] },
     { value: 'rejected', label: 'Recusado ou substituído', statuses: ['Rejected', 'Superseded'] },
   ];
@@ -270,7 +270,7 @@ export class TransportPackagesPage implements OnInit, OnDestroy {
     const has = (users: string[]) => users.some((user) => user.toLowerCase() === me);
     switch (view) {
       case 'attention':
-        return item.status === 'Pending' || (['Partial', 'Failed', 'RevertedPartly'].includes(item.status) && !item.acknowledgedBy) || (has(item.waiting) && item.status !== 'Superseded');
+        return item.status === 'Pending' || (['Partial', 'Failed', 'RevertedPartly'].includes(item.status) && !item.acknowledgedBy) || item.status === 'Paused' || (has(item.waiting) && item.status !== 'Superseded');
       case 'release':
         return has(item.waiting) && item.status !== 'Superseded';
       case 'mine':

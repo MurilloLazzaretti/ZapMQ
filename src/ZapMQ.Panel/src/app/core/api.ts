@@ -526,8 +526,13 @@ export class Api {
     return this.http.get<PackageItemDetail>(`api/transport/packages/${id}/items/${number}`);
   }
 
-  approvePackage(id: string, at: string | null, force = false, installs?: Record<number, InstallChoice>): Observable<PackageDetail> {
-    return this.http.post<PackageDetail>(`api/transport/packages/${id}/approve`, { at, force, installs });
+  approvePackage(id: string, at: string | null, force = false, installs?: Record<number, InstallChoice>, environment?: Record<number, string[]>): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/approve`, { at, force, installs, environment });
+  }
+
+  /** A package stopped at an item that went wrong: the others go on, or the application ends. */
+  decidePackage(id: string, proceed: boolean): Observable<PackageDetail> {
+    return this.http.post<PackageDetail>(`api/transport/packages/${id}/decide`, { proceed });
   }
 
   acknowledgePackage(id: string): Observable<PackageDetail> {

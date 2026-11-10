@@ -55,7 +55,8 @@ public static class TransportEndpoints
 
     public sealed record CloseRequest(string? Draft, string? Name, string? Description, List<string>? Items, bool KeepOrder);
 
-    public sealed record ApproveRequest(DateTimeOffset? At, bool Force = false, Dictionary<int, InstallChoice>? Installs = null);
+    public sealed record DecideRequest(bool Proceed);
+    public sealed record ApproveRequest(DateTimeOffset? At, bool Force = false, Dictionary<int, InstallChoice>? Installs = null, Dictionary<int, List<string>>? Environment = null);
 
     public sealed record RevertRequest(bool Force = false);
 
@@ -145,7 +146,7 @@ public static class TransportEndpoints
                 environment = store.Environment, area = store.Area().Count, drafts = store.Drafts().Count,
                 pending = packages.Count(record => record.Status == "Pending"),
                 scheduled = packages.Count(record => record.Status == "Approved"),
-                troubled = packages.Count(record => record.Status is "Partial" or "Failed" or "RevertedPartly" && record.AcknowledgedBy is null)
+                troubled = packages.Count(record => record.Status is "Partial" or "Failed" or "RevertedPartly" && record.AcknowledgedBy is null) + packages.Count(record => record.Status == "Paused")
             });
         });
 
@@ -475,7 +476,7 @@ public static class TransportEndpoints
 
         api.MapPost("/packages/{id}/approve", (string id, ApproveRequest request, TransportService transport, TransportStore store, HttpContext context, ILoggerFactory loggers) => Guarded(async () =>
         {
-            var record = await transport.Approve(id, request.At, request.Force, User(context), context.RequestAborted, request.Installs);
+            var record = await transport.Approve(id, request.At, request.Force, User(context), context.RequestAborted, request.Installs, request.Environment);
             loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: package {Name} ({Id}) approved to be applied at {At} (by {User})", record.Manifest.Name, id, record.ApplyAt, User(context));
             return Results.Json(Detail(record, store));
         }));
@@ -492,6 +493,14 @@ public static class TransportEndpoints
             var record = await transport.Revert(id, request?.Force == true, User(context), context.RequestAborted);
             loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: package {Name} ({Id}) asked to be reverted (by {User})", record.Manifest.Name, id, User(context));
             return Results.Json(Detail(record, store));
+        }));
+
+        // A package that stopped at an item that went wrong: the items behind it go on, or the application ends.
+        api.MapPost("/packages/{id}/decide", (string id, DecideRequest request, TransportService transport, TransportStore store, HttpContext context, ILoggerFactory loggers) => Guarded(() =>
+        {
+            var record = transport.Decide(id, request.Proceed, User(context));
+            loggers.CreateLogger("ZapMQ.Panel").LogInformation("Transport: package {Name} ({Id}) {Decision} (by {User})", record.Manifest.Name, id, request.Proceed ? "goes on with the items that are left" : "stopped where it was", User(context));
+            return Task.FromResult(Results.Json(Detail(record, store)));
         }));
 
         // Somebody knows it went wrong: it stops being counted among what asks for attention.

@@ -15,7 +15,7 @@ import { kindIcon, kindName, size } from '../core/database';
 import { diff } from '../core/diff';
 import { Auth } from '../core/auth';
 import { AgoPipe, NumPipe, WhenPipe } from '../core/format';
-import { ApplicationDefaults, EndpointUse, InstallChoice, ItemCheck, PackageDetail, PackageItem, PackageItemDetail, PackageResult } from '../core/models';
+import { ApplicationDefaults, EndpointUse, EnvironmentCheck, InstallChoice, ItemCheck, PackageDetail, PackageItem, PackageItemDetail, PackageResult } from '../core/models';
 import { Transport, groupItems, historyText, itemAction, itemTone, statusName, statusTone, targetIcon, targetName } from '../core/transport';
 import { confirm } from '../shared/dialogs';
 import { InstallForm } from '../shared/install-form';
@@ -117,6 +117,13 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   });
   protected readonly defaults = signal<ApplicationDefaults | null>(null);
   private installs: Record<number, InstallChoice> = {};
+  /** The configuration files of the environment that were chosen to be replaced, by "item|path". Nothing is replaced unless chosen. */
+  protected readonly replacing = signal<Record<string, boolean>>({});
+  /** Whether the package is waiting for somebody to decide it here, which is when the files of the environment can be chosen. */
+  protected readonly deciding = computed(() => {
+    const package_ = this.detail()?.package;
+    return !!package_ && (package_.status === 'Pending' || package_.status === 'Reverted' || (package_.status === 'Closed' && !package_.received));
+  });
   protected readonly content = signal<PackageItemDetail | null>(null);
   protected readonly scheduling = signal(false);
   protected readonly refusing = signal(false);
@@ -142,7 +149,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
   protected readonly forcible = computed(() => {
     const detail = this.detail();
     return !!detail && detail.items.some((item) => ['worker', 'service', 'api'].includes(item.kind))
-      && ['Closed', 'Pending', 'Failed', 'Reverted', 'Applied', 'Partial', 'RevertedPartly'].includes(detail.package.status);
+      && ['Closed', 'Pending', 'Failed', 'Reverted', 'Applied', 'Partial', 'RevertedPartly', 'Paused'].includes(detail.package.status);
   });
 
   /** A package of which nothing was applied, for sure, can be asked for again. */
@@ -188,7 +195,7 @@ export class TransportPackagePage implements OnInit, OnDestroy {
       this.checks.set(null);
       this.load(true);
     });
-    this.timer = setInterval(() => ['Approved', 'Applying', 'Reverting'].includes(this.status() ?? '') && this.load(false), 2000);
+    this.timer = setInterval(() => ['Approved', 'Applying', 'Reverting', 'Paused'].includes(this.status() ?? '') && this.load(false), 2000);
   }
 
   ngOnDestroy(): void {
@@ -221,6 +228,36 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     };
   });
 
+  /** The configuration files of the environment an item brings, against the ones here. */
+  protected environmentOf(item: PackageItem): EnvironmentCheck[] {
+    return this.checks()?.find((candidate) => candidate.number === item.number)?.environment ?? [];
+  }
+
+  protected isReplacing(item: PackageItem, path: string): boolean {
+    return !!this.replacing()[`${item.number}|${path}`];
+  }
+
+  protected replace(item: PackageItem, path: string, on: boolean): void {
+    this.replacing.update((chosen) => ({ ...chosen, [`${item.number}|${path}`]: on }));
+  }
+
+  /** What was chosen to be replaced, by item, among the files that still differ. */
+  private chosenEnvironment(): Record<number, string[]> {
+    const chosen: Record<number, string[]> = {};
+    for (const check of this.checks() ?? []) {
+      const paths = check.environment.filter((file) => file.state === 'different' && this.replacing()[`${check.number}|${file.path}`]).map((file) => file.path);
+      if (paths.length) {
+        chosen[check.number] = paths;
+      }
+    }
+    return chosen;
+  }
+
+  /** The configuration files that will be put here without being asked, because the application has none. */
+  private createdEnvironment(): string[] {
+    return (this.checks() ?? []).flatMap((check) => check.environment.filter((file) => file.state === 'new').map((file) => file.path));
+  }
+
   protected lacking(item: PackageItem): string[] {
     return this.checks()?.find((candidate) => candidate.number === item.number)?.missing ?? [];
   }
@@ -248,12 +285,17 @@ export class TransportPackagePage implements OnInit, OnDestroy {
 
   protected async approve(scheduled: boolean): Promise<void> {
     const warnings = this.warnings();
+    const environment = this.chosenEnvironment();
+    const replacements = Object.values(environment).flat();
+    const created = this.createdEnvironment();
     const notes = [
       warnings.blocked ? `${warnings.blocked} item(ns) não podem ser aplicados como estão e vão falhar` : '',
       warnings.conflicts ? `${warnings.conflicts} item(ns) diferentes do ponto de partida` : '',
       warnings.missing ? `${warnings.missing} item(ns) usam algo que não existe aqui nem vem antes no pacote` : '',
       warnings.drops ? `${warnings.drops} objeto(s) serão apagados` : '',
       this.installing().length ? `${this.installing().length} aplicação(ões) serão instaladas aqui` : '',
+      replacements.length ? `${replacements.length} arquivo(s) de ambiente serão substituídos pelos do pacote (${replacements.join(', ')}); o que veio em branco, como senhas, precisa ser preenchido depois, e o anterior fica na cópia guardada` : '',
+      created.length ? `${created.length} arquivo(s) de ambiente não existem aqui e serão criados (${created.join(', ')}): são arquivos que podem variar de um ambiente para o outro, confira o conteúdo` : '',
     ].filter(Boolean);
     const at = scheduled ? new Date(this.when) : null;
     if (scheduled && (!this.when || Number.isNaN(at!.getTime()))) {
@@ -268,9 +310,14 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     });
     if (sure) {
       const installs = Object.fromEntries(this.installing().map((item) => [item.number, this.installs[item.number]]));
-      await this.act(this.api.approvePackage(this.id, at ? at.toISOString() : null, this.forcing(), this.installing().length ? installs : undefined));
+      await this.act(this.api.approvePackage(this.id, at ? at.toISOString() : null, this.forcing(), this.installing().length ? installs : undefined, replacements.length ? environment : undefined));
       this.scheduling.set(false);
     }
+  }
+
+  /** The package stopped at an item that went wrong: the ones behind it go on, or the application ends here. */
+  protected async decide(proceed: boolean): Promise<void> {
+    await this.act(this.api.decidePackage(this.id, proceed));
   }
 
   /** Somebody knows it went wrong: it stops being counted in the menu. */

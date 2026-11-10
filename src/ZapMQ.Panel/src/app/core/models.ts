@@ -915,7 +915,7 @@ export interface RemovedApplication {
   Messages: string[];
 }
 
-export type PackageStatus = 'Closed' | 'Pending' | 'Rejected' | 'Approved' | 'Applying' | 'Applied' | 'Partial' | 'Failed' | 'Reverting' | 'Reverted' | 'RevertedPartly' | 'Superseded';
+export type PackageStatus = 'Closed' | 'Pending' | 'Rejected' | 'Approved' | 'Applying' | 'Paused' | 'Applied' | 'Partial' | 'Failed' | 'Reverting' | 'Reverted' | 'RevertedPartly' | 'Superseded';
 
 /** A package being put together here: closed, it becomes the given version of its package. */
 export interface PackageDraft {
@@ -1085,6 +1085,21 @@ export interface ItemCheck {
   currentFingerprint: string | null;
   missing: string[];
   problem: string | null;
+  /** The configuration files of the environment the item brings, against the ones here. */
+  environment: EnvironmentCheck[];
+}
+
+/**
+ * A configuration file of the environment (env.json, appsettings.json…) that a package brings:
+ * new (not here, so it is put here), same (here, the same but for the secrets) or different
+ * (here, and replaced only if whoever approves says so).
+ */
+export interface EnvironmentCheck {
+  path: string;
+  state: 'new' | 'same' | 'different' | 'unknown';
+  size: number;
+  /** What was left blank in it where the package was made. */
+  blanked: string[];
 }
 
 export interface PackageItemDetail {

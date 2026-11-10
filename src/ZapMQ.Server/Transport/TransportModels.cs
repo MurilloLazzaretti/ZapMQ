@@ -119,6 +119,18 @@ public sealed class FileReference
     public string Path { get; set; } = "";
     public long Size { get; set; }
     public string Sha256 { get; set; } = "";
+
+    /// <summary>
+    /// A configuration file of the environment (<c>env.json</c>, <c>appsettings.json</c>…): it travels
+    /// beside the files of the application, but nothing replaces the one that is there unless whoever
+    /// approves the package says so. What looks like a secret in it was left blank.
+    /// </summary>
+    public bool Environment { get; set; }
+
+    /// <summary>
+    /// The names of what was left blank in it, for whoever fills them in.
+    /// </summary>
+    public List<string> Blanked { get; set; } = [];
 }
 
 public sealed class ItemReference
@@ -367,7 +379,7 @@ public sealed class PackageRecord
     public PackageManifest Manifest { get; set; } = new();
 
     /// <summary>
-    /// Closed (made here), Pending, Rejected, Approved, Applying, Applied, Partial or Failed;
+    /// Closed (made here), Pending, Rejected, Approved, Applying, Paused (an item went wrong and it waits to know whether the others go on), Applied, Partial or Failed;
     /// and, when what it did was put back, Reverting, Reverted or RevertedPartly. Superseded
     /// when a newer version of it arrived before it was applied.
     /// </summary>
@@ -388,6 +400,12 @@ public sealed class PackageRecord
     /// in time to be ended by force.
     /// </summary>
     public bool Force { get; set; }
+
+    /// <summary>
+    /// It stopped at an item that went wrong, somebody said to go on, and what already has a
+    /// result is not done again.
+    /// </summary>
+    public bool Resuming { get; set; }
 
     /// <summary>
     /// Who said they know it went wrong. From then on it does not ask for anybody any more,
@@ -412,6 +430,12 @@ public sealed class PackageRecord
     /// By item: how what this environment does not have yet is to be installed, as said when approving.
     /// </summary>
     public Dictionary<int, InstallChoice> Installs { get; set; } = [];
+
+    /// <summary>
+    /// By item: the configuration files of the environment that are here and differ from the ones the
+    /// package brings, which whoever approved it said to replace. The others stay as they are.
+    /// </summary>
+    public Dictionary<int, List<string>> EnvironmentReplace { get; set; } = [];
 }
 
 public sealed class Delivery
