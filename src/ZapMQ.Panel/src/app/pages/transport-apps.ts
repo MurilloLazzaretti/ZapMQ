@@ -317,9 +317,9 @@ export class TransportAppsPage implements OnInit {
     }
     let made: string;
     try {
+      // Brought and applied by one person in one go: their word that it may go on is given before it closes.
+      await firstValueFrom(this.api.releaseDraft(draft));
       made = (await firstValueFrom(this.api.closePackage({ draft }))).package.id;
-      // Brought and applied by one person in one go: their word that it may go on is given with it.
-      await firstValueFrom(this.api.releasePackage(made)).catch(() => undefined);
     } catch (failure) {
       this.busy.set(false);
       this.snack.open(uploadProblem(failure, 'O pacote não pôde ser fechado'), 'Fechar', { duration: 12000 });

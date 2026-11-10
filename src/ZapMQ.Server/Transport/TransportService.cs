@@ -662,6 +662,12 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
         if (chosen.Count == 0)
             throw new TransportRefused("O pacote está vazio: inclua o que ele leva antes de fechar");
 
+        // What is closed is not open any more: whoever is still working on theirs could not add to it. So it closes only when everybody who put items in it said theirs may go.
+        var waiting = Releases.Contributors(chosen.Select(item => item.AddedBy), by)
+            .Where(user => !draft.Releases.Any(release => string.Equals(release.User, user, StringComparison.OrdinalIgnoreCase))).ToList();
+        if (waiting.Count > 0)
+            throw new TransportRefused($"O pacote só fecha quando todos que incluíram itens nele liberarem. Falta: {string.Join(", ", waiting)}.", StatusCodes.Status409Conflict);
+
         var now = time.GetUtcNow();
         // Before the changes: as it was when it last went in another package, not in a version of this one.
         var packaged = LastPackaged(draft.Line);

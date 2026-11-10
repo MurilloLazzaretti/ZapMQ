@@ -286,10 +286,13 @@ itens de uma vez, em *Liberar meus itens*, com o pacote ainda aberto ou já fech
 próprios itens de um pacote aberto (inclui, troca ou tira) desfaz a própria liberação. O usuário
 master pode liberar em nome de outra pessoa (por exemplo, de férias), e o histórico registra
 "liberado por X em nome de Y". Dá para desfazer a liberação enquanto o pacote não foi entregue a
-nenhum ambiente. A versão pode ser fechada antes de todos liberarem; o que espera é o envio. Os
+nenhum ambiente. **A versão só fecha quando todos liberarem** (o servidor recusa o fechamento, e o botão fica desabilitado
+com quem falta): fechada, a versão não recebe mais itens, e quem ainda trabalha nos seus precisaria de uma versão
+nova. Enquanto está aberta, cada um segue incluindo e liberando. Depois de fechada, a liberação ainda
+pode ser desfeita e dada de novo, e o envio e o download esperam por ela. Os
 pacotes que chegam de outro ambiente não pedem liberação. Também não pedem os pacotes fechados antes
-desta regra, que não guardam quem incluiu cada item. O *Upload e aplicar* libera em nome de quem
-enviou o arquivo.
+desta regra, que não guardam quem incluiu cada item. O *Upload e aplicar* (e o upload de vários módulos) libera, em nome de quem
+enviou o arquivo, antes de fechar.
 
 **Encontrar um pacote.** Na aba *Pacotes*, a busca procura cada palavra em qualquer parte do
 pacote: nome, descrição, origem, quem montou, aprovou ou incluiu itens, o nome de cada item

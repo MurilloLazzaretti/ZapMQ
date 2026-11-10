@@ -49,3 +49,14 @@ a.object[href]:hover strong { text-decoration: underline; }
 .group-head .spacer { flex: 1; }
 tr.kind th { padding-top: 12px; text-align: left; font: var(--mat-sys-label-large); color: var(--mat-sys-on-surface-variant); }
 tr.kind mat-icon { width: 18px; height: 18px; vertical-align: -4px; margin-right: 4px; }
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--zap-warn-container);
+  color: var(--zap-warn);
+}
