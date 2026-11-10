@@ -58,10 +58,10 @@ export class ForgottenDialog {
  * says to go on, 'included' when what was left out was put in the open package (which the
  * person should look at before closing), and null to stop.
  */
-export async function checkForgotten(dialog: MatDialog, api: Api, where: { draft: string } | { package: string }, action: string): Promise<'go' | 'included' | null> {
+export async function checkForgotten(dialog: MatDialog, api: Api, where: { draft: string } | { package: string; route?: string }, action: string): Promise<'go' | 'included' | null> {
   let items: ForgottenItem[];
   try {
-    items = (await firstValueFrom('draft' in where ? api.draftForgotten(where.draft) : api.packageForgotten(where.package))).items;
+    items = (await firstValueFrom('draft' in where ? api.draftForgotten(where.draft) : api.packageForgotten(where.package, where.route))).items;
   } catch {
     // The check is a help: when it cannot be made, it does not stand in the way.
     return 'go';

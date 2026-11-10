@@ -541,8 +541,8 @@ export class Api {
   }
 
   /** The same, for a closed package, before it is sent or downloaded. */
-  packageForgotten(id: string): Observable<{ items: ForgottenItem[] }> {
-    return this.http.get<{ items: ForgottenItem[] }>(`api/transport/packages/${id}/forgotten`);
+  packageForgotten(id: string, route?: string): Observable<{ items: ForgottenItem[] }> {
+    return this.http.get<{ items: ForgottenItem[] }>(`api/transport/packages/${id}/forgotten`, { params: route ? { route } : {} });
   }
 
   acknowledgePackage(id: string): Observable<PackageDetail> {

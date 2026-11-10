@@ -102,7 +102,7 @@ export class PackageSend implements OnInit, OnDestroy {
   }
 
   protected async send(): Promise<void> {
-    if ((await checkForgotten(this.dialog, this.api, { package: this.packageId() }, 'Enviar')) !== 'go') {
+    if ((await checkForgotten(this.dialog, this.api, { package: this.packageId(), route: this.route }, 'Enviar')) !== 'go') {
       return;
     }
     this.sending.set(true);

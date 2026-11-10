@@ -481,6 +481,13 @@ itens: a saída é uma versão nova dele. O aviso só enxerga trocas feitas por 
 *Upload e aplicar*); arquivos mexidos direto na pasta não aparecem. Endpoints:
 `GET /api/transport/drafts/{id}/forgotten` e `GET /api/transport/packages/{id}/forgotten`.
 
+**Só avisa do que o destino ainda não tem igual.** Antes de listar, o servidor confere cada item
+suspeito com o ambiente de destino (a rota escolhida no envio; nas demais telas, todas as rotas
+cadastradas): o que já está **idêntico** lá (mesma impressão digital que o *Comparar* usa) não é
+avisado, mesmo que tenha chegado por download manual ou cópia direta. O item só some se estiver
+igual em todas as rotas consultadas. Se um destino não responde, nada é descartado e o aviso sai
+completo. O endpoint de pacote aceita `?route=<id>`.
+
 **Upload de vários módulos.** Em *Aplicações*, na linha de uma aplicação MFE, *Upload de vários
 módulos* aceita vários `.zip` de uma vez, cada um com o nome do módulo (`Shell.zip`, `Brief.zip`;
 maiúsculas e acentos não importam). O painel mostra o que casou com o quê, e **um único pacote**

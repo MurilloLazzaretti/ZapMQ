@@ -81,6 +81,14 @@ public static class TransportEndpoints
 
     private static string User(HttpContext context) => (string)context.Items[PanelHost.UserItem]!;
 
+    private static async Task<List<ForgottenItem>> NotYetThere(List<ForgottenItem> items, string? route, Comparison comparison, string by, CancellationToken cancellation)
+    {
+        if (items.Count == 0)
+            return items;
+        var same = await comparison.AlreadyThere(route, [.. items.Select(item => (item.Kind, item.Name))], by, cancellation);
+        return [.. items.Where(item => !same.Contains((item.Kind, item.Name)))];
+    }
+
     private static async Task<IResult> Guarded(Func<Task<IResult>> action)
     {
         try
@@ -181,14 +189,15 @@ public static class TransportEndpoints
         });
 
         // What changed here, of the same kind as what this open package carries, and is not in it.
-        api.MapGet("/drafts/{id}/forgotten", (string id, TransportStore store, TransportService transport) =>
-            Results.Json(new { items = transport.Forgotten([.. store.Area(id).Select(item => (item.Kind, item.Name))]) }));
+        // What the destination already has, exactly as it is here, is not told: it needs no carrying.
+        api.MapGet("/drafts/{id}/forgotten", async (string id, string? route, TransportStore store, TransportService transport, Comparison comparison, HttpContext context) =>
+            Results.Json(new { items = await NotYetThere(transport.Forgotten([.. store.Area(id).Select(item => (item.Kind, item.Name))]), route, comparison, User(context), context.RequestAborted) }));
 
         // The same, for a package that is closed, before it is sent or downloaded.
-        api.MapGet("/packages/{id}/forgotten", (string id, TransportStore store, TransportService transport) =>
+        api.MapGet("/packages/{id}/forgotten", async (string id, string? route, TransportStore store, TransportService transport, Comparison comparison, HttpContext context) =>
         {
             var record = store.Find(id);
-            return record is null ? Results.NotFound() : Results.Json(new { items = transport.Forgotten([.. record.Manifest.Items.Select(item => (item.Kind, item.Name))]) });
+            return record is null ? Results.NotFound() : Results.Json(new { items = await NotYetThere(transport.Forgotten([.. record.Manifest.Items.Select(item => (item.Kind, item.Name))]), route, comparison, User(context), context.RequestAborted) });
         });
 
         api.MapPost("/drafts", (DraftRequest request, TransportStore store, TransportPolicyStore policy, HttpContext context, TimeProvider time) => Guarded(() =>
