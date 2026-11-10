@@ -7,7 +7,7 @@ import {
   AreaItem, ApplicationDefaults, CreatedApplication, InspectedFiles, NewApplication, RemovedApplication, ItemCheck, RevertStep, ProxyState, TargetFile, TransportSettings, KeptCopies, ApiDocs, EndpointUse, TransportTarget, PackageDetail, PackageDraft, Comparison, ComparedFile, TransportPolicy, PackageItemDetail, PackageSummary, TransportSummary,
   CatalogDetail, CatalogPage, ObjectChange, ObjectTracking, ScriptHit, DatabasePoint, DatabaseQuery, DatabaseState,
   DeadLetter, DeadSummary, MetricsPoint, Overview, PendingMessage, QueueDetail, QueueRow, QueueSettings, Session, 
-  HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WebSite, WebSwitched, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending, InstallChoice } from './models';
+  HealthSample, InstalledService, ParkMap, ZapMQSettings, Landscape, TrafficError, TrafficScreens, TrafficRoute, TrafficSummary, TrafficUpstreams, WebApplication, WebPublication, WebSite, WebSwitched, WorkerConfig, WorkerControlStatus, WorkerEvent, TransportOrigin, TransportRoute, TransportRoutes, TransportSending, InstallChoice, ForgottenItem } from './models';
 
 /**
  * The panel API. Every address is relative, so it follows the <base href> the service writes
@@ -533,6 +533,16 @@ export class Api {
   /** A package stopped at an item that went wrong: the others go on, or the application ends. */
   decidePackage(id: string, proceed: boolean): Observable<PackageDetail> {
     return this.http.post<PackageDetail>(`api/transport/packages/${id}/decide`, { proceed });
+  }
+
+  /** What changed here, of the kind an open package carries, and is not in it. */
+  draftForgotten(id: string): Observable<{ items: ForgottenItem[] }> {
+    return this.http.get<{ items: ForgottenItem[] }>(`api/transport/drafts/${id}/forgotten`);
+  }
+
+  /** The same, for a closed package, before it is sent or downloaded. */
+  packageForgotten(id: string): Observable<{ items: ForgottenItem[] }> {
+    return this.http.get<{ items: ForgottenItem[] }>(`api/transport/packages/${id}/forgotten`);
   }
 
   acknowledgePackage(id: string): Observable<PackageDetail> {

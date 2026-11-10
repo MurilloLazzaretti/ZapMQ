@@ -287,19 +287,32 @@ export class TransportAppsPage implements OnInit {
     if (!sure) {
       return;
     }
+    await this.applyBrought([{ kind, name, file, version }], `${name} ${version ?? new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`, `Upload de ${file.name} aplicado em ${this.transport.summary()?.environment || 'este ambiente'}.`, name);
+  }
+
+  /**
+   * What was brought by hand, one zip or several, goes in one package that is closed and
+   * approved to apply now. Nothing is applied if any of it is not accepted.
+   */
+  private async applyBrought(brought: { kind: string; name: string; file: File; version: string | null }[], packageName: string, description: string, label: string): Promise<void> {
     this.busy.set(true);
     let draft: string | null = null;
     try {
-      const stamp = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-      draft = (await firstValueFrom(this.api.createDraft({ name: `${name} ${version ?? stamp}`, description: `Upload de ${file.name} aplicado em ${this.transport.summary()?.environment || 'este ambiente'}.` }))).id;
-      await firstValueFrom(this.api.addFiles(draft, kind, name, file, version));
+      draft = (await firstValueFrom(this.api.createDraft({ name: packageName, description }))).id;
+      for (const one of brought) {
+        try {
+          await firstValueFrom(this.api.addFiles(draft, one.kind, one.name, one.file, one.version));
+        } catch (failure) {
+          throw new Error(`${one.file.name}: ${uploadProblem(failure, 'o arquivo não foi aceito')}`);
+        }
+      }
     } catch (failure) {
       // Nothing was applied: the package that was being made goes away.
       if (draft) {
         await firstValueFrom(this.api.deleteDraft(draft)).catch(() => undefined);
       }
       this.busy.set(false);
-      this.snack.open(uploadProblem(failure, 'O arquivo não foi aceito'), 'Fechar', { duration: 12000 });
+      this.snack.open(failure instanceof Error && brought.length > 1 ? `${failure.message}. Nada foi aplicado.` : uploadProblem(failure, 'O arquivo não foi aceito'), 'Fechar', { duration: 12000 });
       return;
     }
     let made: string;
@@ -315,7 +328,7 @@ export class TransportAppsPage implements OnInit {
     }
     try {
       await firstValueFrom(this.api.approvePackage(made, null));
-      this.snack.open(`${name}: sendo aplicado`, undefined, { duration: 4000 });
+      this.snack.open(`${label}: sendo aplicado`, undefined, { duration: 4000 });
     } catch (failure) {
       this.snack.open(uploadProblem(failure, 'O pacote foi criado, mas não pôde ser aplicado'), 'Fechar', { duration: 12000 });
     } finally {
@@ -324,6 +337,43 @@ export class TransportAppsPage implements OnInit {
     }
     // The package page follows the application, item by item.
     void this.router.navigate(['/transporte/pacotes', made]);
+  }
+
+  /** The modules of a web application brought together, each zip named after its module: one package for all. */
+  protected async uploadMany(group: WebGroup, event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (!files.length) {
+      return;
+    }
+    const plain = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const matched: { kind: string; name: string; file: File; version: string | null }[] = [];
+    const unknown: string[] = [];
+    for (const file of files) {
+      const stem = plain(file.name.replace(/\.zip$/i, ''));
+      const module = group.modules.find((target) => plain(this.isShell(target) ? 'shell' : target.Name.slice(target.Name.indexOf('/') + 1)) === stem || plain(target.Name) === stem);
+      if (module && !matched.some((one) => one.name === module.Name)) {
+        matched.push({ kind: module.Kind, name: module.Name, file, version: null });
+      } else {
+        unknown.push(file.name);
+      }
+    }
+    if (unknown.length) {
+      this.snack.open(`Não achei o módulo de: ${unknown.join(', ')}. O nome do zip precisa ser o do módulo (${group.modules.map((target) => this.moduleLabel(target)).join(', ')}). Nada foi aplicado.`, 'Fechar', { duration: 15000 });
+      return;
+    }
+    const sure = await confirm(this.dialog, {
+      title: `Aplicar ${matched.length} módulos de ${group.name} agora?`,
+      message: `Um único pacote é criado com: ${matched.map((one) => `${one.file.name} → ${this.moduleLabel(group.modules.find((target) => target.Name === one.name)!)}`).join('; ')}. Ele é aplicado neste ambiente e segue inteiro para os outros.`,
+      warning: 'Cada módulo é trocado e a versão atual de cada um fica guardada para reverter. Se algum zip não for aceito, nada é aplicado.',
+      action: 'Aplicar todos',
+    });
+    if (!sure) {
+      return;
+    }
+    const stamp = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    await this.applyBrought(matched, `${group.name} ${stamp}`, `Upload de ${matched.length} módulos (${matched.map((one) => one.file.name).join(', ')}) aplicado em ${this.transport.summary()?.environment || 'este ambiente'}.`, group.name);
   }
 
   /** A file to download that is not in the folder yet: it goes in under the name it has. */

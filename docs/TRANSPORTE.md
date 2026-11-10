@@ -466,6 +466,24 @@ O pacote termina **revertido** (tudo voltou; pode ser aplicado de novo), **rever
 (algo ficou como o pacote deixou) ou, se nada chegou a voltar, continua como estava, com o motivo
 no histórico.
 
+### 5.6.1 Não esquecer um módulo
+
+**Aviso de item que ficou de fora.** Ao **fechar** um pacote aberto, e ao **enviar** ou **baixar**
+um pacote fechado, o painel olha o que mudou *aqui* e ainda não foi a lugar nenhum: itens do mesmo
+tipo do que vai (os outros módulos de uma aplicação web, as outras APIs) cuja troca foi aplicada
+aqui por um pacote nos últimos 30 dias, sem entrega a outro ambiente depois disso. Trocas que foram
+revertidas não contam. Se achar, o painel lista e pergunta: *Incluir esses* (só no pacote aberto;
+ele não fecha, para você conferir), *assim mesmo* ou *Cancelar*. Um pacote já fechado não recebe
+itens: a saída é uma versão nova dele. O aviso só enxerga trocas feitas por pacote (inclusive
+*Upload e aplicar*); arquivos mexidos direto na pasta não aparecem. Endpoints:
+`GET /api/transport/drafts/{id}/forgotten` e `GET /api/transport/packages/{id}/forgotten`.
+
+**Upload de vários módulos.** Em *Aplicações*, na linha de uma aplicação MFE, *Upload de vários
+módulos* aceita vários `.zip` de uma vez, cada um com o nome do módulo (`Shell.zip`, `Brief.zip`;
+maiúsculas e acentos não importam). O painel mostra o que casou com o quê, e **um único pacote**
+leva todos, é fechado e aplicado aqui. Se algum zip não casar com um módulo ou não for aceito,
+nada é aplicado.
+
 ### 5.7 Promoção
 
 Um pacote aplicado pode ser enviado ao ambiente seguinte, onde passa por tudo de novo.

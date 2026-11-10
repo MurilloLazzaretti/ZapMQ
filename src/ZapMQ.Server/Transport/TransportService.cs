@@ -759,6 +759,40 @@ public sealed partial class TransportService(TransportStore store, WorkerControl
     }
 
     /// <summary>
+    /// What changed here, through a package that was applied here, and has not gone anywhere
+    /// since: the same kind of thing as what is about to be carried (the other modules of a web
+    /// application, the other APIs), left out of it. Only what changed in the last
+    /// <see cref="ForgottenDays"/> days is told, and what was put back is not.
+    /// </summary>
+    public List<ForgottenItem> Forgotten(IReadOnlyCollection<(string Kind, string Name)> carried)
+    {
+        var kinds = carried.Select(item => item.Kind).Where(kind => kind != "database").ToHashSet();
+        var known = carried.Select(item => (item.Kind, item.Name.ToLowerInvariant())).ToHashSet();
+        var since = time.GetUtcNow().AddDays(-ForgottenDays);
+        var changed = new Dictionary<(string, string), (string Name, DateTimeOffset At, string Package)>();
+        var gone = new Dictionary<(string, string), DateTimeOffset>();
+        foreach (var record in store.Packages())
+            foreach (var item in record.Manifest.Items.Where(item => kinds.Contains(item.Kind)))
+            {
+                var key = (item.Kind, item.Name.ToLowerInvariant());
+                if (record.Deliveries.Count > 0)
+                {
+                    var at = record.Deliveries.Max(delivery => delivery.At);
+                    if (!gone.TryGetValue(key, out var was) || at > was)
+                        gone[key] = at;
+                }
+                if (record.Status is "Applied" or "Partial" && record.Results.FirstOrDefault(result => result.Number == item.Number) is { Status: "applied", Did: not "skipped" } result
+                    && (!changed.TryGetValue(key, out var last) || result.At > last.At))
+                    changed[key] = (item.Name, result.At, record.Manifest.Name);
+            }
+        return [.. changed.Where(pair => !known.Contains(pair.Key) && pair.Value.At >= since && (!gone.TryGetValue(pair.Key, out var sent) || pair.Value.At > sent))
+            .OrderBy(pair => pair.Key.Item1).ThenBy(pair => pair.Value.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(pair => new ForgottenItem(pair.Key.Item1, pair.Value.Name, pair.Value.At, pair.Value.Package))];
+    }
+
+    public const int ForgottenDays = 30;
+
+    /// <summary>
     /// When each object last went into a package made here.
     /// </summary>
     public Dictionary<string, DateTimeOffset> LastPackaged(string? except = null)

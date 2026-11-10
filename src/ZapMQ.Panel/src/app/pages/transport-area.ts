@@ -10,6 +10,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { confirm } from '../shared/dialogs';
+import { checkForgotten } from '../shared/forgotten';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
 import { kindIcon, kindName } from '../core/database';
@@ -137,6 +138,14 @@ export class TransportAreaPage implements OnInit {
   protected async close(): Promise<void> {
     this.busy.set(true);
     try {
+      const check = await checkForgotten(this.dialog, this.api, { draft: this.id }, 'Fechar');
+      if (check !== 'go') {
+        // Cancelled, or what was left out is now in the package: it is looked at before closing.
+        if (check === 'included') {
+          this.load();
+        }
+        return;
+      }
       const made = await firstValueFrom(this.api.closePackage({ draft: this.id, name: this.name, description: this.description }));
       if (this.transport.current()?.id === this.id) {
         this.transport.choose(null);

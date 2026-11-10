@@ -76,6 +76,10 @@
                   </span>
                   @if (group.whole; as whole) {
                     <span class="muted mono path" [matTooltip]="whole.Paths.join('\n')">{{ whole.Paths[0] }}</span>
+                    @if (group.mode === 'mfe' && transport.manual() && group.modules.length) {
+                      <button mat-button (click)="many.click()" [disabled]="busy()" matTooltip="Escolha vários .zip de uma vez, cada um com o nome do módulo (Shell.zip, Brief.zip…): um pacote só leva todos">Upload de vários módulos</button>
+                      <input #many type="file" accept=".zip" multiple hidden (change)="uploadMany(group, $event)" />
+                    }
                     <ng-container *ngTemplateOutlet="actions; context: { $implicit: whole, whole: group.mode === 'mfe' }" />
                   }
                 </div>

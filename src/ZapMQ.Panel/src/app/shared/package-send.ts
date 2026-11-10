@@ -3,7 +3,9 @@ import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, input, o
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { checkForgotten } from './forgotten';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../core/api';
@@ -69,6 +71,7 @@ import { TransportRoute, TransportSending } from '../core/models';
 export class PackageSend implements OnInit, OnDestroy {
   private readonly api = inject(Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
 
   readonly packageId = input.required<string>();
   /** The other side has it: the page reads the package again, to show the delivery. */
@@ -99,6 +102,9 @@ export class PackageSend implements OnInit, OnDestroy {
   }
 
   protected async send(): Promise<void> {
+    if ((await checkForgotten(this.dialog, this.api, { package: this.packageId() }, 'Enviar')) !== 'go') {
+      return;
+    }
     this.sending.set(true);
     try {
       this.last.set(await firstValueFrom(this.api.sendPackage(this.packageId(), this.route)));

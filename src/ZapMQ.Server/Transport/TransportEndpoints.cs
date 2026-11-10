@@ -180,6 +180,17 @@ public static class TransportEndpoints
             });
         });
 
+        // What changed here, of the same kind as what this open package carries, and is not in it.
+        api.MapGet("/drafts/{id}/forgotten", (string id, TransportStore store, TransportService transport) =>
+            Results.Json(new { items = transport.Forgotten([.. store.Area(id).Select(item => (item.Kind, item.Name))]) }));
+
+        // The same, for a package that is closed, before it is sent or downloaded.
+        api.MapGet("/packages/{id}/forgotten", (string id, TransportStore store, TransportService transport) =>
+        {
+            var record = store.Find(id);
+            return record is null ? Results.NotFound() : Results.Json(new { items = transport.Forgotten([.. record.Manifest.Items.Select(item => (item.Kind, item.Name))]) });
+        });
+
         api.MapPost("/drafts", (DraftRequest request, TransportStore store, TransportPolicyStore policy, HttpContext context, TimeProvider time) => Guarded(() =>
         {
             policy.RequirePackages();

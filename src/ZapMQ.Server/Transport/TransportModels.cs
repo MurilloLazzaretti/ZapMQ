@@ -452,3 +452,8 @@ public sealed class TransportRefused(string message, int status = StatusCodes.St
 {
     public int Status { get; } = status;
 }
+
+/// <summary>
+/// Something of the same kind as what is about to be carried that changed here and did not go anywhere yet.
+/// </summary>
+public sealed record ForgottenItem(string Kind, string Name, DateTimeOffset ChangedAt, string Package);

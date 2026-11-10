@@ -20,6 +20,7 @@ import { Transport, groupItems, historyText, itemAction, itemTone, statusName, s
 import { confirm } from '../shared/dialogs';
 import { InstallForm } from '../shared/install-form';
 import { PackageSend } from '../shared/package-send';
+import { checkForgotten } from '../shared/forgotten';
 import { DiffView } from '../shared/diff-view';
 
 /** How an item stands against this environment, in the words of the panel. */
@@ -276,7 +277,10 @@ export class TransportPackagePage implements OnInit, OnDestroy {
     this.api.packageItem(this.id, item.number).subscribe({ next: (content) => this.open() === item.number && this.content.set(content), error: (failure) => this.say(failure) });
   }
 
-  protected download(): void {
+  protected async download(): Promise<void> {
+    if ((await checkForgotten(this.dialog, this.api, { package: this.id }, 'Baixar')) !== 'go') {
+      return;
+    }
     const link = document.createElement('a');
     link.href = `api/transport/packages/${this.id}/download`;
     link.click();

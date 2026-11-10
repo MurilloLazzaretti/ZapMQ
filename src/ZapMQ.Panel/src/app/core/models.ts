@@ -1355,3 +1355,11 @@ export interface EndpointUse {
   route: string;
 }
 
+
+/** Something of the same kind as what is about to be carried that changed here and did not go anywhere yet. */
+export interface ForgottenItem {
+  kind: string;
+  name: string;
+  changedAt: string;
+  package: string;
+}

@@ -893,6 +893,52 @@ public sealed class TransportTests(ServerFixture server) : IClassFixture<ServerF
     }
 
     [Fact]
+    public async Task What_changed_here_beside_what_is_being_carried_is_told_before_the_package_is_closed_or_sent()
+    {
+        var tag = Guid.NewGuid().ToString("N")[..6];
+        var (shell, brief, adm) = ("shell" + tag, "brief" + tag, "adm" + tag);
+        var here = new PretendDatabase();
+        foreach (var module in new[] { shell, brief, adm })
+            here.Targets["frontend:" + module] = new() { ["remoteEntry.json"] = "v1" };
+        // What other tests left applied in the same panel is not of interest here.
+        IEnumerable<string?> Ours(JObject answer) => answer["items"]!.Select(item => (string?)item["name"]).Where(name => name!.EndsWith(tag)).Order();
+        await using var _ = await Serve(here);
+        await ClearArea();
+
+        // Three modules brought by hand, each applied in a package of its own.
+        var made = new List<string>();
+        foreach (var module in new[] { shell, brief, adm })
+        {
+            var draft = (string?)(await Json(await Api.PostAsJsonAsync("api/transport/drafts", new { name = module }), HttpStatusCode.Created))["id"];
+            await Json(await Api.PostAsync($"api/transport/area/upload?draft={draft}&kind=frontend&name={module}", new ByteArrayContent(PretendDatabase.Zipped(new() { ["remoteEntry.json"] = "{" + module + "}" }))), HttpStatusCode.Created);
+            var id = (string)(await Json(await Api.PostAsJsonAsync("api/transport/packages", new { draft }), HttpStatusCode.Created))["package"]!["id"]!;
+            await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/release", new { }));
+            await Json(await Api.PostAsJsonAsync($"api/transport/packages/{id}/approve", new { }));
+            await WaitFor(id, "Applied");
+            made.Add(id);
+        }
+
+        // A new package with only one of them: the other two are told.
+        await ClearArea();
+        await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=frontend&name={shell}", new ByteArrayContent(PretendDatabase.Zipped(new() { ["remoteEntry.json"] = "{shell2}" }))), HttpStatusCode.Created);
+        var told = JObject.Parse(await Api.GetStringAsync($"api/transport/drafts/{_draft}/forgotten"));
+        Assert.Equal([adm, brief], Ours(told));
+
+        // A package that is already closed says the same about what it does not carry.
+        Assert.Equal([adm, brief], Ours(JObject.Parse(await Api.GetStringAsync($"api/transport/packages/{made[0]}/forgotten"))));
+
+        // With the three in it, nothing is left out.
+        foreach (var module in new[] { brief, adm })
+            await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=frontend&name={module}", new ByteArrayContent(PretendDatabase.Zipped(new() { ["remoteEntry.json"] = "{x}" }))), HttpStatusCode.Created);
+        Assert.Empty(Ours(JObject.Parse(await Api.GetStringAsync($"api/transport/drafts/{_draft}/forgotten"))));
+
+        // Another kind of thing is not asked about: an API goes without the modules.
+        await ClearArea();
+        await Json(await Api.PostAsync($"api/transport/area/upload?draft={_draft}&kind=api&name=Orders{tag}", new ByteArrayContent(PretendDatabase.Zipped(new() { ["Orders.dll"] = "x" }))), HttpStatusCode.Created);
+        Assert.Empty(Ours(JObject.Parse(await Api.GetStringAsync($"api/transport/drafts/{_draft}/forgotten"))));
+    }
+
+    [Fact]
     public async Task An_approval_may_be_for_later_and_may_be_taken_back_and_a_package_may_be_refused()
     {
         var (_, made) = await Made();
