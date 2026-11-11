@@ -486,7 +486,8 @@ suspeito com o ambiente de destino (a rota escolhida no envio; nas demais telas,
 cadastradas): o que já está **idêntico** lá (mesma impressão digital que o *Comparar* usa) não é
 avisado, mesmo que tenha chegado por download manual ou cópia direta. O item só some se estiver
 igual em todas as rotas consultadas. Se um destino não responde, nada é descartado e o aviso sai
-completo. O endpoint de pacote aceita `?route=<id>`.
+completo. O endpoint de pacote aceita `?route=<id>`. Também não é avisado o que **não existe mais
+neste ambiente** (um nome que um pacote antigo usava e foi renomeado ou removido): não há o que levar.
 
 **Upload de vários módulos.** Em *Aplicações*, na linha de uma aplicação MFE, *Upload de vários
 módulos* aceita vários `.zip` de uma vez, cada um com o nome do módulo (`Shell.zip`, `Brief.zip`;

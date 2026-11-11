@@ -122,37 +122,44 @@ public sealed class Comparison(WorkerControlClient worker, TransportSender sende
         ?? throw new TransportRefused("A resposta do outro ambiente não pôde ser lida", StatusCodes.Status502BadGateway);
 
     /// <summary>
-    /// Of the applications given, those that are exactly the same in the environment at the end of the route
-    /// (one route, or all of them when none is named) as they are here. When an environment does not answer,
-    /// nothing is said to be the same there: the one asking is told about everything.
+    /// Of the applications given, those that need no carrying: the ones that are not on this machine any more
+    /// (a name an old package used and was renamed or removed since) and the ones that are exactly the same in
+    /// the environment at the end of the route (one route, or all of them when none is named) as they are here.
+    /// When an environment does not answer, nothing is said to be the same there: the one asking is told about everything.
     /// </summary>
     public async Task<HashSet<(string Kind, string Name)>> AlreadyThere(string? route, IReadOnlyCollection<(string Kind, string Name)> candidates, string by, CancellationToken cancellation)
     {
-        var same = new HashSet<(string Kind, string Name)>();
+        var skip = new HashSet<(string Kind, string Name)>();
         if (candidates.Count == 0)
-            return same;
-        var ids = route is not null ? [route] : routes.Routes().Select(item => item.Id).ToList();
-        if (ids.Count == 0)
-            return same;
+            return skip;
         try
         {
             var mine = (await Ask("TransportInventory", by, _ => { }, cancellation))["Targets"].Deserialize<List<InventoryTarget>>(Format) ?? [];
+            // An environment that lists nothing is not one where nothing exists: it cannot be told.
+            if (mine.Count == 0)
+                return skip;
             static string Key(string kind, string name) => $"{kind}|{name}".ToLowerInvariant();
+            var exist = mine.Select(item => Key(item.Kind, item.Name)).ToHashSet();
+            skip.UnionWith(candidates.Where(item => !exist.Contains(Key(item.Kind, item.Name))));
+
+            var ids = route is not null ? [route] : routes.Routes().Select(item => item.Id).ToList();
+            if (ids.Count == 0)
+                return skip;
             var here = mine.Where(item => item.Fingerprint is not null).GroupBy(item => Key(item.Kind, item.Name)).ToDictionary(group => group.Key, group => group.First().Fingerprint);
-            var equal = candidates.ToHashSet();
+            var equal = candidates.Where(item => !skip.Contains(item)).ToHashSet();
             foreach (var id in ids)
             {
                 var there = (await There(id, cancellation)).Targets.Where(item => item.Fingerprint is not null).GroupBy(item => Key(item.Kind, item.Name)).ToDictionary(group => group.Key, group => group.First().Fingerprint);
                 // Same only where both sides have it and say the same.
                 equal.RemoveWhere(item => !(here.TryGetValue(Key(item.Kind, item.Name), out var a) && there.TryGetValue(Key(item.Kind, item.Name), out var b) && a == b));
             }
-            same = equal;
+            skip.UnionWith(equal);
         }
         catch (Exception error) when (error is TransportRefused or HttpRequestException or TaskCanceledException or JsonException)
         {
             logger.LogInformation("Transport: could not tell whether what changed here is already at the destination: {Error}", error.Message);
         }
-        return same;
+        return skip;
     }
 
     /// <summary>
